@@ -1,3 +1,4 @@
-logs/
-saved_models/
 data/
+saved_models/
+**/__pycache__
+notebooks/.ipynb_checkpoints
