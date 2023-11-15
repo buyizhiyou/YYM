@@ -7,7 +7,10 @@
 @Version :   Cinnamoroll V1
 '''
 
-import torch 
+import torch
+from scipy.stats import entropy
+import numpy as np
+
 
 def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
@@ -24,3 +27,12 @@ def accuracy(output, target, topk=(1,)):
             correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
             res.append(correct_k.mul_(100.0 / batch_size))
         return res
+
+
+def mutual_info(probs):
+    """calculate mutual information 
+
+    Args:
+        probs (np.array): NxKxM array
+    """
+    return entropy(np.mean(probs, axis=1), axis=1)-np.mean(entropy(probs, axis=2), axis=1)

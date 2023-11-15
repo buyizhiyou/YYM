@@ -1,12 +1,24 @@
-import argparse
+#!/usr/bin/env python
+# -*- encoding: utf-8 -*-
+'''
+@File    :   main.py
+@Time    :   2023/11/04 14:56:35
+@Author  :   shiqing 
+@Version :   Cinnamoroll V1
+'''
+
+
+import glob
 import os
+import argparse
 import random
-import shutil
 import time
+import datetime
+import yaml
 import warnings
+from tqdm import tqdm
+import warmup_scheduler
 
-
-from torchsummary import summary
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
@@ -16,20 +28,20 @@ import torch.nn.parallel
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
-import torchvision.datasets as datasets
-import torchvision.models as models
-import torchvision.transforms as transforms
-from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import Subset
 from torch.utils.tensorboard import SummaryWriter
+from torchsummary import summary
+import torchvision.transforms as transforms
+from torchtoolbox.transform import Cutout
 
-from data_utils.get_dataset import get_cifar10_dataset, get_imagenet_dataset
-from utils.visual import ProgressMeter, AverageMeter, Summary
+
+from data_utils.get_datasets import get_dataset
+from model_utils.get_models import get_model
+from model_utils.resnet import ResNet50
 from utils.metircs import accuracy
 from utils.misc import argsdict
-from model_utils.get_models import get_model 
-import yaml
-from tqdm import tqdm
+from utils.randomaug import RandAugment
+from utils.visual import AverageMeter, ProgressMeter, Summary
 
 parser = argparse.ArgumentParser(description='Training')
 parser.add_argument('--config', help='yaml config file')
@@ -41,7 +53,7 @@ def main():
     configargs = parser.parse_args()
     with open(configargs.config, "r") as f:
         cfg = yaml.safe_load(f)
-    args = argsdict(cfg)
+    args = argsdict(cfg)  # 包装字典，可以通过.访问
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -88,9 +100,15 @@ def main_worker(gpu, ngpus_per_node, args):
                                 world_size=args.world_size, rank=args.rank)
 
     # create model
-    model = get_model(args.arch, args.pretrained, 10)
+    if args.size == 32:
+        model = get_model(args.arch, args.pretrained,
+                          num_classes=10, use_torchvision=False)
+    elif args.size == 224:
+        model = get_model(args.arch, args.pretrained,
+                          num_classes=10, use_torchvision=True)
+    # summary(model,(3, 32, 32),device="cpu")
 
-
+    # ddp并行训练配置
     if not torch.cuda.is_available() and not torch.backends.mps.is_available():
         print('using CPU, this will be slow')
     elif args.distributed:
@@ -111,7 +129,7 @@ def main_worker(gpu, ngpus_per_node, args):
     elif args.gpu is not None and torch.cuda.is_available():
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
-    elif torch.backends.mps.is_available():
+    elif torch.backends.mps.is_available():  # PyTorch支持在M1芯片版本的Mac上进行模型加速
         device = torch.device("mps")
         model = model.to(device)
     else:
@@ -134,30 +152,57 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # define loss function (criterion), optimizer, and learning rate scheduler
     criterion = nn.CrossEntropyLoss().to(device)
-    optimizer = torch.optim.SGD(model.parameters(), args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay)
-    scheduler = StepLR(optimizer, step_size=args.step_size, gamma=0.1)
+    if args.optimizer == "sgd":
+        optimizer = torch.optim.SGD(model.parameters(
+        ), args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    elif args.optimizer == "adam":
+        optimizer = torch.optim.Adam(
+            model.parameters(), args.lr, weight_decay=args.weight_decay)
+    elif args.optimizer == "adamw":
+        optimizer = torch.optim.AdamW(
+            model.parameters(), args.lr, weight_decay=args.weight_decay)
 
-    # optionally resume from a checkpoint
-    model_dir = f"{args.saved_models}/{args.arch}"
+    if args.scheduler == "step":
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer, step_size=args.step_size, gamma=0.1)
+    elif args.scheduler == "cos":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=200)
+    elif args.scheduler == "exp":
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(
+            optimizer, gamma=0.9)
+
+    if args.warmup:
+        scheduler = warmup_scheduler.GradualWarmupScheduler(optimizer, multiplier=1.,
+                                                            total_epoch=5, after_scheduler=scheduler)
+
+    curr_time = datetime.datetime.now()
+    time_str = datetime.datetime.strftime(curr_time, "%Y_%m_%d_%H_%M_%S")
+    # time_str = "2023_11_14_13_02_01"
+    model_dir = f"{args.saved_models}/{args.arch}/{time_str}"
+    log_dir = f"{args.logs}/{args.arch}/{time_str}"
     try:
         os.makedirs(model_dir)
+        os.makedirs(log_dir)
     except:
         pass
 
+    # 模型恢复
     if args.resume:
-        resume_path = os.path.join(model_dir, f"{args.arch}_best_model.pth")
-        if os.path.isfile(resume_path):
+        reg_path = os.path.join(model_dir, f"{args.arch}_best_model*.pth")
+        files_path = glob.glob(reg_path)
+        if files_path:
+            resume_path = files_path[0]
             print("=> loading checkpoint '{}'".format(resume_path))
             if args.gpu is None:
                 checkpoint = torch.load(resume_path)
             elif torch.cuda.is_available():
-                # Map model to be loaded to specified single gpu.
                 loc = 'cuda:{}'.format(args.gpu)
                 checkpoint = torch.load(resume_path, map_location=loc)
             args.start_epoch = checkpoint['epoch']
             best_acc1 = checkpoint['best_acc1']
+            print(
+                f"resume model start epoch {args.start_epoch},best acc1:{best_acc1}")
             if args.gpu is not None:
                 # best_acc1 may be from a checkpoint from a different GPU
                 best_acc1 = torch.tensor(best_acc1)
@@ -168,10 +213,41 @@ def main_worker(gpu, ngpus_per_node, args):
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(resume_path, checkpoint['epoch']))
         else:
-            print("=> no checkpoint found at '{}'".format(resume_path))
+            print("=> no checkpoint found at '{}'".format(model_dir))
 
-    train_dataset, val_dataset = get_cifar10_dataset("./data")
+    # 数据集加载
+    train_transform = transforms.Compose(
+        [
+            transforms.RandomCrop(32, padding=4),
+            transforms.Resize((args.size, args.size)),
+            transforms.RandomGrayscale(),  # add
+            transforms.GaussianBlur(3),  # add
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                 #  (0.2470, 0.2435, 0.2616)) #right std
+                                 (0.2023, 0.1994, 0.2010)),  # pytorch doc std
+        ]
+    )
+    val_transform = transforms.Compose(
+        [
+            transforms.Resize((args.size, args.size)),
+            transforms.ToTensor(),
+            transforms.Normalize(
+                (0.4914, 0.4822, 0.4465),
+                #  (0.2470, 0.2435, 0.2616))
+                (0.2023, 0.1994, 0.2010)),
+        ]
+    )
+    # 添加额外的数据增强
+    if args.aug:
+        print("add more augmentation")
+        N = 2
+        M = 14
+        train_transform.transforms.insert(0, RandAugment(N, M))
 
+    train_dataset, val_dataset = get_dataset(
+        args.data, "./data", train_transform, val_transform)
     if args.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(
             train_dataset)
@@ -185,16 +261,17 @@ def main_worker(gpu, ngpus_per_node, args):
         train_dataset, batch_size=args.batch_size, shuffle=(
             train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler)
-
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=args.batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True, sampler=val_sampler)
 
+    # 在测试集上评估模型
     if args.evaluate:
         validate(val_loader, model, criterion, args)
         return
 
-    writer = SummaryWriter(args.logs)
+    writer = SummaryWriter(log_dir)
+    # scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     for epoch in tqdm(range(args.start_epoch, args.epochs)):
         if args.distributed:
             # 在每个周期开始之前，可以调用train_sampler.set_epoch(epoch)来使得数据打的更乱。
@@ -203,15 +280,14 @@ def main_worker(gpu, ngpus_per_node, args):
         # train for one epoch
         train(train_loader, model, criterion,
               optimizer, writer, epoch, device, args)
-        # evaluate on validation set
-        acc1 = validate(val_loader, model, criterion, args)
-        writer.add_scalar("acc1", acc1, epoch)
         scheduler.step()
 
-        # remember best acc@1 and save checkpoint
+        # evaluate on validation set
+        acc1 = validate(val_loader, model, criterion, args)
+        writer.add_scalar("acc1/test", acc1, epoch)
+
         is_best = acc1 > best_acc1
         best_acc1 = max(acc1, best_acc1)
-
         # 模型保存
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                     and args.rank % ngpus_per_node == 0):
@@ -220,12 +296,21 @@ def main_worker(gpu, ngpus_per_node, args):
                 'state_dict': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'scheduler': scheduler.state_dict(),
-                "best_acc": best_acc1
+                "best_acc1": best_acc1
             }
 
             if is_best:
+                # 删除旧模型文件
+                files = glob.glob(os.path.join(
+                    model_dir, f"{args.arch}_best_model_*.pth"))
+                for f in files:
+                    os.remove(f)
+                # 保存准确率最高的模型文件
                 torch.save(state, os.path.join(
-                    model_dir, f"{args.arch}_best_model.pth"))
+                    model_dir, f"{args.arch}_best_model_{best_acc1:.2f}.pth"))
+
+    with open("logs/model_parameters_map.yaml", "a") as f:  # 保存模型日期和训练参数
+        yaml.dump({f"{args.arch}_{time_str}": dict(args)}, f)
 
 
 def train(train_loader, model, criterion, optimizer, writer, epoch, device, args):
@@ -241,17 +326,21 @@ def train(train_loader, model, criterion, optimizer, writer, epoch, device, args
 
     # switch to train mode
     model.train()
-
     end = time.time()
     for i, (images, target) in enumerate(train_loader):
-        # measure data loading time
+        """ 
+        # Train with amp
+        with torch.cuda.amp.autocast(enabled=use_amp):
+            outputs = net(inputs)
+            loss = criterion(outputs, targets)
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+        optimizer.zero_grad()
+        """
         data_time.update(time.time() - end)
-
-        # move data to the same device as model
         images = images.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
-
-        # compute output
         output = model(images)
         loss = criterion(output, target)
 
@@ -266,21 +355,20 @@ def train(train_loader, model, criterion, optimizer, writer, epoch, device, args
         loss.backward()
         optimizer.step()
 
-        # TODO: ADD LOG FOR TRAINING
-        if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                    and args.rank == 0):
-            writer.add_scalar("Loss/train", loss, epoch)
-
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
-
         if i % args.print_freq == 0:
             progress.display(i + 1)
 
+    # log loss and acc1
+    if not args.multiprocessing_distributed or (args.multiprocessing_distributed
+                                                and args.rank == 0):
+        writer.add_scalar("Loss/train", losses.avg, epoch)
+        writer.add_scalar("acc1/train", top1.avg, epoch)
+
 
 def validate(val_loader, model, criterion, args):
-
     def run_validate(loader, base_progress=0):
         with torch.no_grad():
             end = time.time()

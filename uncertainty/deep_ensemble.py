@@ -9,20 +9,30 @@
 
 import time
 import sys
+import numpy as np 
 sys.path.append("../")
+import gc
 
-import torchvision.models as models
 from torch import nn
 import torch
+import torchvision.models as models
+import torchvision.transforms as transforms
 
 from model_utils.get_models import get_model
-from data_utils.get_dataset import get_cifar10_dataset
+from data_utils.get_datasets import get_dataset
 from utils.visual import ProgressMeter, AverageMeter, Summary
 from utils.metircs import accuracy
 
+def memory_stats():
+    print(torch.cuda.memory_allocated()/1024**2)
+    print(torch.cuda.memory_cached()/1024**2)
 
-
-def deep_ensembel_predict(val_loader, models, device, N):
+def deep_ensembel_predict(val_loader,model_path, device):
+    model = get_model("vgg16", False, 10)
+    model = model.to(device)
+    model.eval()
+    checkpoint = torch.load(model_path)
+    model.load_state_dict(checkpoint['state_dict'])
     inference_time = AverageMeter('Time', ':6.3f', Summary.AVERAGE)
     top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
     top5 = AverageMeter('Acc@5', ':6.2f', Summary.AVERAGE)
@@ -31,47 +41,59 @@ def deep_ensembel_predict(val_loader, models, device, N):
         [inference_time,  top1, top5],
         prefix='Test: ')
 
-    with torch.no_grad():
+    probs_list = []
+    with torch.no_grad():   
         for i, (images, target) in enumerate(val_loader):
             images = images.to(device)
             target = target.to(device)
             
-            end = time.time()
-            output = model(images)
-            for model in models[1:]:
-                output += model(images)
-            output = output/len(models)
-            # measure elapsed time
-            inference_time.update(time.time() - end, images.size(0))
+            start = time.time()
+            prob = torch.softmax(model(images), axis=1)
+            probs_list.append(prob.cpu().numpy())
 
+            # measure elapsed time
+            inference_time.update(time.time() - start, images.size(0))
             # measure accuracy and record loss
-            acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            acc1, acc5 = accuracy(prob, target, topk=(1, 5))
             top1.update(acc1[0], images.size(0))
             top5.update(acc5[0], images.size(0))
-            break
+            if i>2:
+                break
 
+    # BatchesxNxBatchSizexNumClasses-->NxBatchSize*BatchesxNumClasses
+    probs = np.concatenate(probs_list,axis=0)
     progress.display_summary()
+
+    return probs
 
 
 def main():
-    _, val_dataset = get_cifar10_dataset("../data")
+    val_transform = transforms.Compose(
+            [
+                transforms.Resize((224, 224)),
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    (0.4914, 0.4822, 0.4465),
+                    (0.2023, 0.1994, 0.2010)),
+            ]
+        )
+
+
+    _, val_dataset = get_dataset("cifar","./data", None,val_transform)
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=64, shuffle=False,
         num_workers=4, pin_memory=True)
 
-    device = torch.device('cuda:1')
-    model = get_model("vgg16", False, 10)
-    model = model.to(device)
-    model.eval()
-    model.classifier[5].training = True  # 打开dropout
-    models = []
-    models_path = ["../saved_models/vgg16/vgg16_best_model.pth"]
-    for path in models_path:
-        checkpoint = torch.load(path)
-        model.load_state_dict(checkpoint['state_dict'])
-        models.append(model)
-    deep_ensembel_predict(val_loader, models, device, 10)
-
+    #TODO:Ensembel train
+    device = torch.device('cuda:2')
+    models_path = ["../saved_models/vgg16/vgg16_best_model.pth",
+                   "../saved_models/vgg16/2023_11_10_14_54_33/vgg16_best_model.pth",
+                   "../saved_models/vgg16/2023_11_08_20_52_37/vgg16_best_model.pth"]
+    outputs = []
+    for model_path in models_path:
+        probs = deep_ensembel_predict(val_loader ,model_path,  device)
+        outputs.append(probs)
+    outputs = torch.stack(outputs, dim=0)
 
 if __name__ == '__main__':
     main()
