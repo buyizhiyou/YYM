@@ -10,11 +10,13 @@
 
 from torch import nn
 from torchvision import models
-from . import resnet, vgg, vit ,swin
 
-def get_model(arch, pretrained, num_classes, use_torchvision=True):
-    if use_torchvision:#使用torchvision的官方实现
-        print("call torchvision.models")
+from . import resnet, swin, vgg, vit, vit_s, resnet_variational
+
+
+def get_model(arch, pretrained, num_classes, use_torchvision=False, use_bayesian=False):
+    if use_torchvision:  # 使用torchvision的官方实现
+        print("use torchvision official models...")
         if pretrained:
             print("=> using pre-trained model '{}'".format(arch))
             model = models.__dict__[arch](pretrained=True)
@@ -33,15 +35,22 @@ def get_model(arch, pretrained, num_classes, use_torchvision=True):
         else:
             print("=> create model '{}'".format(arch))
             model = models.__dict__[arch](num_classes=num_classes)
-    else: #使用专为cifar10 32x32实现的模型
-        print("call specific models")
+    elif use_bayesian:#TODO:添加更多bayesian模型
+        print("use bayesian models...")
+        if arch == "vgg16":
+            pass
+        elif arch == "resnet":
+            model = resnet_variational.resnet20()
+    else:  # 使用专为cifar10 32x32实现的模型
+        print("use private models...")
         if arch == "vgg16":
             model = vgg.VGG('VGG16')
         elif arch == "resnet50":
             model = resnet.ResNet50()
         elif arch == "vit_b_16":
-            model = vit.ViT()
-        elif arch =="swin_t":
+            # model = vit.ViT()#TODO:实验这两种实现哪一种更好
+            model = vit_s.ViT()
+        elif arch == "swin_t":#TODO:实验swin-t的效果
             model = swin.swin_b()
 
 

@@ -5,3 +5,5 @@ notebooks/.ipynb_checkpoints
 notebooks/.virtual_documents
 logs/
 extra/
+assets/
+.vscode/

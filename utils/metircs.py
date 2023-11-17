@@ -7,9 +7,11 @@
 @Version :   Cinnamoroll V1
 '''
 
-import torch
-from scipy.stats import entropy
 import numpy as np
+import torch
+from scipy import special
+from scipy.stats import entropy
+from torchmetrics.classification import BinaryCalibrationError
 
 
 def accuracy(output, target, topk=(1,)):
@@ -35,4 +37,25 @@ def mutual_info(probs):
     Args:
         probs (np.array): NxKxM array
     """
+    assert isinstance(probs,np.ndarray), "probs should be np.array"
     return entropy(np.mean(probs, axis=1), axis=1)-np.mean(entropy(probs, axis=2), axis=1)
+
+
+def nll(y_pred,y_true):
+    """
+    calculate negative log likelihood
+    """
+    assert isinstance(y_pred,np.ndarray), "y_pred should be np.array"
+    assert isinstance(y_true,np.ndarray), "y_true shold be np.array"
+    return np.mean(-special.xlogy(y_true, y_pred) - special.xlogy(1-y_true, 1-y_pred))
+
+
+def ece(y_pred,y_true):
+    """
+    calculate calibration error
+    """
+    assert isinstance(y_pred,np.ndarray), "y_pred should be np.array"
+    assert isinstance(y_true,np.ndarray), "y_true shold be np.array"
+    ece_score =  BinaryCalibrationError(n_bins=2, norm='l2')(torch.Tensor(y_pred),torch.Tensor(y_true))
+
+    return ece_score

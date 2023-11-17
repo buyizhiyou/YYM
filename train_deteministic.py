@@ -8,16 +8,13 @@
 '''
 
 
+import argparse
+import datetime
 import glob
 import os
-import argparse
 import random
 import time
-import datetime
-import yaml
 import warnings
-from tqdm import tqdm
-import warmup_scheduler
 
 import torch
 import torch.backends.cudnn as cudnn
@@ -28,43 +25,37 @@ import torch.nn.parallel
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
+import torchvision.transforms as transforms
+import warmup_scheduler
+import yaml
 from torch.utils.data import Subset
 from torch.utils.tensorboard import SummaryWriter
 from torchsummary import summary
-import torchvision.transforms as transforms
-from torchtoolbox.transform import Cutout
-
+from tqdm import tqdm
 
 from data_utils.get_datasets import get_dataset
 from model_utils.get_models import get_model
-from model_utils.resnet import ResNet50
+from utils.loss import LabelSmoothingCrossEntropyLoss
 from utils.metircs import accuracy
-from utils.misc import argsdict
+from utils.misc import argsdict, seed_torch
 from utils.randomaug import RandAugment
 from utils.visual import AverageMeter, ProgressMeter, Summary
+
+
 
 parser = argparse.ArgumentParser(description='Training')
 parser.add_argument('--config', help='yaml config file')
 
 best_acc1 = 0
-
-
 def main():
     configargs = parser.parse_args()
     with open(configargs.config, "r") as f:
         cfg = yaml.safe_load(f)
     args = argsdict(cfg)  # 包装字典，可以通过.访问
 
-    if args.seed is not None:
-        random.seed(args.seed)
-        torch.manual_seed(args.seed)
-        cudnn.deterministic = True
-        cudnn.benchmark = False
-        warnings.warn('You have chosen to seed training. '
-                      'This will turn on the CUDNN deterministic setting, '
-                      'which can slow down your training considerably! '
-                      'You may see unexpected behavior when restarting '
-                      'from checkpoints.')
+    # if args.seed is not None: #极大降低训练速度
+    #     print("set random seed")
+    #     seed_torch(args.seed)
     if args.gpu is not None:
         warnings.warn('You have chosen a specific GPU. This will completely '
                       'disable data parallelism.')
@@ -129,29 +120,21 @@ def main_worker(gpu, ngpus_per_node, args):
     elif args.gpu is not None and torch.cuda.is_available():
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
-    elif torch.backends.mps.is_available():  # PyTorch支持在M1芯片版本的Mac上进行模型加速
-        device = torch.device("mps")
-        model = model.to(device)
-    else:
-        # DataParallel will divide and allocate batch_size to all available GPUs
-        if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
-            model.features = torch.nn.DataParallel(model.features)
-            model.cuda()
-        else:
-            model = torch.nn.DataParallel(model).cuda()
 
     if torch.cuda.is_available():
         if args.gpu:
             device = torch.device('cuda:{}'.format(args.gpu))
         else:
             device = torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        device = torch.device("mps")
     else:
         device = torch.device("cpu")
 
-    # define loss function (criterion), optimizer, and learning rate scheduler
-    criterion = nn.CrossEntropyLoss().to(device)
+    # 定义 loss function (criterion), optimizer, and learning rate scheduler
+    if args.labelsmoothing:
+        criterion = LabelSmoothingCrossEntropyLoss(args.num_classes, smoothing=args.smoothing)
+    else:
+        criterion = nn.CrossEntropyLoss().to(device)
+
     if args.optimizer == "sgd":
         optimizer = torch.optim.SGD(model.parameters(
         ), args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
@@ -171,7 +154,7 @@ def main_worker(gpu, ngpus_per_node, args):
     elif args.scheduler == "exp":
         scheduler = torch.optim.lr_scheduler.ExponentialLR(
             optimizer, gamma=0.9)
-
+    #使用warmup策略
     if args.warmup:
         scheduler = warmup_scheduler.GradualWarmupScheduler(optimizer, multiplier=1.,
                                                             total_epoch=5, after_scheduler=scheduler)
@@ -179,8 +162,8 @@ def main_worker(gpu, ngpus_per_node, args):
     curr_time = datetime.datetime.now()
     time_str = datetime.datetime.strftime(curr_time, "%Y_%m_%d_%H_%M_%S")
     # time_str = "2023_11_14_13_02_01"
-    model_dir = f"{args.saved_models}/{args.arch}/{time_str}"
-    log_dir = f"{args.logs}/{args.arch}/{time_str}"
+    model_dir = f"{args.saved_models}/{args.mode}/{args.arch}/{time_str}"
+    log_dir = f"{args.logs}/{args.mode}/{args.arch}/{time_str}"
     try:
         os.makedirs(model_dir)
         os.makedirs(log_dir)
@@ -218,8 +201,8 @@ def main_worker(gpu, ngpus_per_node, args):
     # 数据集加载
     train_transform = transforms.Compose(
         [
-            transforms.RandomCrop(32, padding=4),
             transforms.Resize((args.size, args.size)),
+            transforms.RandomCrop(args.size, padding=4),
             transforms.RandomGrayscale(),  # add
             transforms.GaussianBlur(3),  # add
             transforms.RandomHorizontalFlip(),
@@ -235,16 +218,18 @@ def main_worker(gpu, ngpus_per_node, args):
             transforms.ToTensor(),
             transforms.Normalize(
                 (0.4914, 0.4822, 0.4465),
-                #  (0.2470, 0.2435, 0.2616))
                 (0.2023, 0.1994, 0.2010)),
         ]
     )
     # 添加额外的数据增强
     if args.aug:
         print("add more augmentation")
-        N = 2
-        M = 14
-        train_transform.transforms.insert(0, RandAugment(N, M))
+        # N = 2
+        # p = 0.5
+        # train_transform.transforms.insert(0, RandAugment(N, p)) #自己实现的autoaugmentation,不如使用下面的
+        auto_aug =  transforms.AutoAugment(policy=transforms.AutoAugmentPolicy('cifar10'), 
+                                            interpolation=transforms.InterpolationMode.BILINEAR)#torchvision里的autoaugmentation
+        train_transform.transforms.insert(1,auto_aug)
 
     train_dataset, val_dataset = get_dataset(
         args.data, "./data", train_transform, val_transform)
@@ -271,6 +256,8 @@ def main_worker(gpu, ngpus_per_node, args):
         return
 
     writer = SummaryWriter(log_dir)
+    with open("logs/model_parameters_map.yaml", "a") as f:  # 保存模型日期和训练参数
+        yaml.dump({f"{args.arch}_{args.mode}_{time_str}": dict(args)}, f)
     # scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     for epoch in tqdm(range(args.start_epoch, args.epochs)):
         if args.distributed:
@@ -309,8 +296,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 torch.save(state, os.path.join(
                     model_dir, f"{args.arch}_best_model_{best_acc1:.2f}.pth"))
 
-    with open("logs/model_parameters_map.yaml", "a") as f:  # 保存模型日期和训练参数
-        yaml.dump({f"{args.arch}_{time_str}": dict(args)}, f)
+
 
 
 def train(train_loader, model, criterion, optimizer, writer, epoch, device, args):
@@ -318,10 +304,9 @@ def train(train_loader, model, criterion, optimizer, writer, epoch, device, args
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
     top1 = AverageMeter('Acc@1', ':6.2f')
-    top5 = AverageMeter('Acc@5', ':6.2f')
     progress = ProgressMeter(
         len(train_loader),
-        [batch_time, data_time, losses, top1, top5],
+        [batch_time, data_time, losses, top1],
         prefix="Epoch: [{}]".format(epoch))
 
     # switch to train mode
@@ -343,18 +328,15 @@ def train(train_loader, model, criterion, optimizer, writer, epoch, device, args
         target = target.to(device, non_blocking=True)
         output = model(images)
         loss = criterion(output, target)
-
-        # measure accuracy and record loss
-        acc1, acc5 = accuracy(output, target, topk=(1, 5))
-        losses.update(loss.item(), images.size(0))
-        top1.update(acc1[0], images.size(0))
-        top5.update(acc5[0], images.size(0))
-
         # compute gradient and do SGD step
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
+        # measure accuracy and record loss
+        acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        losses.update(loss.item(), images.size(0))
+        top1.update(acc1[0], images.size(0))
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
@@ -376,9 +358,6 @@ def validate(val_loader, model, criterion, args):
                 i = base_progress + i
                 if args.gpu is not None and torch.cuda.is_available():
                     images = images.cuda(args.gpu, non_blocking=True)
-                if torch.backends.mps.is_available():
-                    images = images.to('mps')
-                    target = target.to('mps')
                 if torch.cuda.is_available():
                     target = target.cuda(args.gpu, non_blocking=True)
 
@@ -388,9 +367,7 @@ def validate(val_loader, model, criterion, args):
 
                 # measure accuracy and record loss
                 acc1, acc5 = accuracy(output, target, topk=(1, 5))
-                losses.update(loss.item(), images.size(0))
                 top1.update(acc1[0], images.size(0))
-                top5.update(acc5[0], images.size(0))
 
                 # measure elapsed time
                 batch_time.update(time.time() - end)
@@ -399,14 +376,12 @@ def validate(val_loader, model, criterion, args):
                 if i % args.print_freq == 0:
                     progress.display(i + 1)
 
-    batch_time = AverageMeter('Time', ':6.3f', Summary.NONE)
-    losses = AverageMeter('Loss', ':.4e', Summary.NONE)
+    batch_time = AverageMeter('Time', ':6.3f', Summary.AVERAGE)
     top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
-    top5 = AverageMeter('Acc@5', ':6.2f', Summary.AVERAGE)
     progress = ProgressMeter(
         len(val_loader) + (args.distributed and (len(val_loader.sampler)
                                                  * args.world_size < len(val_loader.dataset))),
-        [batch_time, losses, top1, top5],
+        [batch_time, top1],
         prefix='Test: ')
 
     # switch to evaluate mode
@@ -415,7 +390,6 @@ def validate(val_loader, model, criterion, args):
     run_validate(val_loader)
     if args.distributed:
         top1.all_reduce()
-        top5.all_reduce()
 
     if args.distributed and (len(val_loader.sampler) * args.world_size < len(val_loader.dataset)):
         aux_val_dataset = Subset(val_loader.dataset,

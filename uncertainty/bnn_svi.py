@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 '''
-@File    :   mc_dropout.py
-@Time    :   2023/11/07 15:59:29
+@File    :   bnn_svi.py
+@Time    :   2023/11/17 15:27:29
 @Author  :   shiqing 
 @Version :   Cinnamoroll V1
 '''
+
 
 import time
 import sys
@@ -20,16 +21,15 @@ from utils.metircs import accuracy,mutual_info
 from utils.visual import ProgressMeter, AverageMeter, Summary
 from data_utils.get_datasets import get_dataset
 from model_utils.get_models import get_model
+from bayesian_torch.utils.util import predictive_entropy, mutual_information
 
 
-
-def mc_dropout_predict(val_loader, model, device, N):
+def bnn_svi_predict(val_loader, model, device, num_monte_carlo):
     inference_time = AverageMeter('Time', ':6.3f', Summary.AVERAGE)
     top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
-    top5 = AverageMeter('Acc@5', ':6.2f', Summary.AVERAGE)
     progress = ProgressMeter(
         len(val_loader),
-        [inference_time,  top1, top5],
+        [inference_time,  top1],
         prefix='Test: ')
 
     probs_list = []
@@ -40,19 +40,22 @@ def mc_dropout_predict(val_loader, model, device, N):
 
             start = time.time()
             outputs = []
-            for _ in range(N):  # add mc_dropout
-                prob = torch.softmax(model(images), axis=1)
+            for _ in range(num_monte_carlo):# add bnn_svi
+                prob  = torch.softmax(model.forward(images),dim=1)#输出的概率
                 outputs.append(prob)
             outputs = torch.stack(outputs, dim=0)
             probs_list.append(outputs)
             output = torch.mean(outputs, dim=0)
+
+                        
+            # predictive_uncertainty = predictive_entropy(outputs.data.cpu().numpy())
+            # model_uncertainty = mutual_information(outputs.data.cpu().numpy())
 
             # measure elapsed time
             inference_time.update(time.time() - start, images.size(0))
             # measure accuracy and record loss
             acc1, acc5 = accuracy(output, target, topk=(1, 5))
             top1.update(acc1[0], images.size(0))
-            top5.update(acc5[0], images.size(0))
 
 
     # BatchesxNxBatchSizexNumClasses-->NxBatchSize*BatchesxNumClasses
@@ -69,7 +72,7 @@ def main():
     model = get_model("vgg16", False, 10, False)
     model = model.to(device)
     model.eval()
-    # model.classifier[5].training = True  # 打开dropout #TODO:resnet没有用dropout, vgg最后全连接层后面跟了dropout
+    # model.classifier[5].training = True  # 打开dropout
     model.classifier.training = True  # 打开dropout
     checkpoint = torch.load("../saved_models/vgg16/2023_11_15_16_36_44/vgg16_best_model_91.78.pth")
     model.load_state_dict(checkpoint['state_dict'])
@@ -89,7 +92,7 @@ def main():
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=256, shuffle=False,
         num_workers=4, pin_memory=True)
-    probs = mc_dropout_predict(val_loader, model, device, 8)
+    probs = bnn_svi_predict(val_loader, model, device, 8)
 
     mi = mutual_info(probs.cpu().numpy())
 
