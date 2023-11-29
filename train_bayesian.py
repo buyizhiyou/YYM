@@ -11,13 +11,11 @@ import argparse
 import datetime
 import glob
 import os
-import random
 import time
 import warnings
+import numpy as np 
 
-import bayesian_torch.models.deterministic.resnet as resnet
 import torch
-import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import torch.nn as nn
@@ -25,9 +23,7 @@ import torch.nn.parallel
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
-import torchvision
 import torchvision.transforms as transforms
-from torchvision import datasets
 import warmup_scheduler
 import yaml
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn, get_kl_loss
@@ -41,7 +37,7 @@ from model_utils.get_models import get_model
 from utils.loss import LabelSmoothingCrossEntropyLoss
 from utils.metircs import accuracy
 from utils.misc import argsdict, seed_torch
-from utils.randomaug import RandAugment
+from utils.randomaug import RandAugment,MixUp,CutMix
 from utils.visual import AverageMeter, ProgressMeter, Summary
 
 parser = argparse.ArgumentParser(description='Training')
@@ -92,14 +88,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                 world_size=args.world_size, rank=args.rank)
 
     # create model
-    if args.size == 32:
-        model = get_model(args.arch, args.pretrained,
-                          num_classes=10, use_torchvision=False)#
-        # model = resnet.resnet20()
-        # model = torchvision.models.resnet18(num_classes=10)
-    elif args.size == 224:
-        model = get_model(args.arch, args.pretrained,
-                          num_classes=10, use_torchvision=True)
+    model = get_model(args.arch, 10, args.use_torchvision,args.pretrained,args.use_bayesian)
     # summary(model,(3, 32, 32),device="cpu")
 
     # translate deterministic network into bayesian network
@@ -149,7 +138,8 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # 定义 loss function (criterion), optimizer, and learning rate scheduler
     if args.labelsmoothing:
-        criterion = LabelSmoothingCrossEntropyLoss(args.num_classes, smoothing=args.smoothing)
+        criterion = LabelSmoothingCrossEntropyLoss(
+            args.num_classes, smoothing=args.smoothing)
     else:
         criterion = nn.CrossEntropyLoss().to(device)
 
@@ -178,8 +168,8 @@ def main_worker(gpu, ngpus_per_node, args):
                                                             total_epoch=5, after_scheduler=scheduler)
 
     curr_time = datetime.datetime.now()
-    time_str = datetime.datetime.strftime(curr_time, "%Y_%m_%d_%H_%M_%S")
-    # time_str = "2023_11_14_13_02_01"
+    # time_str = datetime.datetime.strftime(curr_time, "%Y_%m_%d_%H_%M_%S")
+    time_str = "2023_11_29_11_13_47"
     model_dir = f"{args.saved_models}/{args.mode}/{args.arch}/{time_str}"
     log_dir = f"{args.logs}/{args.mode}/{args.arch}/{time_str}"
     try:
@@ -211,6 +201,10 @@ def main_worker(gpu, ngpus_per_node, args):
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             scheduler.load_state_dict(checkpoint['scheduler'])
+            if args.warmup:
+                scheduler.after_scheduler.optimizer = optimizer
+            else:
+                scheduler.optimizer = optimizer
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(resume_path, checkpoint['epoch']))
         else:
@@ -241,8 +235,6 @@ def main_worker(gpu, ngpus_per_node, args):
     # 添加额外的数据增强
     if args.aug:
         print("add more augmentation")
-        # N = 2
-        # p = 0.5
         # train_transform.transforms.insert(0, RandAugment(N, p)) #自己实现的autoaugmentation,不如使用下面的
         auto_aug =  transforms.AutoAugment(policy=transforms.AutoAugmentPolicy('cifar10'), 
                                             interpolation=transforms.InterpolationMode.BILINEAR)#torchvision里的autoaugmentation
@@ -265,31 +257,28 @@ def main_worker(gpu, ngpus_per_node, args):
         num_workers=args.workers, pin_memory=True, sampler=train_sampler)
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True, sampler=val_sampler)
-
-   
-    
+        num_workers=args.workers, pin_memory=True, sampler=val_sampler)  
     # 在测试集上评估模型
     if args.evaluate:
-        validate(val_loader, model, criterion, args)
+        validate(val_loader, model, args)
         return
 
     writer = SummaryWriter(log_dir)
     with open("logs/model_parameters_map.yaml", "a") as f:  # 保存模型日期和训练参数
         yaml.dump({f"{args.arch}_{args.mode}_{time_str}": dict(args)}, f)
-    # scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     for epoch in tqdm(range(args.start_epoch, args.epochs)):
         if args.distributed:
             # 在每个周期开始之前，可以调用train_sampler.set_epoch(epoch)来使得数据打的更乱。
             train_sampler.set_epoch(epoch)
 
         # train for one epoch
+        print("第%d个epoch的学习率：%f" % (epoch, optimizer.param_groups[0]['lr']))
         train(train_loader, model, criterion,
               optimizer, writer, epoch, device, args)
-        # scheduler.step()
+        scheduler.step()
 
         # evaluate on validation set
-        acc1 = validate(val_loader, model, criterion, args)
+        acc1 = validate(val_loader, model, args)
         writer.add_scalar("acc1/test", acc1, epoch)
 
         is_best = acc1 > best_acc1
@@ -329,46 +318,60 @@ def train(train_loader, model, criterion, optimizer, writer, epoch, device, args
     # switch to train mode
     model.train()
     end = time.time()
+    if args.use_cutmix:
+        cutmix = CutMix(args.size, beta=1.)
+    if args.use_mixup:
+        mixup = MixUp(alpha=1.)
+
+    scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
     for i, (images, target) in enumerate(train_loader):
-        """ 
-        # Train with amp
-        with torch.cuda.amp.autocast(enabled=use_amp):
-            outputs = net(inputs)
-            loss = criterion(outputs, targets)
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
-        optimizer.zero_grad()
-        """
         data_time.update(time.time() - end)
         images = images.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
+            
+        with torch.autocast("cuda", enabled=args.use_amp):
+            # compute output
+            output_ = []
+            kl_ = []
+            for mc_run in range(args.num_mc):
+                output = model(images)
+                kl = get_kl_loss(model)
+                output_.append(output)
+                kl_.append(kl)
+            output = torch.mean(torch.stack(output_), dim=0)
+            kl = torch.mean(torch.stack(kl_), dim=0)
+            if args.use_cutmix or args.use_mixup:
+                if args.use_cutmix:
+                    images, label, rand_label, lambda_= cutmix((images, target))
+                elif args.use_mixup:
+                    if np.random.rand() <= 0.8:
+                        images, label, rand_label, lambda_ = mixup((images, target))
+                    else:
+                        images, label, rand_label, lambda_ = images, label, torch.zeros_like(label), 1.
+                output = model(images)
+                cross_entropy_loss = criterion(output, label)*lambda_ + criterion(output, rand_label)*(1.-lambda_)
+            else:
+                output = model(images)
+                cross_entropy_loss = criterion(output, target)
 
-        # compute output
-        output_ = []
-        kl_ = []
-        for mc_run in range(args.num_mc):
-            output = model(images)
-            kl = get_kl_loss(model)
-            output_.append(output)
-            kl_.append(kl)
-        output = torch.mean(torch.stack(output_), dim=0)
-        kl = torch.mean(torch.stack(kl_), dim=0)
-        cross_entropy_loss = criterion(output, target)
-        scaled_kl = kl / args.batch_size
-        # ELBO loss
-        loss = cross_entropy_loss + scaled_kl
+            scaled_kl = kl / args.batch_size
+            # ELBO loss
+            loss = cross_entropy_loss + scaled_kl
 
-        # compute gradient and do SGD step
         optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+
+        # optimizer.zero_grad()
+        # loss.backward()
+        # optimizer.step()
+
 
         # measure accuracy and record loss
-        acc1 = accuracy(output, target, topk=(1, 5))[0]
+        acc1 = accuracy(output, target, topk=(1,))[0]
         losses.update(loss.item(), images.size(0))
         top1.update(acc1[0], images.size(0))
-
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
@@ -378,12 +381,12 @@ def train(train_loader, model, criterion, optimizer, writer, epoch, device, args
     # log loss and acc1
     if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                 and args.rank == 0):
-        writer.add_scalar("Loss/train/loss", losses.avg, epoch)
+        writer.add_scalar("Loss/train", losses.avg, epoch)
         writer.add_scalar("acc1/train", top1.avg, epoch)
         writer.flush()
 
 
-def validate(val_loader, model, criterion, args):
+def validate(val_loader, model, args):
     def run_validate(loader, base_progress=0):
         with torch.no_grad():
             end = time.time()
@@ -401,7 +404,7 @@ def validate(val_loader, model, criterion, args):
                 output_ = torch.stack(output_mc,dim=0)#NumMCxBatchSizexNum_classes
 
                 # measure accuracy and record loss
-                acc1, acc5 = accuracy(torch.mean(output_, dim=0), target, topk=(1, 5))
+                acc1= accuracy(torch.mean(output_, dim=0), target, topk=(1, ))[0]
                 top1.update(acc1[0], images.size(0))
 
                 # measure elapsed time

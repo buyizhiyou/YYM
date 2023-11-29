@@ -9,6 +9,7 @@
 
 import time
 import sys
+import numpy as np 
 sys.path.append("../")
 
 import torch
@@ -16,31 +17,32 @@ from torch import nn
 import torchvision.models as models
 import torchvision.transforms as transforms
 
-from utils.metircs import accuracy,mutual_info
+from utils.metircs import accuracy,mutual_info,nll,ece,brier_score
 from utils.visual import ProgressMeter, AverageMeter, Summary
 from data_utils.get_datasets import get_dataset
 from model_utils.get_models import get_model
 
 
 
-def mc_dropout_predict(val_loader, model, device, N):
+def mc_dropout_predict(val_loader, model, device, num_monte_carlo=20):
     inference_time = AverageMeter('Time', ':6.3f', Summary.AVERAGE)
     top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
-    top5 = AverageMeter('Acc@5', ':6.2f', Summary.AVERAGE)
     progress = ProgressMeter(
         len(val_loader),
-        [inference_time,  top1, top5],
+        [inference_time,  top1],
         prefix='Test: ')
 
     probs_list = []
+    target_list = []
     with torch.no_grad():
         for i, (images, target) in enumerate(val_loader):
             images = images.to(device)
             target = target.to(device)
+            target_list.append(target)
 
             start = time.time()
             outputs = []
-            for _ in range(N):  # add mc_dropout
+            for _ in range(num_monte_carlo):  # add mc_dropout
                 prob = torch.softmax(model(images), axis=1)
                 outputs.append(prob)
             outputs = torch.stack(outputs, dim=0)
@@ -50,9 +52,8 @@ def mc_dropout_predict(val_loader, model, device, N):
             # measure elapsed time
             inference_time.update(time.time() - start, images.size(0))
             # measure accuracy and record loss
-            acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            acc1 = accuracy(output, target, topk=(1, ))[0]
             top1.update(acc1[0], images.size(0))
-            top5.update(acc5[0], images.size(0))
 
 
     # BatchesxNxBatchSizexNumClasses-->NxBatchSize*BatchesxNumClasses
@@ -60,18 +61,24 @@ def mc_dropout_predict(val_loader, model, device, N):
     # NxBatchSize*BatchesxNumClasses-->BatchSize*BatchesxNxNumClasses
     probs = torch.transpose(probs, 0, 1)
     progress.display_summary()
-
-    return probs
+    targets = torch.concat(target_list, axis=0)
+    # num_classes = np.max(targets)+1
+    # y_true = np.eye(num_classes)[targets]#转为One-hot
+    # brier_score_ = brier_score(y_true, probs.cpu().detach().numpy())
+    # ece_score = ece(targets, probs.cpu().detach().numpy())
+    # nll_score = nll(y_true, probs.cpu().detach().numpy())
+    # print(f"brier score:{brier_score_},ece score:{ece_score},nll score:{nll_score}")
+    
+    return probs, targets
 
 
 def main():
     device = torch.device('cuda:1')
-    model = get_model("vgg16", False, 10, False)
+    model = get_model("vgg16", 10)
     model = model.to(device)
     model.eval()
-    # model.classifier[5].training = True  # 打开dropout #TODO:resnet没有用dropout, vgg最后全连接层后面跟了dropout
-    model.classifier.training = True  # 打开dropout
-    checkpoint = torch.load("../saved_models/vgg16/2023_11_15_16_36_44/vgg16_best_model_91.78.pth")
+    model.classifier[2].training = True  # 打开dropout
+    checkpoint = torch.load("../saved_models/deterministic/vgg16/2023_11_24_15_25_21/vgg16_best_model_93.62.pth")
     model.load_state_dict(checkpoint['state_dict'])
 
     val_transform = transforms.Compose(
@@ -85,13 +92,11 @@ def main():
         )
 
 
-    _, val_dataset = get_dataset("cifar10","../data", None,val_transform)
+    _, val_dataset = get_dataset("svhn","../data", None,val_transform)
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=256, shuffle=False,
         num_workers=4, pin_memory=True)
-    probs = mc_dropout_predict(val_loader, model, device, 8)
-
-    mi = mutual_info(probs.cpu().numpy())
+    mc_dropout_predict(val_loader, model, device, 20)
 
 
     

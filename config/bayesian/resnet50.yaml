@@ -1,16 +1,21 @@
 data: cifar10
 arch: resnet50
+use_torchvision: False
+use_amp: True
 mode: bayesian
 aug: True
+use_cutmix: False 
+use_cutmix: False
 size: 32
 workers: 4
-epochs: 400
+epochs: 800
 start_epoch: 0
-batch_size: 128
-lr: 0.001
+batch_size: 256
+lr: 0.01
 step_size: 50
 warmup: False
 labelsmoothing: False
+smoothing: 0.1
 optimizer: adam
 scheduler: cos
 momentum: 0.9
@@ -23,7 +28,7 @@ pretrained: False
 world_size: 1
 rank: 0 
 dist_backend: "nccl"
-gpu: 3
+gpu: 2
 multiprocessing_distributed: False 
 print_freq: 50
 seed:

@@ -10,7 +10,7 @@
 import time
 import sys
 sys.path.append("../")
-
+import numpy as np 
 
 import torch
 from torch import nn
@@ -20,24 +20,25 @@ import torchvision.transforms as transforms
 from model_utils.get_models import get_model
 from data_utils.get_datasets import get_dataset
 from utils.visual import ProgressMeter, AverageMeter, Summary
-from utils.metircs import accuracy
+from utils.metircs import accuracy,nll,ece,brier_score
 
 
 
 def baseline_softmax_predict(val_loader, model, device):
     inference_time = AverageMeter('Time', ':6.3f', Summary.AVERAGE)
     top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
-    top5 = AverageMeter('Acc@5', ':6.2f', Summary.AVERAGE)
     progress = ProgressMeter(
         len(val_loader),
-        [inference_time,  top1, top5],
+        [inference_time,  top1],
         prefix='Test: ')
 
     probs_list = []
+    target_list = []
     with torch.no_grad():
         for i, (images, target) in enumerate(val_loader):
             images = images.to(device)
             target = target.to(device)
+            target_list.append(target)
 
             end = time.time()
             output = model(images)
@@ -46,14 +47,14 @@ def baseline_softmax_predict(val_loader, model, device):
             # measure elapsed time
             inference_time.update(time.time() - end, images.size(0))
             # measure accuracy and record loss
-            acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            acc1 = accuracy(output, target, topk=(1, ))[0]
             top1.update(acc1[0], images.size(0))
-            top5.update(acc5[0], images.size(0))
 
     progress.display_summary()
-    probs = torch.concat(probs_list, axis=0)
+    probs = torch.concat(probs_list, axis=0) #Sample_nums x Num_classes
+    targets = torch.concat(target_list, axis=0)
 
-    return probs 
+    return probs ,targets
 
 
 def main():

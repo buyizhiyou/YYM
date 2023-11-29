@@ -20,13 +20,13 @@ from torch import nn
 from torchvision import transforms
 
 from model_utils.get_models import get_model
-from utils.metircs import accuracy
+from utils.metircs import accuracy,nll,ece,brier_score
 from utils.visual import AverageMeter, ProgressMeter, Summary
 
 
 
 
-def test_time_aug_predict(val_loader, model, device):
+def test_time_aug_predict(val_loader, model, device, tta_num=10):
     inference_time = AverageMeter('Time', ':6.3f', Summary.AVERAGE)
     top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
     progress = ProgressMeter(
@@ -35,16 +35,17 @@ def test_time_aug_predict(val_loader, model, device):
         prefix='Test: ')
 
     probs_list = []
+    target_list = []
     with torch.no_grad():
         for i, (images, target) in enumerate(val_loader):
             images = images.to(device)
             target = target.to(device)
+            target_list.append(target)
 
             tta_transform = transforms.Compose(
                 [
                     # transforms.AutoAugment(policy=transforms.AutoAugmentPolicy(
-                    #     'cifar10'), interpolation=transforms.InterpolationMode.BILINEAR),
-
+                    #     'cifar10'), interpolation=transforms.InterpolationMode.BILINEAR),##效果不好
                     transforms.RandomCrop(32, padding=4),
                     transforms.RandomHorizontalFlip(),
                     transforms.ConvertImageDtype(torch.float),
@@ -55,7 +56,7 @@ def test_time_aug_predict(val_loader, model, device):
             )
             outputs = []
             start = time.time()
-            for i in range(8):
+            for i in range(tta_num):
                 images_ = tta_transform(images)
                 prob = torch.softmax(model(images_), axis=1)
                 outputs.append(prob)
@@ -68,19 +69,23 @@ def test_time_aug_predict(val_loader, model, device):
             # measure accuracy and record loss
             acc1 = accuracy(output, target, topk=(1, ))[0]
             top1.update(acc1[0], images.size(0))
+
     # BatchesxNxBatchSizexNumClasses-->NxBatchSize*BatchesxNumClasses
     probs = torch.concat(probs_list, axis=1)
-    # NxBatchSize*BatchesxNumClasses-->BatchSize*BatchesxNxNumClasses
+    # NxBatchSize*BatchesxNumClasses-->BatchSize*BatchesxNxNumClasses 
     probs = torch.transpose(probs, 0, 1)
     progress.display_summary()
+    targets = torch.concat(target_list, axis=0)
 
-    return probs
+
+    return probs,targets
 
 
 def main():
     val_transform = transforms.Compose(
         [
             transforms.PILToTensor(), #返回torch.uint8
+            transforms.Resize([32,32]),
         ]
     )
     val_dataset = datasets.CIFAR10(
@@ -91,11 +96,11 @@ def main():
         num_workers=4, pin_memory=True)
 
     device = torch.device('cuda:3')
-    model = get_model("vgg16", False, 10, False)
+    model = get_model("vgg16", 10)
     model = model.to(device)
     model.eval()
     checkpoint = torch.load(
-        "/share/home/shiqing/YYM/saved_models/vgg16/2023_11_16_14_10_39/vgg16_best_model_92.90.pth")
+        "../saved_models/deterministic/vgg16/2023_11_24_15_25_21/vgg16_best_model_93.62.pth")
     model.load_state_dict(checkpoint['state_dict'])
     test_time_aug_predict(val_loader, model, device)
 

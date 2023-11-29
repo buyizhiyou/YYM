@@ -1,7 +1,12 @@
 data: cifar10
+num_classes: 10
 arch: vgg16
+use_torchvision: False
+use_amp: True
 mode: deterministic
 aug: True
+use_cutmix: False 
+use_cutmix: False
 size: 32
 workers: 4
 epochs: 400
@@ -11,6 +16,7 @@ lr: 0.01
 step_size: 50
 warmup: True
 labelsmoothing: False
+smoothing: 0.1
 optimizer: sgd
 scheduler: cos
 momentum: 0.9
@@ -23,7 +29,7 @@ pretrained: False
 world_size: 1
 rank: 0 
 dist_backend: "nccl"
-gpu: 2
+gpu: 1
 multiprocessing_distributed: False 
 print_freq: 50
 seed: 107

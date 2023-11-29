@@ -11,16 +11,17 @@
 
 ## Model uncertainty
 
-- [ ] implement TTA 
-- [ ] implement MC dropout
-- [ ] implement Ensemble 
-- [ ] implement a deteministic method
+- [x] implement a deteministic method(max softmax prob)
+- [x] implement TTA(Test time augmentation) 
+- [x] implement MC dropout
+- [x] implement deep Ensemble 
+- [x] implement bayesian deep learning(SVI)
 
 
 
 ## Calculate uncertainty
-- [ ] Entropy
-- [ ] Mutual Information
+- [x] Entropy
+- [x] Mutual Information
   
 
 ## Evaluate uncertaitny
@@ -30,5 +31,4 @@
 
 
 ## Analalyze Networks and Ablation study 
-- [ ] aa
-- [ ] bb
+- [ ] uncertainty and network structure

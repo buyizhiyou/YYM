@@ -34,22 +34,22 @@ def get_dataset(name, path, train_transform, val_transform):
         包含60000张32x32x3的彩色图像，涵盖100个类别,其中50000张图像用于训练，10000张图像用于测试
         '''
         train_dataset = datasets.CIFAR100(
-            root=path, train=True, download=False, transform=train_transform
+            root=path, train=True, download=True, transform=train_transform
         )
 
         val_dataset = datasets.CIFAR100(
-            root=path, train=False, download=False, transform=val_transform
+            root=path, train=False, download=True, transform=val_transform
         )
     elif name == "svhn":
         '''
         包含了73257张用于训练的图像、26032张用于测试的图像和531131张用于额外训练数据的额外图像。
         '''
         train_dataset = datasets.SVHN(
-            root=path, split="train", download=True, transform=train_transform
+            root=path, split="train", download=False, transform=train_transform
         )
 
         val_dataset = datasets.SVHN(
-            root=path, split="test", download=True, transform=val_transform
+            root=path, split="test", download=False, transform=val_transform
         )
 
     elif name == "mnist":
@@ -88,6 +88,6 @@ def get_dataset(name, path, train_transform, val_transform):
         val_dataset = datasets.ImageFolder(val_path,transform=val_transform)
 
     else:
-        raise Exception("参数错误")
+        raise Exception("参数错误,不合法的数据集名称")
 
     return train_dataset, val_dataset

@@ -27,7 +27,7 @@ from utils.visual import AverageMeter, ProgressMeter, Summary
 
 class EnsembleModel(nn.Module):
     def __init__(self, model_name, models_path, device, num_classes=10):
-        super(EnsembleModel, self).__init__()
+        super().__init__()
         self.models_path = models_path
         self.model_name = model_name
         self.num_classes = num_classes
@@ -37,7 +37,7 @@ class EnsembleModel(nn.Module):
     def _load_weights(self):
         trained_models = []
         for model_path in self.models_path:
-            model = get_model(self.model_name, False, self.num_classes, False)
+            model = get_model(self.model_name, self.num_classes)
             model = model.to(self.device)
             model.eval()
             checkpoint = torch.load(model_path)
@@ -50,45 +50,61 @@ class EnsembleModel(nn.Module):
         outputs = []
         for model in self.trained_models:
             outputs.append(torch.softmax(model(x), axis=1))
+        
+        outputs = torch.stack(outputs, dim=0)#NxBatchSizexnum_classes
+
+        return torch.mean(outputs,axis=0)
+
+
+    def mc_forward(self, x):
+        outputs = []
+        for model in self.trained_models:
+            outputs.append(torch.softmax(model(x), axis=1))
+        
+        outputs = torch.stack(outputs, dim=0)#NxBatchSizexnum_classes
 
         return outputs
+
+
 
 
 def deep_ensembel_predict(val_loader, vgg_ensemble, device):
     inference_time = AverageMeter('Time', ':6.3f', Summary.AVERAGE)
     top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
-    top5 = AverageMeter('Acc@5', ':6.2f', Summary.AVERAGE)
     progress = ProgressMeter(
         len(val_loader),
-        [inference_time,  top1, top5],
+        [inference_time,  top1],
         prefix='Test: ')
 
     probs_list = []
+    target_list = []
     with torch.no_grad():
         for i, (images, target) in enumerate(val_loader):
             images = images.to(device)
             target = target.to(device)
+            target_list.append(target)
 
             start = time.time()
-            outputs = vgg_ensemble(images)
-            outputs = torch.stack(outputs, dim=0)
+            outputs = vgg_ensemble.mc_forward(images)
+           
             probs_list.append(outputs)
             output = torch.mean(outputs, dim=0)
 
             # measure elapsed time
             inference_time.update(time.time() - start, images.size(0))
             # measure accuracy and record loss
-            acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            acc1 = accuracy(output, target, topk=(1, ))[0]
             top1.update(acc1[0], images.size(0))
-            top5.update(acc5[0], images.size(0))
 
+    progress.display_summary()
     # BatchesxNxBatchSizexNumClasses-->NxBatchSize*BatchesxNumClasses
     probs = torch.concat(probs_list, axis=1)
     # NxBatchSize*BatchesxNumClasses-->BatchSize*BatchesxNxNumClasses
     probs = torch.transpose(probs, 0, 1)
-    progress.display_summary()
+    targets = torch.concat(target_list, axis=0)
 
-    return probs
+
+    return probs,targets
 
 
 def main():
@@ -108,12 +124,11 @@ def main():
         num_workers=4, pin_memory=True)
 
     device = torch.device('cuda:3')
-    models_path = ["../saved_models/vgg16/2023_11_15_16_36_44/vgg16_best_model_91.78.pth",
-                   "../saved_models/vgg16/2023_11_15_21_15_51/vgg16_best_model_92.90.pth",
-                   "../saved_models/vgg16/2023_11_16_14_10_39/vgg16_best_model_92.90.pth"]
+    models_path = ["../saved_models/deterministic/vgg16/2023_11_15_16_36_44/vgg16_best_model_91.78.pth",
+                   "../saved_models/deterministic/vgg16/2023_11_15_21_15_51/vgg16_best_model_92.90.pth",]
 
     vgg_ensemble = EnsembleModel("vgg16", models_path, device)
-    probs = deep_ensembel_predict(val_loader, vgg_ensemble,  device)
+    deep_ensembel_predict(val_loader, vgg_ensemble,  device)
 
 
 if __name__ == '__main__':
