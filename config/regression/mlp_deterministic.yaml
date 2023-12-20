@@ -1,0 +1,13 @@
+type: regression
+mode: deterministic
+occlude: False
+hetero: False
+n_hidden: 32
+drop_p: 0.5
+batch_size: 512
+learning_rate: 1.0e-3
+weight_decay: 0.001
+number_epochs: 100000
+gpu: 0
+saved_models: "saved_models"
+logs: "logs"

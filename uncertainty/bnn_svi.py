@@ -17,7 +17,7 @@ from torch import nn
 import torchvision.models as models
 import torchvision.transforms as transforms
 
-from utils.metircs import accuracy,mutual_info,nll,ece,brier_score
+from utils.metrics import accuracy,mutual_info,nll,ece,brier_score
 from utils.visual import ProgressMeter, AverageMeter, Summary
 from data_utils.get_datasets import get_dataset
 from model_utils.get_models import get_model

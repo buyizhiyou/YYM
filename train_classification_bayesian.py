@@ -35,7 +35,7 @@ from tqdm import tqdm
 from data_utils.get_datasets import get_dataset
 from model_utils.get_models import get_model
 from utils.loss import LabelSmoothingCrossEntropyLoss
-from utils.metircs import accuracy
+from utils.metrics import accuracy
 from utils.misc import argsdict, seed_torch
 from utils.randomaug import RandAugment,MixUp,CutMix
 from utils.visual import AverageMeter, ProgressMeter, Summary

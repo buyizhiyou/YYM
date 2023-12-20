@@ -14,7 +14,7 @@ import pytest
 import sys
 sys.path.append("../")
 
-from utils.metircs import mutual_info
+from utils.metrics import mutual_info
 
 
 class TestDemo():

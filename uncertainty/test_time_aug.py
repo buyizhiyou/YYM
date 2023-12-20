@@ -20,7 +20,7 @@ from torch import nn
 from torchvision import transforms
 
 from model_utils.get_models import get_model
-from utils.metircs import accuracy,nll,ece,brier_score
+from utils.metrics import accuracy,nll,ece,brier_score
 from utils.visual import AverageMeter, ProgressMeter, Summary
 
 

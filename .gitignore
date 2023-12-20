@@ -6,4 +6,5 @@ notebooks/.virtual_documents
 logs/
 extra/
 assets/
+results/
 .vscode/

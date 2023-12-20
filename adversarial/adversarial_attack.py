@@ -47,6 +47,16 @@ def bim_attack(model, images, labels, epsilon=8/255,device=None, normalized=True
 
     return adv_images
 
+def deepfool_attack(model, images, labels, steps=50,device=None, normalized=True):
+    attack = torchattacks.DeepFool(model, steps=steps)
+    if device:
+        attack.set_device(device)
+    if normalized:  # If input images were normalized, then
+        attack.set_normalization_used(
+            mean=(0.4914, 0.4822, 0.4465), std=(0.2023, 0.1994, 0.2010))
+    adv_images = attack(images, labels)
+
+    return adv_images
 
 def pgd_attack(model, images, labels, epsilon=8/255, device=None,normalized=True):
     attack = torchattacks.PGD(

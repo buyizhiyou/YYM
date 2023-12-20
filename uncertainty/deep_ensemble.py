@@ -19,7 +19,7 @@ from torch import nn
 
 from data_utils.get_datasets import get_dataset
 from model_utils.get_models import get_model
-from utils.metircs import accuracy
+from utils.metrics import accuracy
 from utils.visual import AverageMeter, ProgressMeter, Summary
 
 
@@ -40,7 +40,7 @@ class EnsembleModel(nn.Module):
             model = get_model(self.model_name, self.num_classes)
             model = model.to(self.device)
             model.eval()
-            checkpoint = torch.load(model_path)
+            checkpoint = torch.load(model_path,map_location=self.device)
             model.load_state_dict(checkpoint['state_dict'])
             trained_models.append(model)
 

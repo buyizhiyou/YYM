@@ -20,4 +20,4 @@ done
 
 
 echo "train $CFG"
-python train_deteministic.py --config $CFG
+python train_classification_deterministic.py --config $CFG

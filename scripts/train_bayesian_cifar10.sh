@@ -20,4 +20,4 @@ done
 
 
 echo "train $CFG"
-python train_bayesian.py --config $CFG
+python train_classification_bayesian.py --config $CFG

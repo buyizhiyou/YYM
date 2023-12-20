@@ -7,11 +7,12 @@
 @Version :   Cinnamoroll V1
 '''
 
-
+import os
 import numpy as np
 from sklearn import metrics
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 import seaborn as sns
 from typing import List
 
@@ -79,6 +80,26 @@ def plot_dist(axes: Axes, data_list: List[list], datanames: List[str], label: st
     axes.legend()
 
 
+def plot_ecdf(axes: Axes, data_list: List[list], datanames: List[str], label: str = None):
+    """绘制cdf曲线
+
+    Args:
+        axes (Axes): _description_
+        data_list (List[list]): _description_
+        datanames (List[str]): _description_
+        label (str, optional): _description_. Defaults to None.
+    """
+    sns.set_style("white")
+    for i, data in enumerate(data_list):
+        axes.set_xlabel(label)
+        sns.ecdfplot(
+            data,
+            ax=axes,
+            label=datanames[i],
+        )
+    axes.legend()
+
+
 def plot_violin(axes: Axes, data_list: List[list], datanames: List[str], label: str = None):
     """绘制小提琴图
 
@@ -96,6 +117,12 @@ def plot_violin(axes: Axes, data_list: List[list], datanames: List[str], label: 
             ax=axes[i],
         )
         axes[i].set_title(label)
+
+
+def save_fig(fig: Figure, save_path: str, filename: str):
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    fig.savefig(os.path.join(save_path, filename))
 
 
 def visualize_adv(x: np.ndarray, x_adv: np.ndarray, clean_pred: int, adv_pred: int,
@@ -139,3 +166,40 @@ def visualize_adv(x: np.ndarray, x_adv: np.ndarray, clean_pred: int, adv_pred: i
                adv_prob), size=10, ha="center", transform=ax[1].transAxes)
 
     plt.show()
+
+
+def visualize_uncertainty(
+    fig_title, pred_val, ale_val, epi_val, x_train, y_train, x_test, y_test
+):
+    fig, axs = plt.subplots(nrows=1, ncols=2, sharex=True, figsize=(12, 4))
+    for ax in axs:
+        ax.scatter(x_test, y_test, c="orange", s=7, label="test")
+        ax.scatter(x_train, y_train, s=7, label="train")
+        ax.plot(x_test, pred_val, c="red", label="predict")
+
+    if np.mean(ale_val) != 1:  # a tricky hack here
+        axs[0].fill_between(
+            x_test.squeeze(),
+            pred_val - ale_val,
+            pred_val + ale_val,
+            label="Aleatoric",
+            alpha=0.5,
+        )
+    else:
+        axs[0].fill_between(  # TODO: S==0
+            x_test.squeeze(), pred_val, pred_val, label="Aleatoric", alpha=0.5
+        )
+    if np.sum(epi_val) != 0:
+        axs[1].fill_between(
+            x_test.squeeze(),
+            pred_val - epi_val,
+            pred_val + epi_val,
+            label="Epistemic",
+            alpha=0.5,
+        )
+    axs[0].legend()
+    axs[1].legend()
+    fig.suptitle(fig_title)
+    plt.show()
+
+    return fig
