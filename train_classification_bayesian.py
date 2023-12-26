@@ -333,7 +333,7 @@ def train(train_loader, model, criterion, optimizer, writer, epoch, device, args
             # compute output
             output_ = []
             kl_ = []
-            for mc_run in range(args.num_mc):
+            for mc_run in range(args.num_mc_train):
                 output = model(images)
                 kl = get_kl_loss(model)
                 output_.append(output)
@@ -398,7 +398,7 @@ def validate(val_loader, model, args):
                     target = target.cuda(args.gpu, non_blocking=True)
 
                 output_mc = []
-                for _ in range(args.num_monte_carlo):
+                for _ in range(args.num_mc_eval):
                     output = torch.softmax(model.forward(images),dim=1)#输出的概率
                     output_mc.append(output)
                 output_ = torch.stack(output_mc,dim=0)#NumMCxBatchSizexNum_classes

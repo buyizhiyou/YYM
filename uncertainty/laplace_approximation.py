@@ -27,7 +27,7 @@ from utils.metrics import accuracy, brier_score, ece, mutual_info, nll
 from utils.visual import AverageMeter, ProgressMeter, Summary
 
 
-def laplace_approx_predict(val_loader, la_model, device, num_monte_carlo=20):
+def laplace_approx_predict(val_loader, la_model, device, num_mc_eval=20):
     inference_time = AverageMeter('Time', ':6.3f', Summary.AVERAGE)
     top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
     progress = ProgressMeter(
@@ -115,7 +115,7 @@ def main():
     la_model.fit(train_loader)
     la_model.optimize_prior_precision(method='marglik', val_loader=val_loader)
     # User-specified predictive approx.
-    probs, targets = laplace_approx_predict(val_loader, la_model, device, num_monte_carlo=20)
+    probs, targets = laplace_approx_predict(val_loader, la_model, device, num_mc_eval=20)
     # import pdb;pdb.set_trace()
 
     probs_map, targets = predict(val_loader, model, device, laplace=False)

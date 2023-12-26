@@ -32,8 +32,8 @@ gpu: 2
 multiprocessing_distributed: False 
 print_freq: 50
 seed:
-num_monte_carlo: 20
-num_mc: 1
+num_mc_eval: 20
+num_mc_train: 1
 prior_mu: 0.0
 prior_sigma: 1.0
 posterior_mu_init: 0.0

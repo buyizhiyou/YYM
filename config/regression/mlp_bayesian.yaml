@@ -1,0 +1,26 @@
+type: regression
+mode: bayesian
+std_const: 0.3 #噪声参数
+train_abs: 6
+test_abs: 8
+n_samples: 2000
+occlude: False
+hetero: False
+n_hidden: 32
+drop_p: 0.0
+batch_size: 512
+learning_rate: 1.0e-5
+weight_decay: 0.000
+number_epochs: 100000
+gpu: 1
+saved_models: "saved_models"
+logs: "logs"
+num_mc_eval: 20
+num_mc_train: 10
+prior_mu: 0.0
+prior_sigma: 1.0
+posterior_mu_init: 0.0
+bnn_rho_init: -3.0 #rho init for bnn layers
+use_flipout_layers: False #Use Flipout layers for BNNs, default is Reparameterization layers
+moped_init_model: '' #DNN model to intialize MOPED method
+moped_delta_factor: 0.5

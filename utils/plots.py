@@ -173,8 +173,8 @@ def visualize_uncertainty(
 ):
     fig, axs = plt.subplots(nrows=1, ncols=2, sharex=True, figsize=(12, 4))
     for ax in axs:
-        ax.scatter(x_test, y_test, c="orange", s=7, label="test")
-        ax.scatter(x_train, y_train, s=7, label="train")
+        ax.scatter(x_test, y_test, c="blue", s=7, label="test")
+        ax.scatter(x_train, y_train, s=7, label="train",alpha=0.3)
         ax.plot(x_test, pred_val, c="red", label="predict")
 
     if np.mean(ale_val) != 1:  # a tricky hack here
@@ -184,6 +184,7 @@ def visualize_uncertainty(
             pred_val + ale_val,
             label="Aleatoric",
             alpha=0.5,
+            color="orange"
         )
     else:
         axs[0].fill_between(  # TODO: S==0
@@ -196,6 +197,7 @@ def visualize_uncertainty(
             pred_val + epi_val,
             label="Epistemic",
             alpha=0.5,
+            color="orange"
         )
     axs[0].legend()
     axs[1].legend()

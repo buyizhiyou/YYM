@@ -24,7 +24,7 @@ from model_utils.get_models import get_model
 
 
 
-def mc_dropout_predict(val_loader, model, device, num_monte_carlo=20):
+def mc_dropout_predict(val_loader, model, device, num_mc_eval=20):
     inference_time = AverageMeter('Time', ':6.3f', Summary.AVERAGE)
     top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
     progress = ProgressMeter(
@@ -42,7 +42,7 @@ def mc_dropout_predict(val_loader, model, device, num_monte_carlo=20):
 
             start = time.time()
             outputs = []
-            for _ in range(num_monte_carlo):  # add mc_dropout
+            for _ in range(num_mc_eval):  # add mc_dropout
                 prob = torch.softmax(model(images), axis=1)
                 outputs.append(prob)
             outputs = torch.stack(outputs, dim=0)

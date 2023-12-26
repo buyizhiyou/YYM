@@ -1,5 +1,9 @@
 type: regression
 mode: deterministic
+std_const: 0.3 #噪声参数
+train_abs: 6
+test_abs: 8
+n_samples: 2000
 occlude: False
 hetero: False
 n_hidden: 32
@@ -8,6 +12,6 @@ batch_size: 512
 learning_rate: 1.0e-3
 weight_decay: 0.001
 number_epochs: 100000
-gpu: 0
+gpu: 2
 saved_models: "saved_models"
 logs: "logs"

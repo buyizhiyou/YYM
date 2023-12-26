@@ -24,7 +24,7 @@ from model_utils.get_models import get_model
 from bayesian_torch.utils.util import predictive_entropy, mutual_information
 from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn
 
-def bnn_svi_predict(val_loader, model, device, num_monte_carlo=20):
+def bnn_svi_predict(val_loader, model, device, num_mc_eval=20):
     inference_time = AverageMeter('Time', ':6.3f', Summary.AVERAGE)
     top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
     progress = ProgressMeter(
@@ -42,7 +42,7 @@ def bnn_svi_predict(val_loader, model, device, num_monte_carlo=20):
 
             start = time.time()
             outputs = []
-            for _ in range(num_monte_carlo):# add bnn_svi
+            for _ in range(num_mc_eval):# add bnn_svi
                 prob  = torch.softmax(model.forward(images),dim=1)#输出的概率
                 outputs.append(prob)
             outputs = torch.stack(outputs, dim=0)

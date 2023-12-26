@@ -66,7 +66,7 @@ def gen_data(
     aug=False,
     train_abs=5,
     test_abs=8,
-    n_samples=1000,
+    n_samples=2000,
     seed=1
 ):
     """
@@ -77,12 +77,12 @@ def gen_data(
     train/test abs are the absolute value of x ranges
     return two sets of tensor pairs
     """
-    # test data as ground truth
+    # test data as ground truth, 不加入噪声
     test_vec_size = int(n_samples)
     x_test = np.linspace(-test_abs, test_abs, test_vec_size)
     y_test = mean_fun(x_test)
 
-    # train data with some problem
+    # train data with some problem ，加入一些噪声
     train_vec_size = int(n_samples)
     x_train = np.linspace(-train_abs, train_abs, train_vec_size)
     y_train = mean_fun(x_train)
@@ -114,8 +114,8 @@ def gen_data(
 
     # plot
     plt.figure(figsize=(12, 4))
-    plt.scatter(x_test, y_test, c="orange", s=7, label="test")
-    plt.scatter(x_train, y_train, s=7, label="train")
+    plt.scatter(x_test, y_test, c="blue", s=7, label="test")
+    plt.scatter(x_train, y_train,  s=7, alpha=0.3, label="train")
     plt.legend()
     plt.title(plot_title)
 

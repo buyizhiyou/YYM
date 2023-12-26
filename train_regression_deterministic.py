@@ -43,7 +43,8 @@ def main():
     # def MEAN_FUN(x): return x**3
     MEAN_FUN = np.cos
     x_train, y_train, x_test, y_test = gen_data(
-        mean_fun=MEAN_FUN, std_const=0.3, train_abs=5, test_abs=8, occlude=args.occlude, hetero=args.hetero)
+        mean_fun=MEAN_FUN, std_const=args.std_const, train_abs=args.train_abs, test_abs=args.test_abs,
+        occlude=args.occlude, hetero=args.hetero,n_samples=args.n_samples)
 
     # train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
     # val_dataset = torch.utils.data.TensorDataset(x_test, y_test)
@@ -91,6 +92,9 @@ def main():
     net = train_model(net, aleatoric_loss, optimizer, x_train,
                       y_train, x_test, y_test, device, early_stopping, writer, args.number_epochs)
 
+    with open("logs/model_parameters_map.yaml", "a") as f:  # 保存模型日期和训练参数
+        yaml.dump({f"mlp_{args.mode}_{time_str}": dict(args)}, f)
+    
     return net
 
 
