@@ -3,7 +3,7 @@
 '''
 @File    :   misc.py
 @Time    :   2023/11/07 14:37:01
-@Author  :   shiqing 
+@Author  :   shiqing
 @Version :   Cinnamoroll V1
 '''
 
@@ -12,7 +12,6 @@ import random
 
 import numpy as np
 import torch
-from enum import Enum
 from matplotlib import pyplot as plt
 
 
@@ -54,21 +53,25 @@ def get_experiment_name(args):
     return experiment_name
 
 
-def STD_FUNC(x): return 0.3 * (x + 2)  # 异方差函数
+def STD_FUNC(x):
+    return 0.3 * (x + 2)  # 异方差函数
+
+
 # MEAN_FUNC = np.cos
-MEAN_FUNC  = lambda x: x^3
-def gen_data(
-    mean_fun=MEAN_FUNC,
-    std_fun=STD_FUNC,
-    std_const=0.1,
-    hetero=False,
-    occlude=False,
-    aug=False,
-    train_abs=5,
-    test_abs=8,
-    n_samples=2000,
-    seed=1
-):
+def MEAN_FUNC(x):
+    return x ^ 3
+
+
+def gen_data(mean_fun=MEAN_FUNC,
+             std_fun=STD_FUNC,
+             std_const=0.1,
+             hetero=False,
+             occlude=False,
+             aug=False,
+             train_abs=5,
+             test_abs=8,
+             n_samples=2000,
+             seed=1):
     """
     mean_fun and std_fun: two normal function to
     engineer relatinship y = f_w(x) + sigma(x)
@@ -91,7 +94,8 @@ def gen_data(
     if hetero:  # 添加异方差噪声
         plot_title = plot_title + " heteroskedastic"
         np.random.seed(seed)
-        y_train = y_train + np.random.normal(0, np.abs(std_fun(x_train)), train_vec_size)
+        y_train = y_train + \
+            np.random.normal(0, np.abs(std_fun(x_train)), train_vec_size)
     else:  # 添加同方差噪声
         np.random.seed(seed)
         y_train = y_train + np.random.normal(0, std_const, train_vec_size)
@@ -101,21 +105,21 @@ def gen_data(
         indicies = np.arange(train_vec_size)
         n_piece = indicies // (train_vec_size / 5)
         new_indicies = np.concatenate(
-            (indicies[n_piece != 1], indicies[n_piece == 1][1::6]), axis=None
-        )  # 忽略掉一部分训练数据
+            (indicies[n_piece != 1], indicies[n_piece == 1][1::6]),
+            axis=None)  # 忽略掉一部分训练数据
         y_train = y_train[new_indicies]
         x_train = x_train[new_indicies]
 
     if aug:
         x_aug = np.linspace(-0.5, 0.5, 500)
         y_aug = mean_fun(x_aug)
-        x_train = np.concatenate([x_train,x_aug])
-        y_train = np.concatenate([y_train,y_aug])
+        x_train = np.concatenate([x_train, x_aug])
+        y_train = np.concatenate([y_train, y_aug])
 
     # plot
     plt.figure(figsize=(12, 4))
     plt.scatter(x_test, y_test, c="blue", s=7, label="test")
-    plt.scatter(x_train, y_train,  s=7, alpha=0.3, label="train")
+    plt.scatter(x_train, y_train, s=7, alpha=0.3, label="train")
     plt.legend()
     plt.title(plot_title)
 
@@ -126,5 +130,3 @@ def gen_data(
     y_test = torch.from_numpy(y_test).float().view(-1, 1)
 
     return (x_train, y_train, x_test, y_test)
-
-

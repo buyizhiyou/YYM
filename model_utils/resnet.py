@@ -3,7 +3,7 @@
 '''
 @File    :   resnet.py
 @Time    :   2023/11/15 14:31:38
-@Author  :   shiqing 
+@Author  :   shiqing
 @Version :   Cinnamoroll V1
 '''
 

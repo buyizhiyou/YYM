@@ -3,7 +3,7 @@
 '''
 @File    :   mlp.py
 @Time    :   2023/12/12 12:29:10
-@Author  :   shiqing 
+@Author  :   shiqing
 @Version :   Cinnamoroll V1
 '''
 

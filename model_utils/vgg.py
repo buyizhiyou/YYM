@@ -3,7 +3,7 @@
 '''
 @File    :   vgg.py
 @Time    :   2023/11/15 14:32:15
-@Author  :   shiqing 
+@Author  :   shiqing
 @Version :   Cinnamoroll V1
 '''
 

@@ -2,11 +2,11 @@
 # https://github.com/rpmcruz/autoaugment/blob/master/transformations.py
 import random
 
-import PIL
-import PIL.ImageOps
-import PIL.ImageEnhance
-import PIL.ImageDraw
 import numpy as np
+import PIL
+import PIL.ImageDraw
+import PIL.ImageEnhance
+import PIL.ImageOps
 import torch
 from PIL import Image
 
@@ -150,6 +150,7 @@ def CutoutAbs(img, v):  # [0, 60] => percentage: [0, 0.2]
 
 
 def SamplePairing(imgs):  # [0, 0.4]
+
     def f(img1, v):
         i = np.random.choice(len(imgs))
         img2 = PIL.Image.fromarray(imgs[i])
@@ -165,7 +166,7 @@ def Identity(img, v):
 def augment_list():  # 16 oeprations and their ranges
     # https://github.com/google-research/uda/blob/master/image/randaugment/policies.py#L57
     # https://github.com/tensorflow/tpu/blob/8462d083dd89489a79e3200bcc8d4063bf362186/models/official/efficientnet/autoaugment.py#L505
-    l = [
+    ls = [
         (AutoContrast, 0, 1),
         (Equalize, 0, 1),
         (Invert, 0, 1),
@@ -184,7 +185,7 @@ def augment_list():  # 16 oeprations and their ranges
         (TranslateYabs, 0., 100),
     ]
 
-    return l
+    return ls
 
 
 class Lighting(object):
@@ -208,7 +209,7 @@ class Lighting(object):
         return img.add(rgb.view(3, 1, 1).expand_as(img))
 
 
-class Cutout(object):
+class CutOut(object):
     """
     Reference : https://github.com/quark0/darts/blob/master/cnn/utils.py
     """
@@ -227,7 +228,7 @@ class Cutout(object):
         x1 = np.clip(x - self.length // 2, 0, w)
         x2 = np.clip(x + self.length // 2, 0, w)
 
-        mask[y1: y2, x1: x2] = 0. ##全0填充区域
+        mask[y1:y2, x1:x2] = 0.  # 全0填充区域
         mask = torch.from_numpy(mask)
         mask = mask.expand_as(img)
         img *= mask
@@ -235,6 +236,7 @@ class Cutout(object):
 
 
 class CutMix(object):
+
     def __init__(self, size, beta):
         self.size = size
         self.beta = beta
@@ -245,15 +247,15 @@ class CutMix(object):
         lambda_ = np.random.beta(self.beta, self.beta)
         r_x = np.random.uniform(0, self.size)
         r_y = np.random.uniform(0, self.size)
-        r_w = self.size * np.sqrt(1-lambda_)
-        r_h = self.size * np.sqrt(1-lambda_)
+        r_w = self.size * np.sqrt(1 - lambda_)
+        r_h = self.size * np.sqrt(1 - lambda_)
         x1 = int(np.clip(r_x - r_w // 2, a_min=0, a_max=self.size))
         x2 = int(np.clip(r_x + r_w // 2, a_min=0, a_max=self.size))
         y1 = int(np.clip(r_y - r_h // 2, a_min=0, a_max=self.size))
         y2 = int(np.clip(r_y + r_h // 2, a_min=0, a_max=self.size))
         img[:, :, x1:x2, y1:y2] = rand_img[:, :, x1:x2, y1:y2]
 
-        lambda_ = 1 - (x2-x1)*(y2-y1)/(self.size*self.size)
+        lambda_ = 1 - (x2 - x1) * (y2 - y1) / (self.size * self.size)
         return img, label, rand_label, lambda_
 
     def _shuffle_minibatch(self, batch):
@@ -278,11 +280,14 @@ class MixUp(object):
         mixed_x = lam * x + (1 - lam) * x[index, :]
         y_a, y_b = y, y[index]
         return mixed_x, y_a, y_b, lam
+
+
 """    def mixup_criterion(criterion, pred, y_a, y_b, lam):
         return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b) """
 
 
 class RandomCropPaste(object):
+
     def __init__(self, size, alpha=1.0, flip_p=0.5):
         """Randomly flip and paste a cropped image on the same image. """
         self.size = size
@@ -292,23 +297,24 @@ class RandomCropPaste(object):
     def __call__(self, img):
         lam = np.random.beta(self.alpha, self.alpha)
         front_bbx1, front_bby1, front_bbx2, front_bby2 = self._rand_bbox(lam)
-        img_front = img[:, front_bby1:front_bby2, front_bbx1:front_bbx2].clone()
+        img_front = img[:, front_bby1:front_bby2,
+                        front_bbx1:front_bbx2].clone()
         front_w = front_bbx2 - front_bbx1
         front_h = front_bby2 - front_bby1
 
-        img_x1 = np.random.randint(0, high=self.size-front_w)
-        img_y1 = np.random.randint(0, high=self.size-front_h)
+        img_x1 = np.random.randint(0, high=self.size - front_w)
+        img_y1 = np.random.randint(0, high=self.size - front_h)
         img_x2 = img_x1 + front_w
         img_y2 = img_y1 + front_h
 
         if np.random.rand(1) <= self.flip_p:
-            img_front = img_front.flip((-1,))
+            img_front = img_front.flip((-1, ))
         if np.random.rand(1) <= self.flip_p:
-            img = img.flip((-1,))
+            img = img.flip((-1, ))
 
         mixup_alpha = np.random.rand(1)
-        img[:,img_y1:img_y2, img_x1:img_x2] *= mixup_alpha
-        img[:,img_y1:img_y2, img_x1:img_x2] += img_front*(1-mixup_alpha)
+        img[:, img_y1:img_y2, img_x1:img_x2] *= mixup_alpha
+        img[:, img_y1:img_y2, img_x1:img_x2] += img_front * (1 - mixup_alpha)
         return img
 
     def _rand_bbox(self, lam):
@@ -328,13 +334,14 @@ class RandomCropPaste(object):
         bby2 = np.clip(cy + cut_h // 2, 0, H)
 
         return bbx1, bby1, bbx2, bby2
-    
+
 
 class RandAugment:
+
     def __init__(self, N=4, p=0.5):
         self.N = N
         assert p <= 1, "p>1"
-        self.p = p      # [0, 1]
+        self.p = p  # [0, 1]
         self.augment_list = augment_list()
 
     def __call__(self, img):

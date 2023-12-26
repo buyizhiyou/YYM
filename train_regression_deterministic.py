@@ -3,7 +3,7 @@
 '''
 @File    :   train_regression_deterministic.py
 @Time    :   2023/12/20 22:00:34
-@Author  :   shiqing 
+@Author  :   shiqing
 @Version :   Cinnamoroll V1
 '''
 
@@ -24,10 +24,10 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from model_utils.mlp import MLPNet
+from utils.early_stopping import EarlyStopping
 from utils.loss import AleatoricLoss
 from utils.misc import argsdict, gen_data
 from utils.visual import AverageMeter, ProgressMeter, Summary
-from utils.early_stopping import EarlyStopping
 
 parser = argparse.ArgumentParser(description='Training')
 parser.add_argument(
@@ -44,7 +44,7 @@ def main():
     MEAN_FUN = np.cos
     x_train, y_train, x_test, y_test = gen_data(
         mean_fun=MEAN_FUN, std_const=args.std_const, train_abs=args.train_abs, test_abs=args.test_abs,
-        occlude=args.occlude, hetero=args.hetero,n_samples=args.n_samples)
+        occlude=args.occlude, hetero=args.hetero, n_samples=args.n_samples)
 
     # train_dataset = torch.utils.data.TensorDataset(x_train, y_train)
     # val_dataset = torch.utils.data.TensorDataset(x_test, y_test)
@@ -81,20 +81,20 @@ def main():
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
     if args.occlude and args.hetero:
-        save_path = os.path.join(model_dir, f"mlp_occlude_hetero.pth")
+        save_path = os.path.join(model_dir, "mlp_occlude_hetero.pth")
     elif args.hetero:
-        save_path = os.path.join(model_dir, f"mlp_hetero.pth")
+        save_path = os.path.join(model_dir, "mlp_hetero.pth")
     elif args.occlude:
-        save_path = os.path.join(model_dir, f"mlp_occlude.pth")
+        save_path = os.path.join(model_dir, "mlp_occlude.pth")
     else:
-        save_path = os.path.join(model_dir, f"mlp.pth")
+        save_path = os.path.join(model_dir, "mlp.pth")
     early_stopping = EarlyStopping(save_path, patience=10000)
     net = train_model(net, aleatoric_loss, optimizer, x_train,
                       y_train, x_test, y_test, device, early_stopping, writer, args.number_epochs)
 
     with open("logs/model_parameters_map.yaml", "a") as f:  # 保存模型日期和训练参数
         yaml.dump({f"mlp_{args.mode}_{time_str}": dict(args)}, f)
-    
+
     return net
 
 
@@ -129,11 +129,12 @@ def train_model(
         with torch.no_grad():
             x_test = x_test.to(device)
             y_test = y_test.to(device)
-            prediction,log_var = network(x_test)
+            prediction, log_var = network(x_test)
             val_loss = loss_fun(y_test, prediction, log_var.to(device))
 
-        if epoch%10000==0:
-            print(f'Epoch {epoch+1}/{number_epochs}, Loss: {loss.item():.4f}, Val Loss: {val_loss:.4f}')
+        if epoch % 10000 == 0:
+            print(
+                f'Epoch {epoch+1}/{number_epochs}, Loss: {loss.item():.4f}, Val Loss: {val_loss:.4f}')
         # losses.update(loss.item(), x.size(0))
         writer.add_scalar("Loss/train", loss,  epoch)
         writer.add_scalar("Loss/val", val_loss,  epoch)

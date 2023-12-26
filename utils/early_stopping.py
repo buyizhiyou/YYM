@@ -1,9 +1,19 @@
+#!/usr/bin/env python
+# -*- encoding: utf-8 -*-
+'''
+@File    :   early_stopping.py
+@Time    :   2023/12/26 19:08:30
+@Author  :   shiqing
+@Version :   Cinnamoroll V1
+'''
+
 import numpy as np
 import torch
-import os
+
 
 class EarlyStopping:
     """Early stops the training if validation loss doesn't improve after a given patience."""
+
     def __init__(self, save_path, patience=10, verbose=False, delta=0):
         """
         Args:
@@ -44,7 +54,8 @@ class EarlyStopping:
     def save_checkpoint(self, val_loss, model):
         '''Saves model when validation loss decrease.'''
         if self.verbose:
-            print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
-        torch.save(model.state_dict(), self.save_path)	# 这里会存储迄今最优模型的参数
+            print(
+                f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...'
+            )
+        torch.save(model.state_dict(), self.save_path)  # 这里会存储迄今最优模型的参数
         self.val_loss_min = val_loss
-

@@ -3,13 +3,15 @@
 '''
 @File    :   visual.py
 @Time    :   2023/11/02 20:52:56
-@Author  :   shiqing 
+@Author  :   shiqing
 @Version :   Cinnamoroll V1
 '''
 
 from enum import Enum
+
 import torch
 import torch.distributed as dist
+
 
 class Summary(Enum):
     NONE = 0
@@ -47,7 +49,8 @@ class AverageMeter(object):
         else:
             device = torch.device("cpu")
         total = torch.tensor([self.sum, self.count],
-                             dtype=torch.float32, device=device)
+                             dtype=torch.float32,
+                             device=device)
         dist.all_reduce(total, dist.ReduceOp.SUM, async_op=False)
         self.sum, self.count = total.tolist()
         self.avg = self.sum / self.count
@@ -73,6 +76,7 @@ class AverageMeter(object):
 
 
 class ProgressMeter(object):
+
     def __init__(self, num_batches, meters, prefix=""):
         self.batch_fmtstr = self._get_batch_fmtstr(num_batches)
         self.meters = meters
@@ -92,5 +96,3 @@ class ProgressMeter(object):
         num_digits = len(str(num_batches // 1))
         fmt = '{:' + str(num_digits) + 'd}'
         return '[' + fmt + '/' + fmt.format(num_batches) + ']'
-
-

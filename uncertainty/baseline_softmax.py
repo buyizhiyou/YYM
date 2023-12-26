@@ -3,34 +3,32 @@
 '''
 @File    :   baseline_softmax.py
 @Time    :   2023/11/07 19:25:16
-@Author  :   shiqing 
+@Author  :   shiqing
 @Version :   Cinnamoroll V1
 '''
 
-import time
 import sys
-sys.path.append("../")
-import numpy as np 
+import time
 
+sys.path.append("../")
+
+import numpy as np
 import torch
-from torch import nn
 import torchvision.models as models
 import torchvision.transforms as transforms
+from torch import nn
 
-from model_utils.get_models import get_model
 from data_utils.get_datasets import get_dataset
-from utils.visual import ProgressMeter, AverageMeter, Summary
-from utils.metrics import accuracy,nll,ece,brier_score
-
+from model_utils.get_models import get_model
+from utils.metrics import accuracy, brier_score, ece, nll
+from utils.visual import AverageMeter, ProgressMeter, Summary
 
 
 def baseline_softmax_predict(val_loader, model, device):
     inference_time = AverageMeter('Time', ':6.3f', Summary.AVERAGE)
     top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
-    progress = ProgressMeter(
-        len(val_loader),
-        [inference_time,  top1],
-        prefix='Test: ')
+    progress = ProgressMeter(len(val_loader), [inference_time, top1],
+                             prefix='Test: ')
 
     probs_list = []
     target_list = []
@@ -42,7 +40,7 @@ def baseline_softmax_predict(val_loader, model, device):
 
             end = time.time()
             output = model(images)
-            probs_list.append(torch.softmax(output,axis=1))
+            probs_list.append(torch.softmax(output, axis=1))
 
             # measure elapsed time
             inference_time.update(time.time() - end, images.size(0))
@@ -51,28 +49,26 @@ def baseline_softmax_predict(val_loader, model, device):
             top1.update(acc1[0], images.size(0))
 
     progress.display_summary()
-    probs = torch.concat(probs_list, axis=0) #Sample_nums x Num_classes
+    probs = torch.concat(probs_list, axis=0)  # Sample_nums x Num_classes
     targets = torch.concat(target_list, axis=0)
 
-    return probs ,targets
+    return probs, targets
 
 
 def main():
-    val_transform = transforms.Compose(
-        [
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(
-                (0.4914, 0.4822, 0.4465),
-                (0.2023, 0.1994, 0.2010)),
-        ]
-    )
+    val_transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465),
+                             (0.2023, 0.1994, 0.2010)),
+    ])
 
-
-    _, val_dataset = get_dataset("cifar","./data", None,val_transform)
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=64, shuffle=False,
-        num_workers=4, pin_memory=True)
+    _, val_dataset = get_dataset("cifar", "./data", None, val_transform)
+    val_loader = torch.utils.data.DataLoader(val_dataset,
+                                             batch_size=64,
+                                             shuffle=False,
+                                             num_workers=4,
+                                             pin_memory=True)
 
     device = torch.device('cuda:2')
     model = get_model("vgg16", False, 10)

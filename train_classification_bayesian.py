@@ -3,7 +3,7 @@
 '''
 @File    :   train_bayesian.py
 @Time    :   2023/11/17 13:35:58
-@Author  :   shiqing 
+@Author  :   shiqing
 @Version :   Cinnamoroll V1
 '''
 
@@ -13,8 +13,8 @@ import glob
 import os
 import time
 import warnings
-import numpy as np 
 
+import numpy as np
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -37,13 +37,15 @@ from model_utils.get_models import get_model
 from utils.loss import LabelSmoothingCrossEntropyLoss
 from utils.metrics import accuracy
 from utils.misc import argsdict, seed_torch
-from utils.randomaug import RandAugment,MixUp,CutMix
+from utils.randomaug import CutMix, MixUp, RandAugment
 from utils.visual import AverageMeter, ProgressMeter, Summary
 
 parser = argparse.ArgumentParser(description='Training')
 parser.add_argument('--config', help='yaml config file')
 
 best_acc1 = 0
+
+
 def main():
     configargs = parser.parse_args()
     with open(configargs.config, "r") as f:
@@ -88,7 +90,8 @@ def main_worker(gpu, ngpus_per_node, args):
                                 world_size=args.world_size, rank=args.rank)
 
     # create model
-    model = get_model(args.arch, 10, args.use_torchvision,args.pretrained,args.use_bayesian)
+    model = get_model(args.arch, 10, args.use_torchvision,
+                      args.pretrained, args.use_bayesian)
     # summary(model,(3, 32, 32),device="cpu")
 
     # translate deterministic network into bayesian network
@@ -100,7 +103,8 @@ def main_worker(gpu, ngpus_per_node, args):
         "prior_sigma": args.prior_sigma,
         "posterior_mu_init": args.posterior_mu_init,
         "posterior_rho_init": args.bnn_rho_init,
-        "type": "Flipout" if args.use_flipout_layers else "Reparameterization",## Flipout or Reparameterization
+        # Flipout or Reparameterization
+        "type": "Flipout" if args.use_flipout_layers else "Reparameterization",
         "moped_enable": moped_enable,  # initialize mu/sigma from the dnn weights
         "moped_delta": args.moped_delta_factor,
     }
@@ -148,7 +152,7 @@ def main_worker(gpu, ngpus_per_node, args):
         ), args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     elif args.optimizer == "adam":
         optimizer = torch.optim.Adam(
-            model.parameters(), args.lr, weight_decay=args.weight_decay) #训练bnn时weight_decay置0
+            model.parameters(), args.lr, weight_decay=args.weight_decay)  # 训练bnn时weight_decay置0
     elif args.optimizer == "adamw":
         optimizer = torch.optim.AdamW(
             model.parameters(), args.lr, weight_decay=args.weight_decay)
@@ -162,7 +166,7 @@ def main_worker(gpu, ngpus_per_node, args):
     elif args.scheduler == "exp":
         scheduler = torch.optim.lr_scheduler.ExponentialLR(
             optimizer, gamma=0.9)
-    #使用warmup策略
+    # 使用warmup策略
     if args.warmup:
         scheduler = warmup_scheduler.GradualWarmupScheduler(optimizer, multiplier=1.,
                                                             total_epoch=5, after_scheduler=scheduler)
@@ -176,7 +180,7 @@ def main_worker(gpu, ngpus_per_node, args):
         os.makedirs(model_dir)
         os.makedirs(log_dir)
     except:
-        pass
+        print(" ")
 
     # 模型恢复
     if args.resume:
@@ -236,9 +240,9 @@ def main_worker(gpu, ngpus_per_node, args):
     if args.aug:
         print("add more augmentation")
         # train_transform.transforms.insert(0, RandAugment(N, p)) #自己实现的autoaugmentation,不如使用下面的
-        auto_aug =  transforms.AutoAugment(policy=transforms.AutoAugmentPolicy('cifar10'), 
-                                            interpolation=transforms.InterpolationMode.BILINEAR)#torchvision里的autoaugmentation
-        train_transform.transforms.insert(1,auto_aug)
+        auto_aug = transforms.AutoAugment(policy=transforms.AutoAugmentPolicy('cifar10'),
+                                          interpolation=transforms.InterpolationMode.BILINEAR)  # torchvision里的autoaugmentation
+        train_transform.transforms.insert(1, auto_aug)
 
     train_dataset, val_dataset = get_dataset(
         args.data, "./data", train_transform, val_transform)
@@ -257,7 +261,7 @@ def main_worker(gpu, ngpus_per_node, args):
         num_workers=args.workers, pin_memory=True, sampler=train_sampler)
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True, sampler=val_sampler)  
+        num_workers=args.workers, pin_memory=True, sampler=val_sampler)
     # 在测试集上评估模型
     if args.evaluate:
         validate(val_loader, model, args)
@@ -328,7 +332,7 @@ def train(train_loader, model, criterion, optimizer, writer, epoch, device, args
         data_time.update(time.time() - end)
         images = images.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
-            
+
         with torch.autocast("cuda", enabled=args.use_amp):
             # compute output
             output_ = []
@@ -342,14 +346,18 @@ def train(train_loader, model, criterion, optimizer, writer, epoch, device, args
             kl = torch.mean(torch.stack(kl_), dim=0)
             if args.use_cutmix or args.use_mixup:
                 if args.use_cutmix:
-                    images, label, rand_label, lambda_= cutmix((images, target))
+                    images, label, rand_label, lambda_ = cutmix(
+                        (images, target))
                 elif args.use_mixup:
                     if np.random.rand() <= 0.8:
-                        images, label, rand_label, lambda_ = mixup((images, target))
+                        images, label, rand_label, lambda_ = mixup(
+                            (images, target))
                     else:
-                        images, label, rand_label, lambda_ = images, label, torch.zeros_like(label), 1.
+                        images, label, rand_label, lambda_ = images, label, torch.zeros_like(
+                            label), 1.
                 output = model(images)
-                cross_entropy_loss = criterion(output, label)*lambda_ + criterion(output, rand_label)*(1.-lambda_)
+                cross_entropy_loss = criterion(
+                    output, label) * lambda_ + criterion(output, rand_label) * (1.0 - lambda_)
             else:
                 output = model(images)
                 cross_entropy_loss = criterion(output, target)
@@ -366,7 +374,6 @@ def train(train_loader, model, criterion, optimizer, writer, epoch, device, args
         # optimizer.zero_grad()
         # loss.backward()
         # optimizer.step()
-
 
         # measure accuracy and record loss
         acc1 = accuracy(output, target, topk=(1,))[0]
@@ -399,12 +406,15 @@ def validate(val_loader, model, args):
 
                 output_mc = []
                 for _ in range(args.num_mc_eval):
-                    output = torch.softmax(model.forward(images),dim=1)#输出的概率
+                    output = torch.softmax(
+                        model.forward(images), dim=1)  # 输出的概率
                     output_mc.append(output)
-                output_ = torch.stack(output_mc,dim=0)#NumMCxBatchSizexNum_classes
+                # NumMCxBatchSizexNum_classes
+                output_ = torch.stack(output_mc, dim=0)
 
                 # measure accuracy and record loss
-                acc1= accuracy(torch.mean(output_, dim=0), target, topk=(1, ))[0]
+                acc1 = accuracy(torch.mean(output_, dim=0),
+                                target, topk=(1, ))[0]
                 top1.update(acc1[0], images.size(0))
 
                 # measure elapsed time

@@ -3,7 +3,7 @@
 '''
 @File    :   ddp_demo.py
 @Time    :   2023/11/02 16:51:51
-@Author  :   shiqing 
+@Author  :   shiqing
 @Version :   Cinnamoroll V1
 '''
 
@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
-import torch.amp as amp 
+import torch.amp as amp
 import torch.optim as optim
 import tempfile
 
@@ -29,12 +29,14 @@ def setup(rank, world_size):
     # initialize the process group
     dist.init_process_group("gloo", rank=rank, world_size=world_size)
 
+
 def cleanup():
     dist.destroy_process_group()
 
 
 ##ddp 数据并行
 class ToyModel(nn.Module):
+
     def __init__(self):
         super(ToyModel, self).__init__()
         self.net1 = nn.Linear(10, 10)
@@ -66,10 +68,8 @@ def demo_basic(rank, world_size):
 
 
 def run_demo(demo_fn, world_size):
-    mp.spawn(demo_fn,
-             args=(world_size,),
-             nprocs=world_size,
-             join=True) # rank参数由torch.multiprocessing.spawn传入
+    mp.spawn(demo_fn, args=(world_size, ), nprocs=world_size,
+             join=True)  # rank参数由torch.multiprocessing.spawn传入
 
 
 ##ddp 数据并行 保存模型文件
@@ -79,7 +79,6 @@ def demo_checkpoint(rank, world_size):
 
     model = ToyModel().to(rank)
     ddp_model = DDP(model, device_ids=[rank])
-
 
     CHECKPOINT_PATH = tempfile.gettempdir() + "/model.checkpoint"
     if rank == 0:
@@ -118,6 +117,7 @@ def demo_checkpoint(rank, world_size):
 
 ##模型并行
 class ToyMpModel(nn.Module):
+
     def __init__(self, dev0, dev1):
         super(ToyMpModel, self).__init__()
         self.dev0 = dev0
@@ -131,7 +131,8 @@ class ToyMpModel(nn.Module):
         x = self.relu(self.net1(x))
         x = x.to(self.dev1)
         return self.net2(x)
-    
+
+
 def demo_model_parallel(rank, world_size):
     print(f"Running DDP with model parallel example on rank {rank}.")
     setup(rank, world_size)
@@ -161,7 +162,7 @@ if __name__ == "__main__":
     world_size = n_gpus
     run_demo(demo_basic, world_size)
     run_demo(demo_checkpoint, world_size)
-    world_size = n_gpus//2
+    world_size = n_gpus // 2
     run_demo(demo_model_parallel, world_size)
 
 if __name__ == "__main__":
@@ -170,5 +171,5 @@ if __name__ == "__main__":
     world_size = n_gpus
     run_demo(demo_basic, world_size)
     run_demo(demo_checkpoint, world_size)
-    world_size = n_gpus//2
+    world_size = n_gpus // 2
     run_demo(demo_model_parallel, world_size)

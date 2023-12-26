@@ -3,7 +3,7 @@
 '''
 @File    :   vit.py
 @Time    :   2023/11/15 14:32:44
-@Author  :   shiqing 
+@Author  :   shiqing
 @Version :   Cinnamoroll V1
 '''
 

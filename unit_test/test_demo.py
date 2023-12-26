@@ -3,30 +3,30 @@
 '''
 @File    :   test_demo.py
 @Time    :   2022/11/08 13:58:18
-@Author  :   shiqing 
+@Author  :   shiqing
 @Version :   Cinnamoroll V1
 '''
-import numbers
-
+from utils.metrics import mutual_info
 import numpy as np
 import pytest
 
 import sys
+
 sys.path.append("../")
 
-from utils.metrics import mutual_info
+
 
 
 class TestDemo():
 
     def test_mutual_info(self):
-        probs = np.random.rand(3,4,10)
+        probs = np.random.rand(3, 4, 10)
         mi = mutual_info(probs)
         print(mi)
 
     def test_entropy(self):
-        assert 1==2
+        assert 1 == 2
 
 
 if __name__ == '__main__':
-    pytest.main(["test_demo.py::TestDemo::test_mutual_info","-v","-s"])
+    pytest.main(["test_demo.py::TestDemo::test_mutual_info", "-v", "-s"])
