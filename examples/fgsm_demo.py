@@ -78,8 +78,8 @@ test_loader = torch.utils.data.DataLoader(datasets.MNIST(
         transforms.ToTensor(),
         transforms.Normalize((0.1307, ), (0.3081, )),
     ])),
-                                          batch_size=1,
-                                          shuffle=True)
+    batch_size=1,
+    shuffle=True)
 
 # Define what device we are using
 print("CUDA Available: ", torch.cuda.is_available())

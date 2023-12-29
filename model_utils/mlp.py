@@ -33,7 +33,7 @@ class MLPNet(nn.Module):
         x = F.relu(self.mid3(x))
         x = F.dropout(x, p=self.p, training=self.training)
         x = F.relu(self.mid4(x))
-        x = F.dropout(x, p=self.p, training=self.training)####注意！！！这里要使用self.training才可以通过model.eval()关闭dropout
+        x = F.dropout(x, p=self.p, training=self.training)  # 注意！！！这里要使用self.training才可以通过model.eval()关闭dropout
 
         # get y and log_sigma
         y = self.predict(x)
