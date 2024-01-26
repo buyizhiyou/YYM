@@ -175,8 +175,8 @@ def main_worker(gpu, ngpus_per_node, args):
     curr_time = datetime.datetime.now()
     time_str = datetime.datetime.strftime(curr_time, "%Y_%m_%d_%H_%M_%S")
     # time_str = "2023_11_27_11_38_47"
-    model_dir = f"{args.saved_models}/{args.mode}/{args.arch}/{time_str}"
-    log_dir = f"{args.logs}/{args.mode}/{args.arch}/{time_str}"
+    model_dir = f"{args.saved_models}/{args.type}/{args.mode}/{args.arch}/{time_str}"
+    log_dir = f"{args.logs}/{args.type}/{args.mode}/{args.arch}/{time_str}"
     try:
         os.makedirs(model_dir)
         os.makedirs(log_dir)

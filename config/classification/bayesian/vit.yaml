@@ -1,3 +1,4 @@
+type: classification
 data: cifar10
 num_classes: 10
 arch: vit_b_16

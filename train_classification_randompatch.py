@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-'''
-@File    :   train_bayesian.py
-@Time    :   2023/11/17 13:35:58
+"""
+@File    :   main.py
+@Time    :   2023/11/04 14:56:35
 @Author  :   shiqing
 @Version :   Cinnamoroll V1
-'''
+"""
 
 import argparse
 import datetime
@@ -26,7 +26,6 @@ import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import warmup_scheduler
 import yaml
-from bayesian_torch.models.dnn_to_bnn import dnn_to_bnn, get_kl_loss
 from torch.utils.data import Subset
 from torch.utils.tensorboard import SummaryWriter
 from torchsummary import summary
@@ -40,8 +39,8 @@ from utils.misc import argsdict, seed_torch
 from utils.randomaug import CutMix, MixUp, RandAugment
 from utils.visual import AverageMeter, ProgressMeter, Summary
 
-parser = argparse.ArgumentParser(description='Training')
-parser.add_argument('--config', help='yaml config file')
+parser = argparse.ArgumentParser(description="Training")
+parser.add_argument("--config", help="yaml config file")
 
 best_acc1 = 0
 
@@ -52,15 +51,17 @@ def main():
         cfg = yaml.safe_load(f)
     args = argsdict(cfg)  # 包装字典，可以通过.访问
 
-    # if args.seed is not None:
+    # if args.seed is not None: #极大降低训练速度
     #     print("set random seed")
     #     seed_torch(args.seed)
     if args.gpu is not None:
-        warnings.warn('You have chosen a specific GPU. This will completely '
-                      'disable data parallelism.')
+        warnings.warn(
+            "You have chosen a specific GPU. This will completely disable data parallelism."
+        )
     if args.dist_url == "env://" and args.world_size == -1:
         args.world_size = int(os.environ["WORLD_SIZE"])
-    args.distributed = args.world_size > 1 or args.multiprocessing_distributed  # 是否开启多卡训练
+    args.distributed = (args.world_size > 1
+                        or args.multiprocessing_distributed)  # 是否开启多卡训练
 
     if torch.cuda.is_available():
         ngpus_per_node = torch.cuda.device_count()
@@ -68,8 +69,9 @@ def main():
         ngpus_per_node = 1
     if args.multiprocessing_distributed:
         args.world_size = ngpus_per_node * args.world_size
-        mp.spawn(main_worker, nprocs=ngpus_per_node,
-                 args=(ngpus_per_node, args))
+        mp.spawn(main_worker,
+                 nprocs=ngpus_per_node,
+                 args=(ngpus_per_node, args))  # 启动多个训练进程
     else:
         main_worker(args.gpu, ngpus_per_node, args)
 
@@ -86,33 +88,21 @@ def main_worker(gpu, ngpus_per_node, args):
             args.rank = int(os.environ["RANK"])
         if args.multiprocessing_distributed:
             args.rank = args.rank * ngpus_per_node + gpu
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                world_size=args.world_size, rank=args.rank)
+        dist.init_process_group(
+            backend=args.dist_backend,
+            init_method=args.dist_url,
+            world_size=args.world_size,
+            rank=args.rank,
+        )
 
     # create model
-    model = get_model(args.arch, 10, args.use_torchvision,
-                      args.pretrained, args.use_bayesian)
+    model = get_model(args.arch, args.num_classes + 1, args.use_torchvision,
+                      args.pretrained)
     # summary(model,(3, 32, 32),device="cpu")
-
-    # translate deterministic network into bayesian network
-    moped_enable = False
-    if len(args.moped_init_model) > 0:  # use moped method if trained dnn model weights are provided
-        moped_enable = True
-    const_bnn_prior_parameters = {
-        "prior_mu": args.prior_mu,
-        "prior_sigma": args.prior_sigma,
-        "posterior_mu_init": args.posterior_mu_init,
-        "posterior_rho_init": args.bnn_rho_init,
-        # Flipout or Reparameterization
-        "type": "Flipout" if args.use_flipout_layers else "Reparameterization",
-        "moped_enable": moped_enable,  # initialize mu/sigma from the dnn weights
-        "moped_delta": args.moped_delta_factor,
-    }
-    dnn_to_bnn(model, const_bnn_prior_parameters)
 
     # ddp并行训练配置
     if not torch.cuda.is_available() and not torch.backends.mps.is_available():
-        print('using CPU, this will be slow')
+        print("using CPU, this will be slow")
     elif args.distributed:
         if torch.cuda.is_available():
             if args.gpu is not None:
@@ -134,7 +124,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     if torch.cuda.is_available():
         if args.gpu:
-            device = torch.device('cuda:{}'.format(args.gpu))
+            device = torch.device("cuda:{}".format(args.gpu))
         else:
             device = torch.device("cuda")
     else:
@@ -142,45 +132,56 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # 定义 loss function (criterion), optimizer, and learning rate scheduler
     if args.labelsmoothing:
-        criterion = LabelSmoothingCrossEntropyLoss(
-            args.num_classes, smoothing=args.smoothing)
+        criterion = LabelSmoothingCrossEntropyLoss(args.num_classes,
+                                                   smoothing=args.smoothing)
     else:
         criterion = nn.CrossEntropyLoss().to(device)
 
     if args.optimizer == "sgd":
-        optimizer = torch.optim.SGD(model.parameters(
-        ), args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            args.lr,
+            momentum=args.momentum,
+            weight_decay=args.weight_decay,
+        )
     elif args.optimizer == "adam":
-        optimizer = torch.optim.Adam(
-            model.parameters(), args.lr, weight_decay=args.weight_decay)  # 训练bnn时weight_decay置0
+        optimizer = torch.optim.Adam(model.parameters(),
+                                     args.lr,
+                                     weight_decay=args.weight_decay)
     elif args.optimizer == "adamw":
-        optimizer = torch.optim.AdamW(
-            model.parameters(), args.lr, weight_decay=args.weight_decay)
+        optimizer = torch.optim.AdamW(model.parameters(),
+                                      args.lr,
+                                      weight_decay=args.weight_decay)
 
     if args.scheduler == "step":
-        scheduler = torch.optim.lr_scheduler.StepLR(
-            optimizer, step_size=args.step_size, gamma=0.1)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
+                                                    step_size=args.step_size,
+                                                    gamma=0.1)
     elif args.scheduler == "cos":
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=200)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,
+                                                               T_max=200,
+                                                               eta_min=1e-7)
     elif args.scheduler == "exp":
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(
-            optimizer, gamma=0.9)
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer,
+                                                           gamma=0.9)
     # 使用warmup策略
     if args.warmup:
-        scheduler = warmup_scheduler.GradualWarmupScheduler(optimizer, multiplier=1.,
-                                                            total_epoch=5, after_scheduler=scheduler)
+        scheduler = warmup_scheduler.GradualWarmupScheduler(
+            optimizer,
+            multiplier=1.0,
+            total_epoch=5,
+            after_scheduler=scheduler)
 
     curr_time = datetime.datetime.now()
-    # time_str = datetime.datetime.strftime(curr_time, "%Y_%m_%d_%H_%M_%S")
-    time_str = "2023_11_29_11_13_47"
+    time_str = datetime.datetime.strftime(curr_time, "%Y_%m_%d_%H_%M_%S")
+    # time_str = "2023_11_27_11_38_47"
     model_dir = f"{args.saved_models}/{args.type}/{args.mode}/{args.arch}/{time_str}"
     log_dir = f"{args.logs}/{args.type}/{args.mode}/{args.arch}/{time_str}"
     try:
         os.makedirs(model_dir)
         os.makedirs(log_dir)
     except:
-        print(" ")
+        pass
 
     # 模型恢复
     if args.resume:
@@ -192,60 +193,58 @@ def main_worker(gpu, ngpus_per_node, args):
             if args.gpu is None:
                 checkpoint = torch.load(resume_path)
             elif torch.cuda.is_available():
-                loc = 'cuda:{}'.format(args.gpu)
+                loc = "cuda:{}".format(args.gpu)
                 checkpoint = torch.load(resume_path, map_location=loc)
-            args.start_epoch = checkpoint['epoch']
-            best_acc1 = checkpoint['best_acc1']
+            args.start_epoch = checkpoint["epoch"]
+            best_acc1 = checkpoint["best_acc1"]
             print(
-                f"resume model start epoch {args.start_epoch},best acc1:{best_acc1}")
+                f"resume model start epoch {args.start_epoch},best acc1:{best_acc1}"
+            )
             if args.gpu is not None:
                 # best_acc1 may be from a checkpoint from a different GPU
                 best_acc1 = torch.tensor(best_acc1)
                 best_acc1 = best_acc1.to(args.gpu)
-            model.load_state_dict(checkpoint['state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer'])
-            scheduler.load_state_dict(checkpoint['scheduler'])
+            model.load_state_dict(checkpoint["state_dict"])
+            optimizer.load_state_dict(checkpoint["optimizer"])
+            scheduler.load_state_dict(checkpoint["scheduler"])
             if args.warmup:
                 scheduler.after_scheduler.optimizer = optimizer
             else:
                 scheduler.optimizer = optimizer
-            print("=> loaded checkpoint '{}' (epoch {})"
-                  .format(resume_path, checkpoint['epoch']))
+            print("=> loaded checkpoint '{}' (epoch {})".format(
+                resume_path, checkpoint["epoch"]))
         else:
             print("=> no checkpoint found at '{}'".format(model_dir))
 
     # 数据集加载
-    train_transform = transforms.Compose(
-        [
-            transforms.Resize((args.size, args.size)),
-            transforms.RandomCrop(args.size, padding=4),
-            transforms.RandomGrayscale(),  # add
-            transforms.GaussianBlur(3),  # add
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465),
-                                 (0.2023, 0.1994, 0.2010)),  # pytorch doc std
-        ]
-    )
-    val_transform = transforms.Compose(
-        [
-            transforms.Resize((args.size, args.size)),
-            transforms.ToTensor(),
-            transforms.Normalize(
-                (0.4914, 0.4822, 0.4465),
-                (0.2023, 0.1994, 0.2010)),
-        ]
-    )
+    train_transform = transforms.Compose([
+        transforms.Resize((args.size, args.size)),
+        transforms.RandomCrop(args.size, padding=4),
+        transforms.RandomGrayscale(),  # add
+        transforms.GaussianBlur(3),  # add
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465),
+                             (0.2023, 0.1994, 0.2010)),  # pytorch doc std
+    ])
+    val_transform = transforms.Compose([
+        transforms.Resize((args.size, args.size)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465),
+                             (0.2023, 0.1994, 0.2010)),
+    ])
     # 添加额外的数据增强
     if args.aug:
         print("add more augmentation")
-        # train_transform.transforms.insert(0, RandAugment(N, p)) #自己实现的autoaugmentation,不如使用下面的
-        auto_aug = transforms.AutoAugment(policy=transforms.AutoAugmentPolicy('cifar10'),
-                                          interpolation=transforms.InterpolationMode.BILINEAR)  # torchvision里的autoaugmentation
+        # train_transform.transforms.insert(0, RandAugment(2, 0.5)) #自己实现的autoaugmentation,不如使用下面的
+        auto_aug = transforms.AutoAugment(
+            policy=transforms.AutoAugmentPolicy("cifar10"),
+            interpolation=transforms.InterpolationMode.BILINEAR,
+        )  # torchvision里的autoaugmentation
         train_transform.transforms.insert(1, auto_aug)
 
-    train_dataset, val_dataset = get_dataset(
-        args.data, "./data", train_transform, val_transform)
+    train_dataset, val_dataset = get_dataset(args.data, "./data",
+                                             train_transform, val_transform)
     if args.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(
             train_dataset)
@@ -256,12 +255,21 @@ def main_worker(gpu, ngpus_per_node, args):
         val_sampler = None
 
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=(
-            train_sampler is None),
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=(train_sampler is None),
+        num_workers=args.workers,
+        pin_memory=True,
+        sampler=train_sampler,
+    )
     val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True, sampler=val_sampler)
+        val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.workers,
+        pin_memory=True,
+        sampler=val_sampler,
+    )
     # 在测试集上评估模型
     if args.evaluate:
         validate(val_loader, model, args)
@@ -276,10 +284,10 @@ def main_worker(gpu, ngpus_per_node, args):
             train_sampler.set_epoch(epoch)
 
         # train for one epoch
-        print("第%d个epoch的学习率：%f" % (epoch, optimizer.param_groups[0]['lr']))
-        train(train_loader, model, criterion,
-              optimizer, writer, epoch, device, args)
-        scheduler.step()
+        print("第%d个epoch的学习率：%f" % (epoch, optimizer.param_groups[0]["lr"]))
+        train(train_loader, model, criterion, optimizer, writer, epoch, device,
+              args)
+        scheduler.step()  # 更新学习率
 
         # evaluate on validation set
         acc1 = validate(val_loader, model, args)
@@ -288,44 +296,51 @@ def main_worker(gpu, ngpus_per_node, args):
         is_best = acc1 > best_acc1
         best_acc1 = max(acc1, best_acc1)
         # 模型保存
-        if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                    and args.rank % ngpus_per_node == 0):
+        if not args.multiprocessing_distributed or (
+                args.multiprocessing_distributed
+                and args.rank % ngpus_per_node == 0):
             state = {
-                'epoch': epoch + 1,
-                'state_dict': model.state_dict(),
-                'optimizer': optimizer.state_dict(),
-                'scheduler': scheduler.state_dict(),
-                "best_acc1": best_acc1
+                "epoch": epoch + 1,
+                "state_dict": model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "scheduler": scheduler.state_dict(),
+                "best_acc1": best_acc1,
             }
 
             if is_best:
                 # 删除旧模型文件
-                files = glob.glob(os.path.join(
-                    model_dir, f"{args.arch}_best_model_*.pth"))
+                files = glob.glob(
+                    os.path.join(model_dir, f"{args.arch}_best_model_*.pth"))
                 for f in files:
                     os.remove(f)
                 # 保存准确率最高的模型文件
-                torch.save(state, os.path.join(
-                    model_dir, f"{args.arch}_best_model_{best_acc1:.2f}.pth"))
+                torch.save(
+                    state,
+                    os.path.join(
+                        model_dir,
+                        f"{args.arch}_best_model_{best_acc1:.2f}.pth"),
+                )
 
 
-def train(train_loader, model, criterion, optimizer, writer, epoch, device, args):
-    batch_time = AverageMeter('Time', ':6.3f')
-    data_time = AverageMeter('Data', ':6.3f')
-    losses = AverageMeter('Loss', ':.4e')
-    top1 = AverageMeter('Acc@1', ':6.2f')
+def train(train_loader, model, criterion, optimizer, writer, epoch, device,
+          args):
+    batch_time = AverageMeter("Time", ":6.3f")
+    data_time = AverageMeter("Data", ":6.3f")
+    losses = AverageMeter("Loss", ":.4e")
+    top1 = AverageMeter("Acc@1", ":6.2f")
     progress = ProgressMeter(
         len(train_loader),
         [batch_time, data_time, losses, top1],
-        prefix="Epoch: [{}]".format(epoch))
+        prefix="Epoch: [{}]".format(epoch),
+    )
 
     # switch to train mode
     model.train()
     end = time.time()
     if args.use_cutmix:
-        cutmix = CutMix(args.size, beta=1.)
+        cutmix = CutMix(args.size, beta=1.0)
     if args.use_mixup:
-        mixup = MixUp(alpha=1.)
+        mixup = MixUp(alpha=1.0)
 
     scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
     for i, (images, target) in enumerate(train_loader):
@@ -333,17 +348,38 @@ def train(train_loader, model, criterion, optimizer, writer, epoch, device, args
         images = images.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
 
-        with torch.autocast("cuda", enabled=args.use_amp):
-            # compute output
-            output_ = []
-            kl_ = []
-            for mc_run in range(args.num_mc_train):
-                output = model(images)
-                kl = get_kl_loss(model)
-                output_.append(output)
-                kl_.append(kl)
-            output = torch.mean(torch.stack(output_), dim=0)
-            kl = torch.mean(torch.stack(kl_), dim=0)
+        #random patch
+        bs, c, h, w = images.shape
+        patch_size = 16
+        pics = bs
+        rand_patch = torch.zeros((pics, c, h, w))
+        for k in range(h // patch_size):
+            for j in range(w // patch_size):
+                rand_idx = torch.randint(0, bs, (pics, ))
+                rand_h = torch.randint(0, h // patch_size, (1, ))
+                rand_w = torch.randint(0, w // patch_size, (1, ))
+                idx = rand_idx[0]
+                rand_patch[:, :, k * patch_size:(k + 1) * patch_size,
+                           j * patch_size:(j + 1) *
+                           patch_size] = images[rand_idx, :, rand_h *
+                                                patch_size:(rand_h + 1) *
+                                                patch_size, rand_w *
+                                                patch_size:(rand_w + 1) *
+                                                patch_size]
+        rand_patch = rand_patch + torch.rand_like(rand_patch)  #  加点高斯噪声
+        rand_patch = transforms.GaussianBlur(kernel_size=3,
+                                             sigma=(0.1, 2.0))(rand_patch) #高斯模糊
+        rand_patch = rand_patch.to(device, non_blocking=True)
+        images = torch.concat((rand_patch, images), dim=0)
+
+        psedu_target = torch.ones((pics)) * (args.num_classes)
+        psedu_target = psedu_target.to(device,
+                                       dtype=torch.int,
+                                       non_blocking=True)
+        target = torch.concat((psedu_target, target), dim=0)
+
+        # Train with amp
+        with torch.autocast("cuda", enabled=args.use_amp):  # TODO:使用amp
             if args.use_cutmix or args.use_mixup:
                 if args.use_cutmix:
                     images, label, rand_label, lambda_ = cutmix(
@@ -353,18 +389,18 @@ def train(train_loader, model, criterion, optimizer, writer, epoch, device, args
                         images, label, rand_label, lambda_ = mixup(
                             (images, target))
                     else:
-                        images, label, rand_label, lambda_ = images, label, torch.zeros_like(
-                            label), 1.
+                        images, label, rand_label, lambda_ = (
+                            images,
+                            label,
+                            torch.zeros_like(label),
+                            1.0,
+                        )
                 output = model(images)
-                cross_entropy_loss = criterion(
-                    output, label) * lambda_ + criterion(output, rand_label) * (1.0 - lambda_)
+                loss = criterion(output, label) * lambda_ + criterion(
+                    output, rand_label) * (1.0 - lambda_)
             else:
                 output = model(images)
-                cross_entropy_loss = criterion(output, target)
-
-            scaled_kl = kl / args.batch_size
-            # ELBO loss
-            loss = cross_entropy_loss + scaled_kl
+                loss = criterion(output, target)
 
         optimizer.zero_grad()
         scaler.scale(loss).backward()
@@ -376,7 +412,7 @@ def train(train_loader, model, criterion, optimizer, writer, epoch, device, args
         # optimizer.step()
 
         # measure accuracy and record loss
-        acc1 = accuracy(output, target, topk=(1,))[0]
+        acc1 = accuracy(output, target, topk=(1, ))[0]
         losses.update(loss.item(), images.size(0))
         top1.update(acc1[0], images.size(0))
         # measure elapsed time
@@ -386,14 +422,15 @@ def train(train_loader, model, criterion, optimizer, writer, epoch, device, args
             progress.display(i + 1)
 
     # log loss and acc1
-    if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                                                and args.rank == 0):
+    if not args.multiprocessing_distributed or (
+            args.multiprocessing_distributed and args.rank == 0):
         writer.add_scalar("Loss/train", losses.avg, epoch)
         writer.add_scalar("acc1/train", top1.avg, epoch)
         writer.flush()
 
 
 def validate(val_loader, model, args):
+
     def run_validate(loader, base_progress=0):
         with torch.no_grad():
             end = time.time()
@@ -404,17 +441,11 @@ def validate(val_loader, model, args):
                 if torch.cuda.is_available():
                     target = target.cuda(args.gpu, non_blocking=True)
 
-                output_mc = []
-                for _ in range(args.num_mc_eval):
-                    output = torch.softmax(
-                        model.forward(images), dim=1)  # 输出的概率
-                    output_mc.append(output)
-                # NumMCxBatchSizexNum_classes
-                output_ = torch.stack(output_mc, dim=0)
+                # compute output
+                output = model(images)
 
                 # measure accuracy and record loss
-                acc1 = accuracy(torch.mean(output_, dim=0),
-                                target, topk=(1, ))[0]
+                acc1 = accuracy(output, target, topk=(1, ))[0]
                 top1.update(acc1[0], images.size(0))
 
                 # measure elapsed time
@@ -424,13 +455,15 @@ def validate(val_loader, model, args):
                 if i % args.print_freq == 0:
                     progress.display(i + 1)
 
-    batch_time = AverageMeter('Time', ':6.3f', Summary.AVERAGE)
-    top1 = AverageMeter('Acc@1', ':6.2f', Summary.AVERAGE)
+    batch_time = AverageMeter("Time", ":6.3f", Summary.AVERAGE)
+    top1 = AverageMeter("Acc@1", ":6.2f", Summary.AVERAGE)
     progress = ProgressMeter(
-        len(val_loader) + (args.distributed and (len(val_loader.sampler)
-                                                 * args.world_size < len(val_loader.dataset))),
-        [batch_time,  top1],
-        prefix='Test: ')
+        len(val_loader) + (args.distributed and
+                           (len(val_loader.sampler) * args.world_size < len(
+                               val_loader.dataset))),
+        [batch_time, top1],
+        prefix="Test: ",
+    )
 
     # switch to evaluate mode
     model.eval()
@@ -438,12 +471,21 @@ def validate(val_loader, model, args):
     if args.distributed:
         top1.all_reduce()
 
-    if args.distributed and (len(val_loader.sampler) * args.world_size < len(val_loader.dataset)):
-        aux_val_dataset = Subset(val_loader.dataset,
-                                 range(len(val_loader.sampler) * args.world_size, len(val_loader.dataset)))
+    if args.distributed and (len(val_loader.sampler) * args.world_size < len(
+            val_loader.dataset)):
+        aux_val_dataset = Subset(
+            val_loader.dataset,
+            range(
+                len(val_loader.sampler) * args.world_size,
+                len(val_loader.dataset)),
+        )
         aux_val_loader = torch.utils.data.DataLoader(
-            aux_val_dataset, batch_size=args.batch_size, shuffle=False,
-            num_workers=args.workers, pin_memory=True)
+            aux_val_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,
+            num_workers=args.workers,
+            pin_memory=True,
+        )
         run_validate(aux_val_loader, len(val_loader))
 
     progress.display_summary()
@@ -451,5 +493,5 @@ def validate(val_loader, model, args):
     return top1.avg
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

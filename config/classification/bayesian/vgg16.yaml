@@ -1,3 +1,4 @@
+type: classification
 data: cifar10
 arch: vgg16
 use_torchvision: False
