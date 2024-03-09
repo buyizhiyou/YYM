@@ -368,7 +368,8 @@ def train(train_loader, model, criterion, optimizer, writer, epoch, device,
                                                 patch_size]
         rand_patch = rand_patch + torch.rand_like(rand_patch)  #  加点高斯噪声
         rand_patch = transforms.GaussianBlur(kernel_size=3,
-                                             sigma=(0.1, 2.0))(rand_patch) #高斯模糊
+                                             sigma=(0.1,
+                                                    2.0))(rand_patch)  #高斯模糊
         rand_patch = rand_patch.to(device, non_blocking=True)
         images = torch.concat((rand_patch, images), dim=0)
 

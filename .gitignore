@@ -7,4 +7,7 @@ logs/
 extra/
 assets/
 results/
+DDU/saved_models
+DDU/data
+DDU/logs
 .vscode/
