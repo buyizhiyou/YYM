@@ -5,7 +5,6 @@ import os
 import json
 import math
 import torch
-import glob
 import argparse
 import torch.backends.cudnn as cudnn
 
@@ -89,7 +88,7 @@ if __name__ == "__main__":
     print("Parsed args", args)
     print("Seed: ", args.seed)
     torch.manual_seed(args.seed)
-    device = torch.device(f"cuda:{args.gpu}" if cuda else "cpu")
+    device = torch.device("cuda:0" if cuda else "cpu")
 
     # Taking input for the dataset
     num_classes = dataset_num_classes[args.dataset]
@@ -102,8 +101,10 @@ if __name__ == "__main__":
     accuracies = []
 
     # Pre temperature scaling
-    # m1 - Uncertainty/Confidence Metric 1 for deterministic model: logsumexp, for ensemble: entropy
-    # m2 - Uncertainty/Confidence Metric 2 for deterministic model: entropy, for ensemble: MI
+    # m1 - Uncertainty/Confidence Metric 1
+    #      for deterministic model: logsumexp, for ensemble: entropy
+    # m2 - Uncertainty/Confidence Metric 2
+    #      for deterministic model: entropy, for ensemble: MI
     eces = []
     m1_aurocs = []
     m1_auprcs = []
@@ -118,23 +119,24 @@ if __name__ == "__main__":
     t_m2_auprcs = []
 
     topt = None
-    model_name = model_load_name(args.model, args.sn, args.mod, args.coeff,
-                        args.seed, args.contrastive) + "_best.model"
-    model_files = glob.glob(f"{args.load_loc}/Run{args.runs}/*/{model_name}")
 
-    for saved_model_name in model_files:
-        print(f"Run {args.runs}, Evaluating: {saved_model_name}")
-        #load dataset 
+    for i in range(args.runs):
+        print(f"Evaluating run: {(i+1)}")
+        # Loading the model(s)
         train_loader, val_loader = dataset_loader[
             args.dataset].get_train_valid_loader(
                 batch_size=args.batch_size,
                 augment=args.data_aug,
-                val_seed=(args.seed),
+                val_seed=(args.seed + i),
                 val_size=0.1,
                 pin_memory=args.gpu,
             )
-      
-        #load model 
+        saved_model_name = os.path.join(
+            args.load_loc,
+            args.ts,  #模型日期
+            model_load_name(args.model, args.sn, args.mod, args.coeff,
+                            args.seed, args.contrastive) + "_best.model",
+        )
         print(f"load {saved_model_name}")
         net = models[args.model](
             spectral_normalization=args.sn,
@@ -144,11 +146,15 @@ if __name__ == "__main__":
             temp=1.0,
         )
         if args.gpu:
-            net.to(device)
+            net.cuda()
+            # net = torch.nn.DataParallel(net,
+            #                             device_ids=range(
+            #                                 torch.cuda.device_count()))
             cudnn.benchmark = True
         net.load_state_dict(torch.load(str(saved_model_name)))
         net.eval()
 
+        # Evaluating the model(s)
         (
             conf_matrix,
             accuracy,
@@ -161,7 +167,7 @@ if __name__ == "__main__":
                                             labels_list,
                                             num_bins=15)
 
-        temp_scaled_net = ModelWithTemperature(net,device)
+        temp_scaled_net = ModelWithTemperature(net)
         temp_scaled_net.set_temperature(val_loader)
         topt = temp_scaled_net.temperature
 
@@ -180,7 +186,6 @@ if __name__ == "__main__":
         if (args.model_type == "gmm"):
             # Evaluate a GMM model
             print("GMM Model")
-
             embeddings, labels = get_embeddings(
                 net,
                 train_loader,
@@ -213,13 +218,15 @@ if __name__ == "__main__":
                     storage_device=device,
                 )
 
-                (_, _, _), (_, _,_), m1_auroc, m1_auprc = get_roc_auc_logits(
+                (_, _, _), (_, _,
+                            _), m1_auroc, m1_auprc = get_roc_auc_logits(
                                 logits,
                                 ood_logits,
                                 logsumexp,
                                 device,
                                 confidence=True)
-                (_, _, _), (_, _,_), m2_auroc, m2_auprc = get_roc_auc_logits(
+                (_, _, _), (_, _,
+                            _), m2_auroc, m2_auprc = get_roc_auc_logits(
                                 logits, ood_logits, entropy, device)
 
                 t_m1_auroc = m1_auroc
@@ -429,11 +436,11 @@ if __name__ == "__main__":
 
     res_dict["info"] = vars(args)
 
-    saved_name = "res_" + model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed,args.contrastive) + "_" \
+    save_name =  "./logs/res_" + model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed,args.contrastive) + "_" \
                             +args.model_type + "_" + args.dataset + "_" + args.ood_dataset +".json"
-    saved_dir =  f"./results/runs{args.runs}/"
-    if(not os.path.exists(saved_dir)):
-       os.makedirs(saved_dir)
-    with open(os.path.join(saved_dir,saved_name),"w",) as f:
+    with open(
+            save_name,
+            "w",
+    ) as f:
         json.dump(res_dict, f)
-        print(f"save to {os.path.join(saved_dir,saved_name)}")
+        print(f"save to {save_name}")

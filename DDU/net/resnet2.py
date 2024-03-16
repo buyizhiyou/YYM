@@ -173,7 +173,7 @@ class ResNet(nn.Module):
         self.temp = temp
 
         #add projection head for simclr
-        # self.projection_head = ProjectionHead(512 * block.expansion,256)
+        self.projection_head = ProjectionHead(512 * block.expansion,256)
 
     def _make_layer(self, block, input_size, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
@@ -193,9 +193,9 @@ class ResNet(nn.Module):
         out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
         
-        # self.embedding = self.projection_head(out)
+        self.feature = self.projection_head(out)
         
-        self.feature = out.clone().detach()#这里抽出来倒数第二层feature，作为embedding
+        # self.feature = out.clone().detach()#这里直接抽出来倒数第二层feature，作为embedding
         out = self.fc(out) / self.temp
 
 

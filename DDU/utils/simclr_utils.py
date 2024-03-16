@@ -7,65 +7,25 @@
 @Version :   Cinnamoroll V1
 '''
 
-
 import numpy as np
 import torch
 from torch import nn
 from torchvision.transforms import transforms
 from torch.nn import functional as F
+
 np.random.seed(0)
 
 
-class GaussianBlur(object):
-    """blur a single image on CPU"""
-    def __init__(self, kernel_size):
-        radias = kernel_size // 2
-        kernel_size = radias * 2 + 1
-        self.blur_h = nn.Conv2d(3, 3, kernel_size=(kernel_size, 1),
-                                stride=1, padding=0, bias=False, groups=3)
-        self.blur_v = nn.Conv2d(3, 3, kernel_size=(1, kernel_size),
-                                stride=1, padding=0, bias=False, groups=3)
-        self.k = kernel_size
-        self.r = radias
-
-        self.blur = nn.Sequential(
-            nn.ReflectionPad2d(radias),
-            self.blur_h,
-            self.blur_v
-        )
-
-        self.pil_to_tensor = transforms.ToTensor()
-        self.tensor_to_pil = transforms.ToPILImage()
-
-    def __call__(self, img):
-        img = self.pil_to_tensor(img).unsqueeze(0)
-
-        sigma = np.random.uniform(0.1, 2.0)
-        x = np.arange(-self.r, self.r + 1)
-        x = np.exp(-np.power(x, 2) / (2 * sigma * sigma))
-        x = x / x.sum()
-        x = torch.from_numpy(x).view(1, -1).repeat(3, 1)
-
-        self.blur_h.weight.data.copy_(x.view(3, 1, self.k, 1))
-        self.blur_v.weight.data.copy_(x.view(3, 1, 1, self.k))
-
-        with torch.no_grad():
-            img = self.blur(img)
-            img = img.squeeze()
-
-        img = self.tensor_to_pil(img)
-
-        return img
-    
 def get_simclr_pipeline_transform(size, s=1):
     """Return a set of data augmentation transformations as described in the SimCLR paper."""
     color_jitter = transforms.ColorJitter(0.8 * s, 0.8 * s, 0.8 * s, 0.2 * s)
-    data_transforms = transforms.Compose([transforms.RandomResizedCrop(size=size),
-                                            transforms.RandomHorizontalFlip(),
-                                            transforms.RandomApply([color_jitter], p=0.8),
-                                            transforms.RandomGrayscale(p=0.2),
-                                            GaussianBlur(kernel_size=int(0.1 * size)),
-                                            transforms.ToTensor()])
+    data_transforms = transforms.Compose([
+        transforms.RandomResizedCrop(size=size),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomApply([color_jitter], p=0.8),
+        transforms.RandomGrayscale(p=0.2),
+        transforms.GaussianBlur(kernel_size=int(0.1 * size)),
+    ])
     return data_transforms
 
 
@@ -80,33 +40,41 @@ class ContrastiveLearningViewGenerator(object):
         return [self.base_transform(x) for i in range(self.n_views)]
 
 
-def info_nce_loss(self, features):
+def info_nce_loss(features, batch_size, device, temperature=0.7, n_views=2):
     #batch_size:256
-    labels = torch.cat([torch.arange(self.args.batch_size) for i in range(self.args.n_views)], dim=0)#torch.Size([512 ])
+    labels = torch.cat([torch.arange(batch_size) for i in range(n_views)],
+                       dim=0)  #torch.Size([512 ])
     labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
-    labels = labels.to(self.args.device)  #每一行有两个1,分别是labels[i][i]和labels[i][i+256]，其中labels[i][i]是完全一样，lbales[i][i+256]是同张图片不同增强
+    labels = labels.to(
+        device
+    )  #每一行有两个1,分别是labels[i][i]和labels[i][i+256]，其中labels[i][i]是完全一样，lbales[i][i+256]是同张图片不同增强
 
     features = F.normalize(features, dim=1)
 
     similarity_matrix = torch.matmul(features, features.T)
 
     # discard the main diagonal from both: labels and similarities matrix
-    mask = torch.eye(labels.shape[0], dtype=torch.bool).to(self.args.device)
-    labels = labels[~mask].view(labels.shape[0], -1)#torch.Size([512, 511])
-    similarity_matrix = similarity_matrix[~mask].view(similarity_matrix.shape[0], -1)#torch.Size([512, 511])
+    mask = torch.eye(labels.shape[0], dtype=torch.bool).to(device)
+    labels = labels[~mask].view(labels.shape[0], -1)  #torch.Size([512, 511])
+    similarity_matrix = similarity_matrix[~mask].view(
+        similarity_matrix.shape[0], -1)  #torch.Size([512, 511])
 
     # select and combine multiple positives
-    positives = similarity_matrix[labels.bool()].view(labels.shape[0], -1)#torch.Size([512, 1])
+    positives = similarity_matrix[labels.bool()].view(
+        labels.shape[0], -1)  #torch.Size([512, 1])
     # select only the negatives the negatives
-    negatives = similarity_matrix[~labels.bool()].view(similarity_matrix.shape[0], -1)#torch.Size([512, 510])
+    negatives = similarity_matrix[~labels.bool()].view(
+        similarity_matrix.shape[0], -1)  #torch.Size([512, 510])
 
-    logits = torch.cat([positives, negatives], dim=1)# put cos_sim of positive pairs as  first column  And cos_sim of negative pairs are the rest 
-    labels = torch.zeros(logits.shape[0], dtype=torch.long).to(self.args.device)#这里全赋值为0 crossEntropy = log_softmax+nllloss ,注意nllloss原理
+    logits = torch.cat(
+        [positives, negatives], dim=1
+    )  # put cos_sim of positive pairs as  first column  And cos_sim of negative pairs are the rest
+    labels = torch.zeros(logits.shape[0], dtype=torch.long).to(
+        device)  #这里全赋值为0 crossEntropy = log_softmax+nllloss ,注意nllloss原理
 
-    logits = logits / self.args.temperature
+    logits = logits / temperature
 
     return logits, labels
-
 
 
 def supervisedContrastiveLoss(representations,
@@ -136,11 +104,11 @@ def supervisedContrastiveLoss(representations,
     #这步得到它的不同类的矩阵，不同类的位置为1
     mask_no_sim = torch.ones_like(mask).to(device) - mask
     #这步产生一个对角线全为0的，其他位置为1的矩阵
-    mask_dui_jiao_0 = torch.ones(n, n).to(device) - torch.eye(n, n).to(device)
+    mask_diag_0 = torch.ones(n, n).to(device) - torch.eye(n, n).to(device)
     #这步给相似度矩阵求exp,并且除以温度参数T
     similarity_matrix = torch.exp(similarity_matrix / T)
     #这步将相似度矩阵的对角线上的值全置0，因为对比损失不需要自己与自己的相似度
-    similarity_matrix = similarity_matrix * mask_dui_jiao_0
+    similarity_matrix = similarity_matrix * mask_diag_0
     #这步产生了相同类别的相似度矩阵，标签相同的位置保存它们的相似度，其他位置都是0，对角线上也为0
     sim = mask * similarity_matrix
     #用原先的对角线为0的相似度矩阵减去相同类别的相似度矩阵就是不同类别的相似度矩阵

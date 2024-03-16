@@ -9,9 +9,9 @@ from torch import nn
 import torch.distributed as dist
 from tqdm import tqdm
 from utils.eval_utils import accuracy
-from utils.simclr_utils import ContrastiveLearningViewGenerator, get_simclr_pipeline_transform, info_nce_loss
-
-
+from utils.simclr_utils import ContrastiveLearningViewGenerator, get_simclr_pipeline_transform, info_nce_loss, supervisedContrastiveLoss
+from utils.loss import LabelSmoothing
+from torchvision.transforms import transforms
 
 import torch
 import torch.nn.functional as F
@@ -23,7 +23,7 @@ def train_single_epoch(epoch,
                        optimizer,
                        device,
                        contrastive,
-                       loss_function="cross_entropy",
+                       label_smooth=False,
                        loss_mean=False):
     """
     Util method for training a model for a single epoch.
@@ -36,30 +36,53 @@ def train_single_epoch(epoch,
 
     if contrastive:
         activation = {}
+
         def get_activation(name):
+
             def hook(model, input, output):
                 activation[name] = input[0]
-            return hook
-        model.projection_head.out.register_forward_hook(get_activation('embedding'))
 
-    contrastiveGenerator = ContrastiveLearningViewGenerator(get_simclr_pipeline_transform(32))
+            return hook
+
+        # model.fc.register_forward_hook(get_activation('embedding'))
+        model.projection_head.out.register_forward_hook(
+            get_activation('embedding'))
+
+    if label_smooth:
+        loss_func = LabelSmoothing()
+    else:
+        loss_func = nn.CrossEntropyLoss()
+
+    contrastiveGenerator = ContrastiveLearningViewGenerator(
+        get_simclr_pipeline_transform(32))
     for batch_idx, (data, labels) in enumerate(tqdm(train_loader)):
         data = data.to(device)
         labels = labels.to(device)
-
+        batch_size = data.shape[0]
         optimizer.zero_grad()
+
         logits = model(data)
-        loss1 = F.cross_entropy(logits, labels)
+        loss1 = loss_func(logits, labels)
         if contrastive:
-            # loss2 = supervisedContrastiveLoss(embeddings, labels, device)
-            # loss = loss1 - 0.1 * loss2
-            images = contrastiveGenerator(data)
-            images = torch.cat(images, dim=0)
+            """
+            类间对比loss
+            """
+            # loss2 = supervisedContrastiveLoss(embeddings, labels, device,temperature=0.5)
+            # loss = loss1 - 0.01 * loss2  #这个好一些？？
+            # loss = loss1 + 0.01 * loss2
+            """
+            样本间对比loss
+            """
+            images = contrastiveGenerator(data.cpu())
+            images = torch.cat(images, dim=0).to(device)
             model(images)  #TODO:ADD projection head for model
             embeddings = activation['embedding']
-            logits2, labels2 = info_nce_loss(embeddings)
+            logits2, labels2 = info_nce_loss(embeddings, batch_size, device)
             loss2 = F.cross_entropy(logits2, labels2)
-            loss = loss1 + 0.1 * loss2
+            if (epoch > 100):
+                loss = loss1 + 0.1 * loss2
+            else:
+                loss = loss2
         else:
             loss = loss1
 

@@ -4,7 +4,7 @@ Script for training a single model for OOD detection.
 
 import datetime
 import json
-import os 
+import os
 import torch
 import argparse
 from torch import optim
@@ -18,7 +18,8 @@ import data.dirty_mnist as dirty_mnist
 
 # Import network models
 from net.lenet import lenet
-from net.resnet import resnet18, resnet50, resnet101, resnet110, resnet152
+# from net.resnet import resnet18, resnet50, resnet101, resnet110, resnet152
+from net.resnet2 import resnet18, resnet50, resnet101, resnet110, resnet152
 from net.wide_resnet import wrn
 from net.vgg import vgg16
 
@@ -56,6 +57,7 @@ models = {
     "vgg16": vgg16,
 }
 
+# torch.backends.cudnn.benchmark = False
 if __name__ == "__main__":
 
     args = training_args().parse_args()
@@ -65,7 +67,7 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
 
     cuda = torch.cuda.is_available() and args.gpu
-    device = torch.device("cuda:0" if cuda else "cpu")
+    device = torch.device(f"cuda:{args.gpu}" if cuda else "cpu")
     print("CUDA set: " + str(cuda))
 
     num_classes = dataset_num_classes[args.dataset]
@@ -122,10 +124,13 @@ if __name__ == "__main__":
     time_str = datetime.datetime.strftime(curr_time, "%Y_%m_%d_%H_%M_%S")
     save_name = model_save_name(args.model, args.sn, args.mod, args.coeff,
                                 args.seed, args.contrastive)
-    save_loc = f"{args.save_loc}/{time_str}/"
+
+    save_loc = f"{args.save_loc}/Run{args.runs}/{time_str}/"
+    if args.ls:
+        save_loc = f"{args.save_loc}/Run{args.runs}/{time_str}_labelsmooth/"
     if not os.path.exists(save_loc):
         os.makedirs(save_loc)
-    writer = SummaryWriter(f"{args.log_loc}/{save_name}/{time_str}")
+    writer = SummaryWriter(f"{args.log_loc}/{args.runs}/{save_name}/{time_str}")
     print("Model save name", save_name)
 
     best_acc = 0
@@ -139,7 +144,7 @@ if __name__ == "__main__":
             optimizer,
             device,
             args.contrastive,
-            loss_function=args.loss_function,
+            label_smooth=args.ls,
             loss_mean=args.loss_mean,
         )
 
@@ -155,8 +160,8 @@ if __name__ == "__main__":
             best_acc = val_acc
             is_best = True
         if is_best:
-            saved_name = save_loc + save_name + "_best" + ".model"
-            torch.save(net.state_dict(), saved_name)
-            print("Model saved to ", saved_name)
+            save_path = save_loc + save_name + "_best" + ".model"
+            torch.save(net.state_dict(), save_path)
+            print("Model saved to ", save_path)
 
     writer.close()

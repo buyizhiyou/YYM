@@ -35,11 +35,25 @@ def training_args():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
+    # add extra arguments
     parser.add_argument("--contrastive",
                         type=bool,
                         default=False,
                         help="add contrastive loss")
-    
+                        
+    parser.add_argument("--ls",
+                        type=bool,
+                        default=False,
+                        help="using label smoothing")
+                
+        
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=1,
+        dest="runs",
+        help="Number of models to aggregate over",
+    )
     parser.add_argument("--seed",
                         type=int,
                         dest="seed",
@@ -77,10 +91,10 @@ def training_args():
         help="Test Batch size",
     )
 
-    parser.add_argument("--no-gpu",
-                        action="store_false",
-                        dest="gpu",
+    parser.add_argument("--gpu",
+                        default=1,
                         help="Use GPU")
+                        
     parser.add_argument("--model",
                         type=str,
                         default=model,
@@ -114,6 +128,7 @@ def training_args():
                         default=epoch,
                         dest="epoch",
                         help="Number of training epochs")
+
     parser.add_argument(
         "--lr",
         type=float,
@@ -232,10 +247,18 @@ def eval_args():
         description="Training for calibration.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+
+    #add extra arguments
     parser.add_argument("--contrastive",
                         type=bool,
                         default=False,
                         help="add contrastive loss")
+    parser.add_argument("--ls",
+                        type=bool,
+                        default=False,
+                        help="using label smoothing")
+
+                
     
     parser.add_argument("--seed",
                         type=int,
@@ -259,11 +282,10 @@ def eval_args():
     parser.add_argument("--data-aug", action="store_true", dest="data_aug")
     parser.set_defaults(data_aug=False)
 
-    parser.add_argument("--no-gpu",
-                        action="store_false",
-                        dest="gpu",
+    parser.add_argument("--gpu",
+                        default=1,
                         help="Use GPU")
-    parser.set_defaults(gpu=True)
+
     parser.add_argument("-b",
                         type=int,
                         default=batch_size,

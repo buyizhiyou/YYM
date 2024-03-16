@@ -18,10 +18,11 @@ class ModelWithTemperature(nn.Module):
             NOT the softmax (or log softmax)!
     """
 
-    def __init__(self, model, log=True):
+    def __init__(self, model, device, log=True):
         super(ModelWithTemperature, self).__init__()
         self.model = model
         self.temperature = 1.0
+        self.device = device
         self.log = log
 
     def forward(self, input):
@@ -39,22 +40,22 @@ class ModelWithTemperature(nn.Module):
         """
         Tune the tempearature of the model (using the validation set) with cross-validation on ECE or NLL
         """
-        self.cuda()
+        device = self.device
         self.model.eval()
-        nll_criterion = nn.CrossEntropyLoss().cuda()
-        ece_criterion = ECELoss().cuda()
+        nll_criterion = nn.CrossEntropyLoss()
+        ece_criterion = ECELoss()
 
         # First: collect all the logits and labels for the validation set
         logits_list = []
         labels_list = []
         with torch.no_grad():
             for input, label in valid_loader:
-                input = input.cuda()
+                input = input.to(device)
                 logits = self.model(input)
                 logits_list.append(logits)
                 labels_list.append(label)
-            logits = torch.cat(logits_list).cuda()
-            labels = torch.cat(labels_list).cuda()
+            logits = torch.cat(logits_list).to(device)
+            labels = torch.cat(labels_list).to(device)
 
         return self.set_temperature_logits(logits, labels, cross_validate=cross_validate)
 
@@ -62,8 +63,9 @@ class ModelWithTemperature(nn.Module):
         """
         Tune the tempearature of the model (using the validation set) with cross-validation on ECE or NLL
         """
-        nll_criterion = nn.CrossEntropyLoss().cuda()
-        ece_criterion = ECELoss().cuda()
+        device = self.device
+        nll_criterion = nn.CrossEntropyLoss().to(device)
+        ece_criterion = ECELoss().to(device)
 
         # Calculate NLL and ECE before temperature scaling
         before_temperature_nll = nll_criterion(logits, labels).item()
@@ -78,7 +80,7 @@ class ModelWithTemperature(nn.Module):
         T = 0.1
         for i in range(100):  #交叉验证，得到最优的temperature
             self.temperature = T
-            self.cuda()
+            self.to(device)
             after_temperature_nll = nll_criterion(self.temperature_scale(logits), labels).item()
             after_temperature_ece = ece_criterion(self.temperature_scale(logits), labels).item()
             if nll_val > after_temperature_nll:
@@ -94,8 +96,6 @@ class ModelWithTemperature(nn.Module):
             self.temperature = T_opt_ece
         else:
             self.temperature = T_opt_nll
-        self.cuda()
-
         # Calculate NLL and ECE after temperature scaling
         after_temperature_nll = nll_criterion(self.temperature_scale(logits), labels).item()
         after_temperature_ece = ece_criterion(self.temperature_scale(logits), labels).item()
