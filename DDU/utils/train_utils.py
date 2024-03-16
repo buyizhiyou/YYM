@@ -79,10 +79,10 @@ def train_single_epoch(epoch,
             embeddings = activation['embedding']
             logits2, labels2 = info_nce_loss(embeddings, batch_size, device)
             loss2 = F.cross_entropy(logits2, labels2)
-            if (epoch > 100):
-                loss = loss1 + 0.1 * loss2
-            else:
+            if (epoch<1100):#第一阶段，只训练对比loss
                 loss = loss2
+            else: #第二阶段，对比loss+分类loss
+                loss = loss1 + 100 * loss2
         else:
             loss = loss1
 

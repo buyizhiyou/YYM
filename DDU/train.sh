@@ -7,7 +7,7 @@ for i in {1..1}; do
               --gpu 1 \
               --runs 3 \
               -b 64 \
-              --epochs 300 --dataset cifar10 \
+              --epochs 1300 --dataset cifar10 \
               --model resnet50 \
               -mod \
               -sn --coeff 3.0 \

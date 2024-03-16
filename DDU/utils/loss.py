@@ -14,7 +14,7 @@ import torch.nn as nn
 class LabelSmoothing(nn.Module):
     """NLL loss with label smoothing.
     """
-    def __init__(self, smoothing=0.1):
+    def __init__(self, smoothing=0.01):
         """Constructor for the LabelSmoothing module.
         :param smoothing: label smoothing factor
         """
