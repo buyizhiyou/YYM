@@ -178,7 +178,7 @@ class SpectralNormConvLoadStateDictPreHook(object):
         self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs,
     ):
         fn = self.fn
-        version = local_metadata.get("spectral_norm_conv", {}).get(fn.name + ".version", None)
+        version = local_metadata_utils.get("spectral_norm_conv", {}).get(fn.name + ".version", None)
         if version is None or version < 1:
             with torch.no_grad():
                 weight_orig = state_dict[prefix + fn.name + "_orig"]

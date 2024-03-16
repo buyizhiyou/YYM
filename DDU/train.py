@@ -11,10 +11,10 @@ from torch import optim
 import torch.backends.cudnn as cudnn
 
 # Import dataloaders
-import data.ood_detection.cifar10 as cifar10
-import data.ood_detection.cifar100 as cifar100
-import data.ood_detection.svhn as svhn
-import data.dirty_mnist as dirty_mnist
+import data_utils.ood_detection.cifar10 as cifar10
+import data_utils.ood_detection.cifar100 as cifar100
+import data_utils.ood_detection.svhn as svhn
+import data_utils.dirty_mnist as dirty_mnist
 
 # Import network models
 from net.lenet import lenet

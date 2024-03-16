@@ -90,14 +90,14 @@ if __name__ == "__main__":
         download=True,
         transform=test_transform,
     )
-    train_loader = torch.utils.data.DataLoader(
+    train_loader = torch.utils.data_utils.DataLoader(
         train_dataset,
         batch_size=128,
         num_workers=4,
         pin_memory=True,
         shuffle=False,
     )
-    test_loader = torch.utils.data.DataLoader(
+    test_loader = torch.utils.data_utils.DataLoader(
         test_dataset,
         batch_size=128,
         num_workers=4,
@@ -174,7 +174,7 @@ if __name__ == "__main__":
         download=True,
         transform=test_transform,
     )
-    ood_test_loader = torch.utils.data.DataLoader(
+    ood_test_loader = torch.utils.data_utils.DataLoader(
         dataset,
         batch_size=128,
         shuffle=False,

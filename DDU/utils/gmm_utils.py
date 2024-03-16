@@ -14,7 +14,7 @@ def centered_cov_torch(x):
 
 def get_embeddings(
     net,
-    loader: torch.utils.data.DataLoader,
+    loader: torch.utils.data_utils.DataLoader,
     num_dim: int,
     dtype,
     device,
@@ -30,7 +30,7 @@ def get_embeddings(
         start = 0
         print("get embeddings from dataloader...")
         for data, label in tqdm(loader):  #多个少batch
-            data = data.to(device)
+            data = data_utils.to(device)
             label = label.to(device)
 
             if isinstance(net, nn.DataParallel):
@@ -76,7 +76,7 @@ def gmm_evaluate(net, gaussians_model, loader, device, num_classes,
     with torch.no_grad():
         start = 0
         for data, label in tqdm(loader):
-            data = data.to(device)
+            data = data_utils.to(device)
             label = label.to(device)
             logit_B_C = gmm_forward(net, gaussians_model,
                                     data)  #每个batch计算logits,再合并

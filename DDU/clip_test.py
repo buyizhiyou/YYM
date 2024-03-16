@@ -23,10 +23,10 @@ from torchvision import datasets
 from torchvision.transforms import Resize
 
 # Import dataloaders
-import data.ood_detection.cifar10 as cifar10
-import data.ood_detection.cifar100 as cifar100
-import data.ood_detection.svhn as svhn
-import data.ood_detection.tiny_imagenet as tiny_imagenet
+import data_utils.ood_detection.cifar10 as cifar10
+import data_utils.ood_detection.cifar100 as cifar100
+import data_utils.ood_detection.svhn as svhn
+import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
 
 # Import network models
 from net.lenet import lenet
@@ -91,16 +91,16 @@ if __name__ == "__main__":
     data_dir = "./data"
     train_dataset = datasets.CIFAR10(root=data_dir, train=True, download=True, transform=preprocess,)
     test_dataset = datasets.CIFAR10(root=data_dir, train=False, download=True, transform=preprocess,)
-    train_loader = torch.utils.data.DataLoader(
+    train_loader = torch.utils.data_utils.DataLoader(
         train_dataset, batch_size=128, num_workers=4, pin_memory=True, shuffle=False,
     )
-    test_loader = torch.utils.data.DataLoader(
+    test_loader = torch.utils.data_utils.DataLoader(
         test_dataset, batch_size=128, num_workers=4, pin_memory=True, shuffle=False,
     )
 
 
     dataset = datasets.SVHN(root=data_dir, split="test", download=True, transform=preprocess,)
-    ood_test_loader = torch.utils.data.DataLoader(
+    ood_test_loader = torch.utils.data_utils.DataLoader(
         dataset, batch_size=128, shuffle=False, num_workers=4, pin_memory=True,
     )
 

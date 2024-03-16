@@ -8,9 +8,9 @@ from torch import optim
 import torch.backends.cudnn as cudnn
 
 # Import dataloaders
-import data.ood_detection.cifar10 as cifar10
-import data.ood_detection.cifar100 as cifar100
-import data.ood_detection.svhn as svhn
+import data_utils.ood_detection.cifar10 as cifar10
+import data_utils.ood_detection.cifar100 as cifar100
+import data_utils.ood_detection.svhn as svhn
 
 # Import network models
 from net.resnet import resnet50
