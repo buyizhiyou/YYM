@@ -9,6 +9,6 @@ def get_loaders(root, train, batch_size):
     # load the dataset
     dataset = AmbiguousMNIST(root=root, train=train, device=device,)
 
-    loader = torch.utils.data_utils.DataLoader(dataset, batch_size=batch_size, shuffle=train, num_workers=0)
+    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=train, num_workers=0)
 
     return loader

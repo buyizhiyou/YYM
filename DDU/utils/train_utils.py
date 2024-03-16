@@ -56,9 +56,9 @@ def train_single_epoch(epoch,
     contrastiveGenerator = ContrastiveLearningViewGenerator(
         get_simclr_pipeline_transform(32))
     for batch_idx, (data, labels) in enumerate(tqdm(train_loader)):
-        data = data_utils.to(device)
+        data = data.to(device)
         labels = labels.to(device)
-        batch_size = data_utils.shape[0]
+        batch_size = data.shape[0]
         optimizer.zero_grad()
 
         logits = model(data)
@@ -73,7 +73,7 @@ def train_single_epoch(epoch,
             """
             样本间对比loss
             """
-            images = contrastiveGenerator(data_utils.cpu())
+            images = contrastiveGenerator(data.cpu())
             images = torch.cat(images, dim=0).to(device)
             model(images)  #TODO:ADD projection head for model
             embeddings = activation['embedding']
@@ -120,7 +120,7 @@ def test_single_epoch(epoch, model, test_val_loader, device):
     acc = 0
     with torch.no_grad():
         for data, labels in test_val_loader:
-            data = data_utils.to(device)
+            data = data.to(device)
             labels = labels.to(device)
 
             logits = model(data)

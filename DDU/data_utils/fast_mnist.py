@@ -12,13 +12,13 @@ class FastMNIST(MNIST):
         super().__init__(*args, **kwargs)
 
         # Scale data to [0,1]
-        self.data = self.data_utils.unsqueeze(1).float().div(255)
+        self.data = self.data.unsqueeze(1).float().div(255)
 
         # Normalize it with the usual MNIST mean and std
-        self.data = self.data_utils.sub_(0.1307).div_(0.3081)
+        self.data = self.data.sub_(0.1307).div_(0.3081)
 
         # Put both data and targets on GPU in advance
-        self.data, self.targets = self.data_utils.to(device), self.targets.to(device)
+        self.data, self.targets = self.data.to(device), self.targets.to(device)
 
     def __getitem__(self, index):
         """

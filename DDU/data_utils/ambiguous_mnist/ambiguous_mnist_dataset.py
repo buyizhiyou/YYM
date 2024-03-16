@@ -2,7 +2,7 @@ import os
 import torch
 import random
 import numpy as np
-from torch.utils.data_utils.dataset import Dataset
+from torch.utils.data.dataset import Dataset
 
 """
 Loads the ambiguous MNIST dataset. 
@@ -18,11 +18,11 @@ class AmbiguousMNIST(Dataset):
         self.targets = torch.load(os.path.join(root, "amnist_labels.pt")).to(device)
 
         # Normalize it with the usual MNIST mean and std
-        self.data = self.data_utils.sub_(0.1307).div_(0.3081)
+        self.data = self.data.sub_(0.1307).div_(0.3081)
 
         num_multi_labels = self.targets.shape[1]
 
-        self.data = self.data_utils.expand(-1, num_multi_labels, 28, 28).reshape(-1, 1, 28, 28)
+        self.data = self.data.expand(-1, num_multi_labels, 28, 28).reshape(-1, 1, 28, 28)
         self.targets = self.targets.reshape(-1)
 
         data_range = slice(None, 60000) if train else slice(60000, None)

@@ -55,7 +55,7 @@ def ambiguous_acquired(data_loader, threshold, model):
     logits = []
     with torch.no_grad():
         for data, label in data_loader:
-            data = data_utils.to(device)
+            data = data.to(device)
             label = label.to(device)
 
             op = model(data)
@@ -93,8 +93,8 @@ if __name__ == "__main__":
     train_dataset, test_dataset = create_MNIST_dataset()
     if args.ambiguous:
         indices = np.random.choice(len(train_dataset), args.subsample)
-        mnist_train_dataset = data_utils.Subset(train_dataset, indices)
-        train_dataset = data_utils.ConcatDataset(
+        mnist_train_dataset = data.Subset(train_dataset, indices)
+        train_dataset = data.ConcatDataset(
             [mnist_train_dataset, AmbiguousMNIST(root=args.dataset_root, train=True, device=device),]
         )
 
@@ -105,16 +105,16 @@ if __name__ == "__main__":
     np.random.shuffle(idxs)
 
     train_idx, val_idx = idxs[split:], idxs[:split]
-    val_dataset = data_utils.Subset(train_dataset, val_idx)
-    train_dataset = data_utils.Subset(train_dataset, train_idx)
+    val_dataset = data.Subset(train_dataset, val_idx)
+    train_dataset = data.Subset(train_dataset, train_idx)
 
     initial_sample_indices = active_learning.get_balanced_sample_indices(
         train_dataset, num_classes=num_classes, n_per_digit=args.num_initial_samples / num_classes,
     )
 
     kwargs = {"num_workers": 0, "pin_memory": False} if cuda else {}
-    val_loader = torch.utils.data_utils.DataLoader(val_dataset, batch_size=args.test_batch_size, shuffle=False, **kwargs)
-    test_loader = torch.utils.data_utils.DataLoader(test_dataset, batch_size=args.test_batch_size, shuffle=False, **kwargs)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.test_batch_size, shuffle=False, **kwargs)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.test_batch_size, shuffle=False, **kwargs)
 
     # Run experiment
     num_runs = 5
@@ -137,23 +137,23 @@ if __name__ == "__main__":
         active_learning_data = active_learning.ActiveLearningData(train_dataset)
 
         # Acquiring the first training dataset from the total pool. This is random acquisition
-        active_learning_data_utils.acquire(initial_sample_indices)
+        active_learning_data.acquire(initial_sample_indices)
 
         # Train loader for the current acquired training set
         sampler = active_learning.RandomFixedLengthSampler(
-            dataset=active_learning_data_utils.training_dataset, target_length=5056
+            dataset=active_learning_data.training_dataset, target_length=5056
         )
-        train_loader = torch.utils.data_utils.DataLoader(
-            active_learning_data_utils.training_dataset, sampler=sampler, batch_size=args.train_batch_size, **kwargs,
+        train_loader = torch.utils.data.DataLoader(
+            active_learning_data.training_dataset, sampler=sampler, batch_size=args.train_batch_size, **kwargs,
         )
 
-        small_train_loader = torch.utils.data_utils.DataLoader(
-            active_learning_data_utils.training_dataset, shuffle=True, batch_size=args.train_batch_size, **kwargs,
+        small_train_loader = torch.utils.data.DataLoader(
+            active_learning_data.training_dataset, shuffle=True, batch_size=args.train_batch_size, **kwargs,
         )
 
         # Pool loader for the current acquired training set
-        pool_loader = torch.utils.data_utils.DataLoader(
-            active_learning_data_utils.pool_dataset, batch_size=args.scoring_batch_size, shuffle=False, **kwargs,
+        pool_loader = torch.utils.data.DataLoader(
+            active_learning_data.pool_dataset, batch_size=args.scoring_batch_size, shuffle=False, **kwargs,
         )
 
         # Run active learning iterations
@@ -231,11 +231,11 @@ if __name__ == "__main__":
             print("Test set: Accuracy: ({:.2f}%)".format(percentage_correct))
 
             # Breaking clause
-            if len(active_learning_data_utils.training_dataset) >= args.max_training_samples:
+            if len(active_learning_data.training_dataset) >= args.max_training_samples:
                 break
 
             # Acquisition phase
-            N = len(active_learning_data_utils.pool_dataset)
+            N = len(active_learning_data.pool_dataset)
 
             print("Performing acquisition ========================================")
             if args.al_type == "ensemble":
@@ -244,7 +244,7 @@ if __name__ == "__main__":
                 ensemble_uncs = []
                 with torch.no_grad():
                     for data, _ in pool_loader:
-                        data = data_utils.to(device)
+                        data = data.to(device)
                         mean_output, predictive_entropy, mi = ensemble_forward_pass(model_ensemble, data)
 
                         ensemble_uncs.append(mi if args.mi else predictive_entropy)
@@ -272,7 +272,7 @@ if __name__ == "__main__":
                     logits = []
                     with torch.no_grad():
                         for data, _ in pool_loader:
-                            data = data_utils.to(device)
+                            data = data.to(device)
                             logits.append(model(data))
                         logits = torch.cat(logits, dim=0)
                     (candidate_scores, candidate_indices,) = active_learning.find_acquisition_batch(
@@ -280,7 +280,7 @@ if __name__ == "__main__":
                     )
 
             # Performing acquisition
-            active_learning_data_utils.acquire(candidate_indices)
+            active_learning_data.acquire(candidate_indices)
             if args.ambiguous:
                 entropies, amb_percent = ambiguous_acquired(small_train_loader, args.threshold, pretrained_net)
                 ambiguous_dict[run].append(amb_percent)

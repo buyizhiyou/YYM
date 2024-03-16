@@ -79,10 +79,10 @@ def get_train_valid_loader( batch_size, augment, val_seed, val_size=0.1, num_wor
     train_subset = Subset(train_dataset, train_idx)
     valid_subset = Subset(train_dataset, valid_idx)
 
-    train_loader = torch.utils.data_utils.DataLoader(
+    train_loader = torch.utils.data.DataLoader(
         train_subset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, shuffle=True,
     )
-    valid_loader = torch.utils.data_utils.DataLoader(
+    valid_loader = torch.utils.data.DataLoader(
         valid_subset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, shuffle=False,
     )
 
@@ -117,7 +117,7 @@ def get_test_loader(batch_size, num_workers=1, pin_memory=False, **kwargs):
 
     val_dataset = datasets.ImageFolder(val_path, transform=val_transform)
 
-    val_loader = torch.utils.data_utils.DataLoader(
+    val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=4, num_workers=1, pin_memory=pin_memory, shuffle=False,
     )
 

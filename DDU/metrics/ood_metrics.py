@@ -52,7 +52,7 @@ def get_roc_auc_ensemble(model_ensemble, test_loader, ood_test_loader, uncertain
     with torch.no_grad():
         # Getting uncertainties for in-distribution data
         for data, label in test_loader:
-            data = data_utils.to(device)
+            data = data.to(device)
             label = label.to(device)
 
             bin_label_uncertainty = torch.zeros(label.shape).to(device)
@@ -66,7 +66,7 @@ def get_roc_auc_ensemble(model_ensemble, test_loader, ood_test_loader, uncertain
 
         # Getting entropies for OOD data
         for data, label in ood_test_loader:
-            data = data_utils.to(device)
+            data = data.to(device)
             label = label.to(device)
 
             bin_label_uncertainty = torch.ones(label.shape).to(device)

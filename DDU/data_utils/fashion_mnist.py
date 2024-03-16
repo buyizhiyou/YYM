@@ -18,7 +18,7 @@ def get_loaders(batch_size, train=False, num_workers=4, pin_memory=True, **kwarg
 
     dataset = datasets.FashionMNIST(root=data_dir, train=train, download=True, transform=transform,)
 
-    loader = torch.utils.data_utils.DataLoader(
+    loader = torch.utils.data.DataLoader(
         dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=pin_memory,
     )
 

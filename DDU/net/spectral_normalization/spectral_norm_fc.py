@@ -180,7 +180,7 @@ class SpectralNormLoadStateDictPreHook:
     #    v = x / (u @ W_orig @ x) * (W / W_orig).
     def __call__(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs,) -> None:
         fn = self.fn
-        version = local_metadata_utils.get("spectral_norm", {}).get(fn.name + ".version", None)
+        version = local_metadata.get("spectral_norm", {}).get(fn.name + ".version", None)
         if version is None or version < 1:
             weight_key = prefix + fn.name
             if (
@@ -188,7 +188,7 @@ class SpectralNormLoadStateDictPreHook:
                 and all(weight_key + s in state_dict for s in ("_orig", "_u", "_v"))
                 and weight_key not in state_dict
             ):
-                # Detect if it is the updated state dict and just missing metadata_utils.
+                # Detect if it is the updated state dict and just missing metadata.
                 # This could happen if the users are crafting a state dict themselves,
                 # so we just pretend that this is the newest.
                 return

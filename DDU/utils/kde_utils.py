@@ -48,7 +48,7 @@ def kde_evaluate(net, kde_model, loader, device, num_classes, storage_device):
     with torch.no_grad():
         start = 0
         for data, label in tqdm(loader):
-            data = data_utils.to(device)
+            data = data.to(device)
             label = label.to(device)
             logit_B_C = kde_forward(net, kde_model, data)
 

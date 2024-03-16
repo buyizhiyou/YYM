@@ -10,20 +10,20 @@ import torch.utils.data as data
 class ActiveLearningData:
     """Splits `dataset` into an active dataset and an available dataset."""
 
-    dataset: data_utils.Dataset
-    training_dataset: data_utils.Dataset
-    pool_dataset: data_utils.Dataset
+    dataset: data.Dataset
+    training_dataset: data.Dataset
+    pool_dataset: data.Dataset
     training_mask: np.ndarray
     pool_mask: np.ndarray
 
-    def __init__(self, dataset: data_utils.Dataset):
+    def __init__(self, dataset: data.Dataset):
         super().__init__()
         self.dataset = dataset
         self.training_mask = np.full((len(dataset),), False)
         self.pool_mask = np.full((len(dataset),), True)
 
-        self.training_dataset = data_utils.Subset(self.dataset, None)
-        self.pool_dataset = data_utils.Subset(self.dataset, None)
+        self.training_dataset = data.Subset(self.dataset, None)
+        self.pool_dataset = data.Subset(self.dataset, None)
 
         self._update_indices()
 
@@ -62,7 +62,7 @@ class ActiveLearningData:
         pool_indices = torch.randperm(len(self.pool_dataset))[:size]
         return pool_indices
 
-    def extract_dataset_from_pool(self, size) -> data_utils.Dataset:
+    def extract_dataset_from_pool(self, size) -> data.Dataset:
         """
         Extract a dataset randomly from the pool dataset and make those indices unavailable.
 
@@ -70,7 +70,7 @@ class ActiveLearningData:
         """
         return self.extract_dataset_from_pool_from_indices(self.get_random_pool_indices(size))
 
-    def extract_dataset_from_pool_from_indices(self, pool_indices) -> data_utils.Dataset:
+    def extract_dataset_from_pool_from_indices(self, pool_indices) -> data.Dataset:
         """
         Extract a dataset from the pool dataset and make those indices unavailable.
 
@@ -79,11 +79,11 @@ class ActiveLearningData:
         dataset_indices = self.get_dataset_indices(pool_indices)
 
         self.remove_from_pool(pool_indices)
-        return data_utils.Subset(self.dataset, dataset_indices)
+        return data.Subset(self.dataset, dataset_indices)
 
 
 # Random selection of samples with equal number of samples per class
-def get_balanced_sample_indices(dataset: data_utils.Dataset, num_classes, n_per_digit=2) -> List[int]:
+def get_balanced_sample_indices(dataset: data.Dataset, num_classes, n_per_digit=2) -> List[int]:
     """Given `target_classes` randomly sample `n_per_digit` for each of the `num_classes` classes."""
     permed_indices = torch.randperm(len(dataset))
 
@@ -124,16 +124,16 @@ def find_acquisition_batch(logits, batch_size, score_function, uncertainty=True)
     return get_top_k_scorers(scores, batch_size=batch_size, uncertainty=uncertainty)
 
 
-class RandomFixedLengthSampler(data_utils.Sampler):
+class RandomFixedLengthSampler(data.Sampler):
     """
     Sometimes, you really want to do more with little data without increasing the number of epochs.
     This sampler takes a `dataset` and draws `target_length` samples from it (with repetition).
     """
 
-    dataset: data_utils.Dataset
+    dataset: data.Dataset
     target_length: int
 
-    def __init__(self, dataset: data_utils.Dataset, target_length: int):
+    def __init__(self, dataset: data.Dataset, target_length: int):
         super().__init__(dataset)
         self.dataset = dataset
         self.target_length = target_length

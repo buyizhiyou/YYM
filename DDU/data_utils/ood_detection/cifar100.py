@@ -67,10 +67,10 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_work
     train_subset = Subset(train_dataset, train_idx)
     valid_subset = Subset(valid_dataset, valid_idx)
 
-    train_loader = torch.utils.data_utils.DataLoader(
+    train_loader = torch.utils.data.DataLoader(
         train_subset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, shuffle=True,
     )
-    valid_loader = torch.utils.data_utils.DataLoader(
+    valid_loader = torch.utils.data.DataLoader(
         valid_subset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, shuffle=False,
     )
 
@@ -100,7 +100,7 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     data_dir = "./data"
     dataset = datasets.CIFAR100(root=data_dir, train=False, download=True, transform=transform,)
 
-    data_loader = torch.utils.data_utils.DataLoader(
+    data_loader = torch.utils.data.DataLoader(
         dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=pin_memory,
     )
 

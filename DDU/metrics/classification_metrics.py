@@ -21,7 +21,7 @@ def get_logits_labels(model, data_loader, device):
     labels = []
     with torch.no_grad():
         for data, label in data_loader:
-            data = data_utils.to(device)
+            data = data.to(device)
             label = label.to(device)
 
             logit = model(data)
@@ -83,7 +83,7 @@ def test_classification_net_ensemble(model_ensemble, data_loader, device):
     labels = []
     with torch.no_grad():
         for data, label in data_loader:
-            data = data_utils.to(device)
+            data = data.to(device)
             label = label.to(device)
 
             softmax, _, _ = ensemble_forward_pass(model_ensemble, data)
