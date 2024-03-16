@@ -37,7 +37,7 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_work
     valid_transform = transforms.Compose([transforms.ToTensor(), normalize,])
 
     # load the dataset
-    data_dir = "./data"
+    data_dir = kwargs['root']
     train_dataset = datasets.SVHN(root=data_dir, split="train", download=True, transform=valid_transform,)
 
     valid_dataset = datasets.SVHN(root=data_dir, split="train", download=True, transform=valid_transform,)
@@ -83,7 +83,7 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     # define transform
     transform = transforms.Compose([transforms.ToTensor(), normalize,])
 
-    data_dir = "./data"
+    data_dir = kwargs['root']
     dataset = datasets.SVHN(root=data_dir, split="test", download=True, transform=transform,)
 
     data_loader = torch.utils.data.DataLoader(

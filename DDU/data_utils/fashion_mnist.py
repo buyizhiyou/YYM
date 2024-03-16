@@ -14,7 +14,7 @@ def get_loaders(batch_size, train=False, num_workers=4, pin_memory=True, **kwarg
     transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,),)])
 
     # load the dataset
-    data_dir = "./data"
+    data_dir = kwargs['root']
 
     dataset = datasets.FashionMNIST(root=data_dir, train=train, download=True, transform=transform,)
 

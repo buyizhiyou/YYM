@@ -16,7 +16,13 @@ from torchvision import datasets
 from torchvision import transforms
 
 
-def get_train_valid_loader( batch_size, augment, val_seed, val_size=0.1, num_workers=4, pin_memory=False, **kwargs):
+def get_train_valid_loader(batch_size,
+                           augment,
+                           val_seed,
+                           val_size=0.1,
+                           num_workers=4,
+                           pin_memory=False,
+                           **kwargs):
     """
     Utility function for loading and returning train and valid
     multi-process iterators over the CIFAR-10 dataset. 
@@ -40,10 +46,9 @@ def get_train_valid_loader( batch_size, augment, val_seed, val_size=0.1, num_wor
     error_msg = "[!] val_size should be in the range [0, 1]."
     assert (val_size >= 0) and (val_size <= 1), error_msg
 
-
-    path = "/home/sq/YYM/extra/DDU/data/tiny-imagenet-200"
-    train_path = os.path.join(path, "train")
-    val_path = os.path.join(path, "val")
+    data_dir = kwargs['root']
+    train_path = os.path.join(data_dir, "tiny-imagenet-200", "train")
+    val_path = os.path.join(data_dir, "tiny-imagenet-200", "val")
 
     train_transform = transforms.Compose([
         transforms.Resize((32, 32)),
@@ -62,8 +67,7 @@ def get_train_valid_loader( batch_size, augment, val_seed, val_size=0.1, num_wor
                              (0.2023, 0.1994, 0.2010)),
     ])
 
-    train_dataset = datasets.ImageFolder(train_path,
-                                          transform=train_transform)
+    train_dataset = datasets.ImageFolder(train_path, transform=train_transform)
 
     val_dataset = datasets.ImageFolder(val_path, transform=val_transform)
 
@@ -80,10 +84,18 @@ def get_train_valid_loader( batch_size, augment, val_seed, val_size=0.1, num_wor
     valid_subset = Subset(train_dataset, valid_idx)
 
     train_loader = torch.utils.data.DataLoader(
-        train_subset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, shuffle=True,
+        train_subset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        shuffle=True,
     )
     valid_loader = torch.utils.data.DataLoader(
-        valid_subset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, shuffle=False,
+        valid_subset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        shuffle=False,
     )
 
     return (train_loader, valid_loader)
@@ -105,8 +117,8 @@ def get_test_loader(batch_size, num_workers=1, pin_memory=False, **kwargs):
     - data_loader: test set iterator.
     """
 
-    path  = "/home/sq/YYM/extra/DDU/data/tiny-imagenet-200"
-    val_path = os.path.join(path, "val")
+    data_dir = kwargs['root']
+    val_path = os.path.join(data_dir, "tiny-imagenet-200", "val")
 
     val_transform = transforms.Compose([
         transforms.Resize((32, 32)),
@@ -118,7 +130,11 @@ def get_test_loader(batch_size, num_workers=1, pin_memory=False, **kwargs):
     val_dataset = datasets.ImageFolder(val_path, transform=val_transform)
 
     val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=4, num_workers=1, pin_memory=pin_memory, shuffle=False,
+        val_dataset,
+        batch_size=4,
+        num_workers=1,
+        pin_memory=pin_memory,
+        shuffle=False,
     )
 
-    return  val_loader
+    return val_loader

@@ -48,7 +48,7 @@ def train_single_epoch(epoch,
         model.projection_head.out.register_forward_hook(
             get_activation('embedding'))
 
-    if label_smooth:
+    if label_smooth:#使用label smoothing，使特征空间更紧密
         loss_func = LabelSmoothing()
     else:
         loss_func = nn.CrossEntropyLoss()
@@ -75,7 +75,7 @@ def train_single_epoch(epoch,
             """
             images = contrastiveGenerator(data.cpu())
             images = torch.cat(images, dim=0).to(device)
-            model(images)  #TODO:ADD projection head for model
+            model(images)  #TODO:ADD projection head for model 使用resnet2
             embeddings = activation['embedding']
             logits2, labels2 = info_nce_loss(embeddings, batch_size, device)
             loss2 = F.cross_entropy(logits2, labels2)

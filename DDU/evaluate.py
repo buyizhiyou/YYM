@@ -94,9 +94,13 @@ if __name__ == "__main__":
     # Taking input for the dataset
     num_classes = dataset_num_classes[args.dataset]
     test_loader = dataset_loader[args.dataset].get_test_loader(
-        batch_size=args.batch_size, pin_memory=args.gpu)
+        root=args.dataset_root,
+        batch_size=args.batch_size,
+        pin_memory=args.gpu)
     ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(
-        batch_size=args.batch_size, pin_memory=args.gpu)
+        root=args.dataset_root,
+        batch_size=args.batch_size,
+        pin_memory=args.gpu)
 
     # Evaluating the models
     accuracies = []
@@ -119,22 +123,23 @@ if __name__ == "__main__":
 
     topt = None
     model_name = model_load_name(args.model, args.sn, args.mod, args.coeff,
-                        args.seed, args.contrastive) + "_best.model"
-    model_files = glob.glob(f"{args.load_loc}/Run{args.runs}/*/{model_name}")
+                                 args.seed, args.contrastive) + "_best.model"
+    model_files = glob.glob(f"{args.load_loc}/runs{args.runs}/*/{model_name}")
 
     for saved_model_name in model_files:
         print(f"Run {args.runs}, Evaluating: {saved_model_name}")
-        #load dataset 
+        #load dataset
         train_loader, val_loader = dataset_loader[
             args.dataset].get_train_valid_loader(
+                root=args.dataset_root,
                 batch_size=args.batch_size,
                 augment=args.data_aug,
                 val_seed=(args.seed),
                 val_size=0.1,
                 pin_memory=args.gpu,
             )
-      
-        #load model 
+
+        #load model
         print(f"load {saved_model_name}")
         net = models[args.model](
             spectral_normalization=args.sn,
@@ -157,11 +162,11 @@ if __name__ == "__main__":
             confidences,
         ) = test_classification_net(net, test_loader, device)
         ece = expected_calibration_error(confidences,
-                                            predictions,
-                                            labels_list,
-                                            num_bins=15)
+                                         predictions,
+                                         labels_list,
+                                         num_bins=15)
 
-        temp_scaled_net = ModelWithTemperature(net,device)
+        temp_scaled_net = ModelWithTemperature(net, device)
         temp_scaled_net.set_temperature(val_loader)
         topt = temp_scaled_net.temperature
 
@@ -173,9 +178,9 @@ if __name__ == "__main__":
             t_confidences,
         ) = test_classification_net(temp_scaled_net, test_loader, device)
         t_ece = expected_calibration_error(t_confidences,
-                                            t_predictions,
-                                            t_labels_list,
-                                            num_bins=15)
+                                           t_predictions,
+                                           t_labels_list,
+                                           num_bins=15)
 
         if (args.model_type == "gmm"):
             # Evaluate a GMM model
@@ -191,10 +196,9 @@ if __name__ == "__main__":
             )
 
             try:
-                gaussians_model, jitter_eps = gmm_fit(
-                    embeddings=embeddings,
-                    labels=labels,
-                    num_classes=num_classes)
+                gaussians_model, jitter_eps = gmm_fit(embeddings=embeddings,
+                                                      labels=labels,
+                                                      num_classes=num_classes)
                 logits, labels = gmm_evaluate(
                     net,
                     gaussians_model,
@@ -213,14 +217,10 @@ if __name__ == "__main__":
                     storage_device=device,
                 )
 
-                (_, _, _), (_, _,_), m1_auroc, m1_auprc = get_roc_auc_logits(
-                                logits,
-                                ood_logits,
-                                logsumexp,
-                                device,
-                                confidence=True)
-                (_, _, _), (_, _,_), m2_auroc, m2_auprc = get_roc_auc_logits(
-                                logits, ood_logits, entropy, device)
+                (_, _, _), (_, _, _), m1_auroc, m1_auprc = get_roc_auc_logits(
+                    logits, ood_logits, logsumexp, device, confidence=True)
+                (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc_logits(
+                    logits, ood_logits, entropy, device)
 
                 t_m1_auroc = m1_auroc
                 t_m1_auprc = m1_auprc
@@ -264,16 +264,10 @@ if __name__ == "__main__":
                     storage_device=device,
                 )
 
-                (_, _, _), (_, _,
-                            _), m1_auroc, m1_auprc = get_roc_auc_logits(
-                                logits,
-                                ood_logits,
-                                logsumexp,
-                                device,
-                                confidence=True)
-                (_, _, _), (_, _,
-                            _), m2_auroc, m2_auprc = get_roc_auc_logits(
-                                logits, ood_logits, entropy, device)
+                (_, _, _), (_, _, _), m1_auroc, m1_auprc = get_roc_auc_logits(
+                    logits, ood_logits, logsumexp, device, confidence=True)
+                (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc_logits(
+                    logits, ood_logits, entropy, device)
 
                 t_m1_auroc = m1_auroc
                 t_m1_auprc = m1_auprc
@@ -287,14 +281,13 @@ if __name__ == "__main__":
         else:
             # Evaluate a normal Softmax model
             print("Softmax Model")
-            (_, _,
-                _), (_, _,
-                    _), m1_auroc, m1_auprc = get_roc_auc(net,
-                                                        test_loader,
-                                                        ood_test_loader,
-                                                        logsumexp,
-                                                        device,
-                                                        confidence=True)
+            (_, _, _), (_, _,
+                        _), m1_auroc, m1_auprc = get_roc_auc(net,
+                                                             test_loader,
+                                                             ood_test_loader,
+                                                             logsumexp,
+                                                             device,
+                                                             confidence=True)
             (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc(
                 net, test_loader, ood_test_loader, entropy, device)
 
@@ -307,8 +300,7 @@ if __name__ == "__main__":
                 confidence=True,
             )
             (_, _, _), (_, _, _), t_m2_auroc, t_m2_auprc = get_roc_auc(
-                temp_scaled_net, test_loader, ood_test_loader, entropy,
-                device)
+                temp_scaled_net, test_loader, ood_test_loader, entropy, device)
 
         accuracies.append(accuracy)
 
@@ -431,9 +423,12 @@ if __name__ == "__main__":
 
     saved_name = "res_" + model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed,args.contrastive) + "_" \
                             +args.model_type + "_" + args.dataset + "_" + args.ood_dataset +".json"
-    saved_dir =  f"./results/runs{args.runs}/"
-    if(not os.path.exists(saved_dir)):
-       os.makedirs(saved_dir)
-    with open(os.path.join(saved_dir,saved_name),"w",) as f:
+    saved_dir = f"./results/runs{args.runs}/"
+    if (not os.path.exists(saved_dir)):
+        os.makedirs(saved_dir)
+    with open(
+            os.path.join(saved_dir, saved_name),
+            "w",
+    ) as f:
         json.dump(res_dict, f)
         print(f"save to {os.path.join(saved_dir,saved_name)}")

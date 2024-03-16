@@ -50,7 +50,7 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_work
         train_transform = transforms.Compose([transforms.ToTensor(), normalize,])
 
     # load the dataset
-    data_dir = "./data"
+    data_dir = kwargs['root']
     train_dataset = datasets.CIFAR100(root=data_dir, train=True, download=True, transform=train_transform,)
 
     valid_dataset = datasets.CIFAR100(root=data_dir, train=True, download=False, transform=valid_transform,)
@@ -97,7 +97,7 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     # define transform
     transform = transforms.Compose([transforms.ToTensor(), normalize,])
 
-    data_dir = "./data"
+    data_dir = kwargs['root']
     dataset = datasets.CIFAR100(root=data_dir, train=False, download=True, transform=transform,)
 
     data_loader = torch.utils.data.DataLoader(
