@@ -82,7 +82,7 @@ def train_single_epoch(epoch,
             if (epoch<1100):#第一阶段，只训练对比loss
                 loss = loss2
             else: #第二阶段，对比loss+分类loss
-                loss = loss1 + 100 * loss2
+                loss = 100*loss1 + loss2
         else:
             loss = loss1
 
