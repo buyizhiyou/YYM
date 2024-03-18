@@ -420,6 +420,7 @@ if __name__ == "__main__":
     res_dict["values"]["t_m2_auprc"] = t_m2_auprcs
 
     res_dict["info"] = vars(args)
+    res_dict["info"]["cnt_models"] = len(model_files)
 
     saved_name = "res_" + model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed,args.contrastive) + "_" \
                             +args.model_type + "_" + args.dataset + "_" + args.ood_dataset +".json"
