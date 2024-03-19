@@ -50,7 +50,7 @@ def model_load_name(model_name, sn, mod, coeff, seed, contrastive):
             strn = "_"
 
     if contrastive:
-        return str(model_name) + strn + "seed_" + str(seed) + "_contrastive"
+        return str(model_name) + strn + "seed_" + str(seed) + f"_contrastive{contrastive}"
     else:
         return str(model_name) + strn + "seed_" + str(seed)
 

@@ -8,12 +8,13 @@ for i in {1..1}; do
               --seed 1 \
               --gpu 1 \
               --runs 3 \
+              --scheduler cos \
               -b 128 \
               --epochs 1300 --dataset cifar10 \
               --model resnet50 \
               -mod \
               -sn --coeff 3.0 \
-              --contrastive true
+              --contrastive 2
 
        sleep 5
 done

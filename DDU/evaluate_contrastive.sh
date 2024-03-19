@@ -12,4 +12,4 @@ python evaluate.py \
        --model-type gmm \
        -mod \
        -sn --coeff 3.0 \
-       --contrastive true   
+       --contrastive 2

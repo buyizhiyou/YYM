@@ -90,15 +90,8 @@ def training_args():
         help="Test Batch size",
     )
 
-    parser.add_argument("--gpu",
-                        default=1,
-                        help="Use GPU")
-                        
-    parser.add_argument("--model",
-                        type=str,
-                        default=model,
-                        dest="model",
-                        help="Model to train")
+    parser.add_argument("--gpu", default=1, help="Use GPU")   
+    parser.add_argument("--model",type=str,default=model,dest="model",help="Model to train")
 
     parser.add_argument(
         "-sn",
@@ -134,6 +127,13 @@ def training_args():
         default=learning_rate,
         dest="learning_rate",
         help="Learning rate",
+    )
+
+    parser.add_argument(
+        "--scheduler",
+        type=str,
+        default="step",
+        help="Learning rate scheduler",
     )
     parser.add_argument("--mom",
                         type=float,
@@ -249,8 +249,8 @@ def eval_args():
 
     #add extra arguments
     parser.add_argument("--contrastive",
-                        type=bool,
-                        default=False,
+                        type=int,
+                        default=0,#0:不需要对比学习，1:类间有监督的对比学习 2:样本间自监督的对比学习
                         help="add contrastive loss")
     parser.add_argument("--ls",
                         type=bool,

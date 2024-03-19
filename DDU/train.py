@@ -104,10 +104,15 @@ if __name__ == "__main__":
                                weight_decay=args.weight_decay)
 
     #学习率schduler
-    scheduler = optim.lr_scheduler.MultiStepLR(
-        optimizer,
-        milestones=[args.first_milestone, args.second_milestone],
-        gamma=0.1)
+    if args.scheduler=="step":
+        scheduler = optim.lr_scheduler.MultiStepLR(
+            optimizer,
+            milestones=[args.first_milestone, args.second_milestone],
+            gamma=0.1)
+    elif args.scheduler == "cos":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,
+                                                               T_max=300,
+                                                               eta_min=1e-7)
 
     train_loader, val_loader = dataset_loader[
         args.dataset].get_train_valid_loader(
@@ -117,6 +122,7 @@ if __name__ == "__main__":
             val_size=0.1,
             val_seed=args.seed,
             pin_memory=args.gpu,
+            contrastive = args.contrastive
         )
 
     # Creating summary writer in tensorboard
@@ -148,7 +154,7 @@ if __name__ == "__main__":
             loss_mean=args.loss_mean,
         )
 
-        val_acc = test_single_epoch(epoch, net, val_loader, device)
+        val_acc = test_single_epoch(net, val_loader, device)
 
         writer.add_scalar("train_loss", train_loss, (epoch + 1))
         writer.add_scalar("train_acc", train_acc, (epoch + 1))

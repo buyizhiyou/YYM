@@ -11,9 +11,17 @@ from torch.utils.data import Subset
 
 from torchvision import datasets
 from torchvision import transforms
+from utils.simclr_utils import ContrastiveLearningViewTransform, get_simclr_pipeline_transform
 
 
-def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_workers=4, pin_memory=False, **kwargs):
+def get_train_valid_loader(batch_size,
+                           augment,
+                           val_seed,
+                           val_size=0.0,
+                           num_workers=4,
+                           pin_memory=False,
+                           contrastive=0,
+                           **kwargs):
     """
     Utility function for loading and returning train and valid
     multi-process iterators over the CIFAR-10 dataset. 
@@ -37,23 +45,49 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_work
     error_msg = "[!] val_size should be in the range [0, 1]."
     assert (val_size >= 0) and (val_size <= 1), error_msg
 
-    normalize = transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010],)
+    normalize = transforms.Normalize(
+        mean=[0.4914, 0.4822, 0.4465],
+        std=[0.2023, 0.1994, 0.2010],
+    )
 
     # define transforms
-    valid_transform = transforms.Compose([transforms.ToTensor(), normalize,])
+    valid_transform = transforms.Compose([
+        transforms.ToTensor(),
+        normalize,
+    ])
 
     if augment:
-        train_transform = transforms.Compose(
-            [transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize,]
-        )
+        train_transform = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize,
+        ])
     else:
-        train_transform = transforms.Compose([transforms.ToTensor(), normalize,])
+        train_transform = transforms.Compose([
+            transforms.ToTensor(),
+            normalize,
+        ])
 
+    if contrastive==2:
+        train_transform = ContrastiveLearningViewTransform(
+            get_simclr_pipeline_transform(32))  #transforms
+        
     # load the dataset
     data_dir = kwargs['root']
-    train_dataset = datasets.CIFAR10(root=data_dir, train=True, download=False, transform=train_transform,)
+    train_dataset = datasets.CIFAR10(
+        root=data_dir,
+        train=True,
+        download=False,
+        transform=train_transform,
+    )
 
-    valid_dataset = datasets.CIFAR10(root=data_dir, train=True, download=False, transform=valid_transform,)
+    valid_dataset = datasets.CIFAR10(
+        root=data_dir,
+        train=True,
+        download=False,
+        transform=valid_transform,
+    )
 
     num_train = len(train_dataset)
     indices = list(range(num_train))
@@ -68,10 +102,18 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_work
     valid_subset = Subset(valid_dataset, valid_idx)
 
     train_loader = torch.utils.data.DataLoader(
-        train_subset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, shuffle=False,
+        train_subset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        shuffle=False,
     )
     valid_loader = torch.utils.data.DataLoader(
-        valid_subset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, shuffle=False,
+        valid_subset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        shuffle=False,
     )
 
     return (train_loader, valid_loader)
@@ -92,16 +134,31 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     -------
     - data_loader: test set iterator.
     """
-    normalize = transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010],)
+    normalize = transforms.Normalize(
+        mean=[0.4914, 0.4822, 0.4465],
+        std=[0.2023, 0.1994, 0.2010],
+    )
 
     # define transform
-    transform = transforms.Compose([transforms.ToTensor(), normalize,])
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        normalize,
+    ])
 
     data_dir = kwargs['root']
-    dataset = datasets.CIFAR10(root=data_dir, train=False, download=True, transform=transform,)
+    dataset = datasets.CIFAR10(
+        root=data_dir,
+        train=False,
+        download=True,
+        transform=transform,
+    )
 
     data_loader = torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=pin_memory,
+        dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
     )
 
     return data_loader

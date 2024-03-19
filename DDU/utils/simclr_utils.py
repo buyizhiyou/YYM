@@ -18,6 +18,7 @@ np.random.seed(0)
 
 def get_simclr_pipeline_transform(size, s=1):
     """Return a set of data augmentation transformations as described in the SimCLR paper."""
+    normalize = transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010],)
     color_jitter = transforms.ColorJitter(0.8 * s, 0.8 * s, 0.8 * s, 0.2 * s)
     data_transforms = transforms.Compose([
         transforms.RandomResizedCrop(size=size),
@@ -25,11 +26,14 @@ def get_simclr_pipeline_transform(size, s=1):
         transforms.RandomApply([color_jitter], p=0.8),
         transforms.RandomGrayscale(p=0.2),
         transforms.GaussianBlur(kernel_size=int(0.1 * size)),
+        transforms.ToTensor(), 
+        normalize,
     ])
+
     return data_transforms
 
 
-class ContrastiveLearningViewGenerator(object):
+class ContrastiveLearningViewTransform(object):
     """Take two random crops of one image as the query and key."""
 
     def __init__(self, base_transform, n_views=2):
