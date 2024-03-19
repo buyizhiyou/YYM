@@ -38,10 +38,8 @@ def train_single_epoch(epoch,
         activation = {}
 
         def get_activation(name):
-
             def hook(model, input, output):
                 activation[name] = input[0]
-
             return hook
 
         # model.fc.register_forward_hook(get_activation('embedding'))
