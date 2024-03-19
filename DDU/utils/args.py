@@ -74,7 +74,6 @@ def training_args():
         help="path of a dataset (useful for dirty mnist)",
     )
     parser.add_argument("--data-aug", action="store_true", dest="data_aug")
-    parser.set_defaults(data_aug=True)
 
     parser.add_argument(
         "-b",

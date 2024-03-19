@@ -61,29 +61,34 @@ def train_single_epoch(epoch,
         batch_size = data.shape[0]
         optimizer.zero_grad()
 
-        logits = model(data)
-        loss1 = loss_func(logits, labels)
         if contrastive:
             """
             类间对比loss
             """
+            # logits = model(data)
+            # loss1 = loss_func(logits, labels)
             # loss2 = supervisedContrastiveLoss(embeddings, labels, device,temperature=0.5)
             # loss = loss1 - 0.01 * loss2  #这个好一些？？
             # loss = loss1 + 0.01 * loss2
             """
             样本间对比loss
             """
-            images = contrastiveGenerator(data.cpu())
-            images = torch.cat(images, dim=0).to(device)
-            model(images)  #TODO:ADD projection head for model 使用resnet2
+            images = contrastiveGenerator(data)#对每个图片生成两个视角的增强
+            images = torch.cat(images, dim=0)
+            labels = torch.cat([labels,labels],dim=0)
+            logits = model(images) #TODO:ADD projection head for model 使用resnet2
+
             embeddings = activation['embedding']
             logits2, labels2 = info_nce_loss(embeddings, batch_size, device)
             loss2 = F.cross_entropy(logits2, labels2)
-            if (epoch<1100):#第一阶段，只训练对比loss
+            if (epoch<1000):#第一阶段，只训练对比loss
                 loss = loss2
             else: #第二阶段，对比loss+分类loss
+                loss1 = loss_func(logits, labels)
                 loss = 100*loss1 + loss2
         else:
+            logits = model(data)
+            loss1 = loss_func(logits, labels)
             loss = loss1
 
         if loss_mean:
@@ -110,7 +115,7 @@ def train_single_epoch(epoch,
     return train_loss / num_samples, acc / num_samples
 
 
-def test_single_epoch(epoch, model, test_val_loader, device):
+def test_single_epoch(model, test_val_loader, device):
     """
     Util method for testing a model for a single epoch.
     """

@@ -17,7 +17,8 @@ import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
 
 # Import network models
 from net.lenet import lenet
-from net.resnet import resnet18, resnet50, resnet101, resnet110, resnet152
+# from net.resnet import resnet18, resnet50, resnet101, resnet110, resnet152
+from net.resnet2 import resnet18, resnet50, resnet101, resnet110, resnet152
 from net.wide_resnet import wrn
 from net.vgg import vgg16
 
@@ -124,7 +125,7 @@ if __name__ == "__main__":
     topt = None
     model_name = model_load_name(args.model, args.sn, args.mod, args.coeff,
                                  args.seed, args.contrastive) + "_best.model"
-    model_files = glob.glob(f"{args.load_loc}/runs{args.runs}/*/{model_name}")
+    model_files = glob.glob(f"{args.load_loc}/run{args.runs}/*/{model_name}")
 
     for saved_model_name in model_files:
         print(f"Run {args.runs}, Evaluating: {saved_model_name}")
