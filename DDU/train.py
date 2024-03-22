@@ -159,7 +159,8 @@ if __name__ == "__main__":
         writer.add_scalar("train_loss", train_loss, (epoch + 1))
         writer.add_scalar("train_acc", train_acc, (epoch + 1))
         writer.add_scalar("val_acc", val_acc, (epoch + 1))
-
+        writer.add_scalar('learning_rate', scheduler.get_lr()[0], global_step=(epoch + 1))
+        
         scheduler.step()
 
         if epoch == 300:#训练完第一阶段

@@ -2,6 +2,8 @@
 This module contains methods for training models.
 """
 
+import os
+import yaml
 from enum import Enum
 import torch
 from torch.nn import functional as F
@@ -39,7 +41,7 @@ def train_single_epoch(epoch,
 
         def get_activation(name):
             def hook(model, input, output):
-                activation[name] = input[0]
+                activation[name] = output
             return hook
 
         # model.fc.register_forward_hook(get_activation('embedding'))
@@ -60,7 +62,6 @@ def train_single_epoch(epoch,
         batch_size = data.shape[0]
         optimizer.zero_grad()
         logits = model(data) #TODO:ADD projection head for model 使用resnet2
-
         if contrastive==1:
             """
             类间对比loss
@@ -148,3 +149,10 @@ def model_save_name(model_name, sn, mod, coeff, seed, contrastive):
         return str(model_name) + strn + "seed_" + str(seed) + f"_contrastive{contrastive}"
     else:
         return str(model_name) + strn + "seed_" + str(seed)
+
+
+def save_config_file(model_checkpoints_folder, args):
+    if not os.path.exists(model_checkpoints_folder):
+        os.makedirs(model_checkpoints_folder)
+    with open(os.path.join(model_checkpoints_folder, 'config.yml'), 'w') as outfile:
+        yaml.dump(args, outfile, default_flow_style=False)

@@ -169,11 +169,12 @@ class ResNet(nn.Module):
             self.layer4 = self._make_layer(block, 8, 512, num_blocks[3], stride=2)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
         self.activation = mod_activation if self.mod else F.relu
-        self.feature = None   #这里抽出来倒数第二层feature，作为embedding
+        self.feature = None   #这里抽出来倒数第二层feature，作为密度估计的高维特征
+        self.embedding = None #对比loss的embedding
         self.temp = temp
 
         #add projection head for simclr
-        self.projection_head = ProjectionHead(512 * block.expansion,256)
+        self.projection_head = ProjectionHead(512 * block.expansion , 256)
 
     def _make_layer(self, block, input_size, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
@@ -193,9 +194,10 @@ class ResNet(nn.Module):
         out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
         
-        self.feature = self.projection_head(out)
-        
-        # self.feature = out.clone().detach()#这里直接抽出来倒数第二层feature，作为embedding
+        self.embedding = self.projection_head(out) #对比loss的embedding
+
+        self.feature = out.clone().detach()#这里直接抽出来倒数第二层feature，作为embedding
+
         out = self.fc(out) / self.temp
 
 

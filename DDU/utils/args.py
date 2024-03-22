@@ -37,8 +37,8 @@ def training_args():
 
     # add extra arguments
     parser.add_argument("--contrastive",
-                        type=bool,
-                        default=False,
+                        type=int,
+                        default=0,#0:不需要对比学习，1:类间有监督的对比学习 2:样本间自监督的对比学习
                         help="add contrastive loss")
                         
     parser.add_argument("--ls",
