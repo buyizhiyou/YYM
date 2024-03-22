@@ -162,6 +162,11 @@ if __name__ == "__main__":
 
         scheduler.step()
 
+        if epoch == 300:#训练完第一阶段
+            save_path = save_loc + save_name + "_mid" + ".model"
+            torch.save(net.state_dict(), save_path)
+            print("Model saved to ", save_path)
+
         if val_acc > best_acc:
             best_acc = val_acc
             is_best = True

@@ -10,7 +10,7 @@ for i in {1..1}; do
               --run 3 \
               --scheduler cos \
               -b 128 \
-              --epochs 1300 --dataset cifar10 \
+              --epochs 600 --dataset cifar10 \
               --model resnet50 \
               -mod \
               -sn --coeff 3.0 \
