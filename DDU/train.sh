@@ -5,7 +5,7 @@ for i in {1..1}; do
        python train.py \
               --seed 1 \
               --gpu 1 \
-              --runs 3 \
+              --run 3 \
               --data-aug \
               -b 256 \
               --epochs 300 --dataset cifar10 \

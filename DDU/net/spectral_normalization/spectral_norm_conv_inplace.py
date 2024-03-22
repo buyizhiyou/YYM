@@ -40,8 +40,8 @@ class SpectralNormConv(object):
         #     because in `DataParallel` forward, the vectors (being buffers) are
         #     broadcast from the parallelized module to each module replica,
         #     which is a new module object created on the fly. And each replica
-        #     runs its own spectral norm power iteration. So simply assigning
-        #     the updated vectors to the module this function runs on will cause
+        #     run its own spectral norm power iteration. So simply assigning
+        #     the updated vectors to the module this function run on will cause
         #     the update to be lost forever. And the next time the parallelized
         #     module is replicated, the same randomly initialized vectors are
         #     broadcast and used!

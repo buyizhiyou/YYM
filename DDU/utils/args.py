@@ -48,10 +48,10 @@ def training_args():
                 
         
     parser.add_argument(
-        "--runs",
+        "--run",
         type=int,
         default=1,
-        dest="runs",
+        dest="run",
         help="Number of models to aggregate over",
     )
     parser.add_argument("--seed",
@@ -238,7 +238,7 @@ def eval_args():
     load_loc = "../Models/Normal/"
     model = "resnet50"
     sn_coeff = 3.0
-    runs = 1
+    run = 1
     ensemble = 5
     model_type = "gmm"
 
@@ -311,10 +311,10 @@ def eval_args():
                         dest="model",
                         help="Model to train")
     parser.add_argument(
-        "--runs",
+        "--run",
         type=int,
-        default=runs,
-        dest="runs",
+        default=run,
+        dest="run",
         help="Number of models to aggregate over",
     )
 

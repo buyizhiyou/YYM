@@ -87,7 +87,7 @@ end_timer_and_print("Default precision:")
 # serve as context managers that allow regions of your script to run in mixed precision.
 for epoch in range(1):  # 0 epochs, this section is for illustration only
     for input, target in zip(data, targets):
-        # Runs the forward pass under autocast.
+        # Run the forward pass under autocast.
         with torch.autocast(device_type='cuda', dtype=torch.float16):
             output = net(input)
             # output is float16 because linear layers autocast to float16.
@@ -176,7 +176,7 @@ for epoch in range(0):  # 0 epochs, this section is for illustration only
 
 ##########################################################
 # Saving/Resuming
-# To save/resume Amp-enabled runs with bitwise accuracy, use
+# To save/resume Amp-enabled run with bitwise accuracy, use
 # `scaler.state_dict <https://pytorch.org/docs/stable/amp.html#torch.cuda.amp.GradScaler.state_dict>`_ and
 # `scaler.load_state_dict <https://pytorch.org/docs/stable/amp.html#torch.cuda.amp.GradScaler.load_state_dict>`_.
 # When saving, save the scaler state dict alongside the usual model and optimizer state dicts.

@@ -125,10 +125,10 @@ if __name__ == "__main__":
     topt = None
     model_name = model_load_name(args.model, args.sn, args.mod, args.coeff,
                                  args.seed, args.contrastive) + "_best.model"
-    model_files = glob.glob(f"{args.load_loc}/run{args.runs}/*/{model_name}")
+    model_files = glob.glob(f"{args.load_loc}/run{args.run}/*/{model_name}")
 
     for saved_model_name in model_files:
-        print(f"Run {args.runs}, Evaluating: {saved_model_name}")
+        print(f"Run {args.run}, Evaluating: {saved_model_name}")
         #load dataset
         train_loader, val_loader = dataset_loader[
             args.dataset].get_train_valid_loader(
@@ -425,7 +425,7 @@ if __name__ == "__main__":
 
     saved_name = "res_" + model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed,args.contrastive) + "_" \
                             +args.model_type + "_" + args.dataset + "_" + args.ood_dataset +".json"
-    saved_dir = f"./results/runs{args.runs}/"
+    saved_dir = f"./results/run{args.run}/"
     if (not os.path.exists(saved_dir)):
         os.makedirs(saved_dir)
     with open(

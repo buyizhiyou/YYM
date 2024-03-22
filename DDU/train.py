@@ -131,12 +131,12 @@ if __name__ == "__main__":
     save_name = model_save_name(args.model, args.sn, args.mod, args.coeff,
                                 args.seed, args.contrastive)
 
-    save_loc = f"{args.save_loc}/runs{args.runs}/{time_str}/"
+    save_loc = f"{args.save_loc}/run{args.run}/{time_str}/"
     if args.ls:
-        save_loc = f"{args.save_loc}/runs{args.runs}/{time_str}_labelsmooth/"
+        save_loc = f"{args.save_loc}/run{args.run}/{time_str}_labelsmooth/"
     if not os.path.exists(save_loc):
         os.makedirs(save_loc)
-    writer = SummaryWriter(f"{args.log_loc}/{args.runs}/{save_name}/{time_str}")
+    writer = SummaryWriter(f"{args.log_loc}/{args.run}/{save_name}/{time_str}")
     print("Model save name", save_name)
 
     best_acc = 0

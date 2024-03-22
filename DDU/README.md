@@ -64,7 +64,7 @@ python train.py \
 
 ### Evaluation
 
-To evaluate trained models, use [evaluate.py](evaluate.py). This script can evaluate and aggregate results over multiple experimental runs. For example, if the pretrained models are stored in a directory path ```/home/user/models```, store them using the following directory structure:
+To evaluate trained models, use [evaluate.py](evaluate.py). This script can evaluate and aggregate results over multiple experimental run. For example, if the pretrained models are stored in a directory path ```/home/user/models```, store them using the following directory structure:
 ```
 models
 ├── Run1
@@ -119,7 +119,7 @@ Following are the main parameters for evaluation:
 --ood_dataset: OoD dataset to compute AUROC
 --load-path: /path/to/pretrained/models/
 --model: model architecture to load (wide_resnet/vgg16)
---runs: number of experimental runs
+--run: number of experimental run
 -sn: whether the model was trained using spectral normalization
 --coeff: Coefficient for spectral normalization
 -mod: whether the model was trained using architectural modifications
@@ -134,12 +134,12 @@ python evaluate.py \
        --ood_dataset svhn \
        --load-path /path/to/pretrained/models/ \
        --model wide_resnet \
-       --runs 5 \
+       --run 5 \
        -sn -mod \
        --coeff 3.0 \
        --model-type softmax
 ```
-Similarly, to evaluate the above model using feature density, set ```--model-type gmm```. The evaluation script assumes that the seeds of models trained in consecutive runs differ by 1. The script stores the results in a json file with the following structure: 
+Similarly, to evaluate the above model using feature density, set ```--model-type gmm```. The evaluation script assumes that the seeds of models trained in consecutive run differ by 1. The script stores the results in a json file with the following structure: 
 ```
 {
     "mean": {
@@ -209,7 +209,7 @@ The following table presents results for a Wide-ResNet-28-10 architecture traine
 
 To run active learning experiments, use ```active_learning_script.py```. You can run active learning experiments on both [MNIST](http://yann.lecun.com/exdb/mnist/) as well as [Dirty-MNIST](https://blackhc.github.io/ddu_dirty_mnist/). When running with Dirty-MNIST, you will need to provide a pretrained model on Dirty-MNIST to distinguish between clean MNIST and Ambiguous-MNIST samples. The following are the main command line arguments for ```active_learning_script.py```.
 ```
---seed: seed used for initializing the first model (later experimental runs will have seeds incremented by 1)
+--seed: seed used for initializing the first model (later experimental run will have seeds incremented by 1)
 --model: model architecture to train (resnet18)
 -ambiguous: whether to use ambiguous MNIST during training. If this is set to True, the models will be trained on Dirty-MNIST, otherwise they will train on MNIST.
 --dataset-root: /path/to/amnist_labels.pt and amnist_samples.pt/

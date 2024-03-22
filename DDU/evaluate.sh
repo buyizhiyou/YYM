@@ -4,7 +4,7 @@ python evaluate.py \
        --seed 1 \
        -b 64 \
        --gpu 0 \
-       --runs 2 \
+       --run 2 \
        --dataset cifar10 \
        --ood_dataset svhn \
        --load-path ./saved_models \

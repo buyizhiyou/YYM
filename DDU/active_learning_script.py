@@ -117,17 +117,17 @@ if __name__ == "__main__":
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.test_batch_size, shuffle=False, **kwargs)
 
     # Run experiment
-    num_runs = 5
+    num_run = 5
     test_accs = {}
     ambiguous_dict = {}
     ambiguous_entropies_dict = {}
 
-    for i in range(num_runs):
+    for i in range(num_run):
         test_accs[i] = []
         ambiguous_dict[i] = []
         ambiguous_entropies_dict[i] = {}
 
-    for run in range(num_runs):
+    for run in range(num_run):
         print("Experiment run: " + str(run) + " =====================================================================>")
 
         torch.manual_seed(args.seed + run)

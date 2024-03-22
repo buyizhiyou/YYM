@@ -120,7 +120,7 @@ if __name__ == "__main__":
 
     topt = None
 
-    for i in range(args.runs):
+    for i in range(args.run):
         print(f"Evaluating run: {(i+1)}")
         # Loading the model(s)
         train_loader, val_loader = dataset_loader[
