@@ -22,7 +22,6 @@ def training_args():
     save_interval = 50
     save_loc = "./saved_models"
     log_loc = "./logs"
-    saved_model_name = "resnet50_350.model"
     epoch = 350
     first_milestone = 150  # Milestone for change in lr
     second_milestone = 250  # Milestone for change in lr
@@ -191,13 +190,7 @@ def training_args():
         dest="save_interval",
         help="Save Interval on Terminal",
     )
-    parser.add_argument(
-        "--saved_model_name",
-        type=str,
-        default=saved_model_name,
-        dest="saved_model_name",
-        help="file name of the pre-trained model",
-    )
+
     parser.add_argument(
         "--save-path",
         type=str,
@@ -360,7 +353,6 @@ def al_args():
     model_name = "resnet18"
     trained_model_name = "resnet18_sn"
     saved_model_path = "./"
-    saved_model_name = "resnet18_sn_3.0_50.model"
     dataset_root = "./"
     threshold = 1.0
     subsample = 1000
@@ -442,13 +434,7 @@ def al_args():
         dest="saved_model_path",
         help="Path of pretrained model",
     )
-    parser.add_argument(
-        "--saved-model-name",
-        type=str,
-        default=saved_model_name,
-        dest="saved_model_name",
-        help="File name of pretrained model",
-    )
+
     parser.add_argument(
         "--threshold",
         type=float,

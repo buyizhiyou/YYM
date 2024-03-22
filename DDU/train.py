@@ -26,7 +26,7 @@ from net.vgg import vgg16
 # Import train and validation utilities
 from utils.args import training_args
 from utils.eval_utils import get_eval_stats
-from utils.train_utils import model_save_name
+from utils.train_utils import model_save_name,save_config_file
 from utils.train_utils import train_single_epoch, test_single_epoch
 
 # Tensorboard utilities
@@ -65,7 +65,6 @@ if __name__ == "__main__":
     print("Parsed args", args)
     print("Seed: ", args.seed)
     torch.manual_seed(args.seed)
-
     cuda = torch.cuda.is_available() and args.gpu
     device = torch.device(f"cuda:{args.gpu}" if cuda else "cpu")
     print("CUDA set: " + str(cuda))
@@ -112,7 +111,7 @@ if __name__ == "__main__":
     elif args.scheduler == "cos":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,
                                                                T_max=300,
-                                                               eta_min=1e-7)
+                                                               eta_min=1e-7,verbose=True)
 
     train_loader, val_loader = dataset_loader[
         args.dataset].get_train_valid_loader(
@@ -130,14 +129,15 @@ if __name__ == "__main__":
     time_str = datetime.datetime.strftime(curr_time, "%Y_%m_%d_%H_%M_%S")
     save_name = model_save_name(args.model, args.sn, args.mod, args.coeff,
                                 args.seed, args.contrastive)
-
-    save_loc = f"{args.save_loc}/run{args.run}/{time_str}/"
+    print("Model save name", save_name)
+    save_loc = f"{args.save_loc}/run{args.run}/{time_str}/" #保存模型路径
     if args.ls:
         save_loc = f"{args.save_loc}/run{args.run}/{time_str}_labelsmooth/"
     if not os.path.exists(save_loc):
         os.makedirs(save_loc)
-    writer = SummaryWriter(f"{args.log_loc}/{args.run}/{save_name}/{time_str}")
-    print("Model save name", save_name)
+    log_loc = f"{args.log_loc}/run{args.run}/{save_name}/{time_str}"
+    writer = SummaryWriter(log_loc)
+    save_config_file(log_loc,args)
 
     best_acc = 0
     is_best = False
@@ -154,12 +154,12 @@ if __name__ == "__main__":
             loss_mean=args.loss_mean,
         )
 
-        val_acc = test_single_epoch(net, val_loader, device)
+        val_acc = test_single_epoch(epoch, net, val_loader, device)
 
         writer.add_scalar("train_loss", train_loss, (epoch + 1))
         writer.add_scalar("train_acc", train_acc, (epoch + 1))
         writer.add_scalar("val_acc", val_acc, (epoch + 1))
-        writer.add_scalar('learning_rate', scheduler.get_lr()[0], global_step=(epoch + 1))
+        writer.add_scalar('learning_rate', scheduler.get_last_lr()[0], global_step=(epoch + 1))
         
         scheduler.step()
 
