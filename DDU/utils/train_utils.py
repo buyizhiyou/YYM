@@ -38,16 +38,21 @@ def train_single_epoch(epoch,
     if contrastive:
         activation = {}
 
-        def get_activation(name):
-
+        def get_activation1(name):
+            def hook(model, input, output):
+                activation[name] = input[0]
+            return hook
+        
+        def get_activation2(name):
             def hook(model, input, output):
                 activation[name] = output
-
             return hook
 
-        # model.fc.register_forward_hook(get_activation('embedding'))
-        model.projection_head.out.register_forward_hook(
-            get_activation('embedding'))
+        if contrastive == 1:
+            model.fc.register_forward_hook(get_activation1('embedding'))
+        elif contrastive ==2:
+            model.projection_head.out.register_forward_hook(
+                get_activation2('embedding'))
 
     if label_smooth:  #使用label smoothing，使特征空间更紧密
         loss_func = LabelSmoothing()
@@ -76,6 +81,7 @@ def train_single_epoch(epoch,
                                               labels,
                                               device,
                                               temperature=0.5)
+            # if(epoch):第一阶段,只训练对比loss
             loss = loss1 - 0.01 * loss2  #这个好一些？？
             # loss = loss1 + 0.01 * loss2
             acc1, _ = accuracy(logits, labels, (1, 5))

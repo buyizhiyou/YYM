@@ -23,8 +23,7 @@ def training_args():
     save_loc = "./saved_models"
     log_loc = "./logs"
     epoch = 350
-    first_milestone = 150  # Milestone for change in lr
-    second_milestone = 250  # Milestone for change in lr
+
 
     model = "resnet50"
     sn_coeff = 3.0
@@ -209,14 +208,14 @@ def training_args():
     parser.add_argument(
         "--first-milestone",
         type=int,
-        default=first_milestone,
+        default=150,
         dest="first_milestone",
         help="First milestone to change lr",
     )
     parser.add_argument(
         "--second-milestone",
         type=int,
-        default=second_milestone,
+        default=250,
         dest="second_milestone",
         help="Second milestone to change lr",
     )

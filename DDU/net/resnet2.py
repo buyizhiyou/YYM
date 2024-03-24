@@ -7,6 +7,8 @@ import torch
 import math
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.utils import spectral_norm
+
 
 from net.spectral_normalization.spectral_norm_conv_inplace import spectral_norm_conv
 from net.spectral_normalization.spectral_norm_fc import spectral_norm_fc
@@ -35,14 +37,19 @@ class AvgPoolShortCut(nn.Module):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, input_size, wrapped_conv, in_planes, planes, stride=1, mod=True):
+    def __init__(self, input_size, wrapped_conv, in_planes, planes, stride=1, mod=True,bnsn=True):
         super(BasicBlock, self).__init__()
         self.conv1 = wrapped_conv(input_size, in_planes, planes, kernel_size=3, stride=stride)
-        self.bn1 = nn.BatchNorm2d(planes)
+        if bnsn:
+            self.bn1 = spectral_norm(nn.BatchNorm2d(planes))
+            self.bn2 = spectral_norm(nn.BatchNorm2d(planes))
+        else:
+            self.bn1 = nn.BatchNorm2d(planes)
+            self.bn2 = nn.BatchNorm2d(planes)
         self.conv2 = wrapped_conv(math.ceil(input_size / stride), planes, planes, kernel_size=3, stride=1)
-        self.bn2 = nn.BatchNorm2d(planes)
         self.mod = mod
         self.activation = mod_activation if self.mod else F.relu
+
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion * planes:
@@ -65,14 +72,20 @@ class BasicBlock(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, input_size, wrapped_conv, in_planes, planes, stride=1, mod=True):
+    def __init__(self, input_size, wrapped_conv, in_planes, planes, stride=1, mod=True,bnsn=True):
         super(Bottleneck, self).__init__()
         self.conv1 = wrapped_conv(input_size, in_planes, planes, kernel_size=1, stride=1)
-        self.bn1 = nn.BatchNorm2d(planes)
+        if bnsn:
+            self.bn1 = spectral_norm(nn.BatchNorm2d(planes))
+            self.bn2 = spectral_norm(nn.BatchNorm2d(planes))
+            self.bn3 = spectral_norm(nn.BatchNorm2d(self.expansion * planes))
+        else:
+            self.bn1 = nn.BatchNorm2d(planes)
+            self.bn2 = nn.BatchNorm2d(planes)
+            self.bn3 = nn.BatchNorm2d(self.expansion * planes)
         self.conv2 = wrapped_conv(input_size, planes, planes, kernel_size=3, stride=stride)
-        self.bn2 = nn.BatchNorm2d(planes)
         self.conv3 = wrapped_conv(math.ceil(input_size / stride), planes, self.expansion * planes, kernel_size=1, stride=1)
-        self.bn3 = nn.BatchNorm2d(self.expansion * planes)
+
         self.mod = mod
         self.activation = mod_activation if self.mod else F.relu
 
@@ -83,7 +96,7 @@ class Bottleneck(nn.Module):
             else:
                 self.shortcut = nn.Sequential(
                     wrapped_conv(input_size, in_planes, self.expansion * planes, kernel_size=1, stride=stride,),
-                    nn.BatchNorm2d(self.expansion * planes),
+                    nn.BatchNorm2d(self.expansion * planes) if not bnsn else spectral_norm(nn.BatchNorm2d(self.expansion * planes)),
                 )
 
     def forward(self, x):
@@ -131,6 +144,7 @@ class ResNet(nn.Module):
         self.in_planes = 64
 
         self.mod = mod
+        self.bnsn = spectral_normalization #batcNorm 是否加spetral Normalization
 
         def wrapped_conv(input_size, in_c, out_c, kernel_size, stride):
             padding = 1 if kernel_size == 3 else 0
@@ -152,8 +166,12 @@ class ResNet(nn.Module):
             return wrapped_conv
 
         self.wrapped_conv = wrapped_conv
+        if self.bnsn:
+            self.bn1 = spectral_norm(nn.BatchNorm2d(64))
 
-        self.bn1 = nn.BatchNorm2d(64)
+        else:
+            self.bn1 = nn.BatchNorm2d(64)
+
 
         if mnist:
             self.conv1 = wrapped_conv(28, 1, 64, kernel_size=3, stride=1)
@@ -180,7 +198,7 @@ class ResNet(nn.Module):
         strides = [stride] + [1] * (num_blocks - 1)
         layers = []
         for stride in strides:
-            layers.append(block(input_size, self.wrapped_conv, self.in_planes, planes, stride, self.mod,))
+            layers.append(block(input_size, self.wrapped_conv, self.in_planes, planes, stride, self.mod,self.bnsn))
             self.in_planes = planes * block.expansion
             input_size = math.ceil(input_size / stride)
         return nn.Sequential(*layers)

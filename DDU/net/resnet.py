@@ -196,6 +196,7 @@ class ResNet(nn.Module):
         # self.embedding = self.projection_head(out)
         
         self.feature = out.clone().detach()#这里抽出来倒数第二层feature，作为embedding
+
         out = self.fc(out) / self.temp
 
 

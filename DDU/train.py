@@ -106,8 +106,9 @@ if __name__ == "__main__":
     if args.scheduler=="step":
         scheduler = optim.lr_scheduler.MultiStepLR(
             optimizer,
-            milestones=[args.first_milestone, args.second_milestone],
-            gamma=0.1)
+            # milestones=[args.first_milestone, args.second_milestone],
+            milestones= [0.3*args.epoch,0.6*args.epoch,0.9*args.epoch],
+            gamma=0.1,verbose=True)
     elif args.scheduler == "cos":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,
                                                                T_max=300,

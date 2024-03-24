@@ -76,11 +76,12 @@ class SpectralNorm:
         #    GAN training: loss = D(real) - D(fake). Otherwise, engine will
         #    complain that variables needed to do backward for the first forward
         #    (i.e., the `u` and `v` vectors) are changed in the second forward.
-        weight = getattr(module, self.name + "_orig")
+        weight = getattr(module, self.name + "_orig") #torch.Size([64, 64, 1, 1])
         u = getattr(module, self.name + "_u")
         v = getattr(module, self.name + "_v")
         sigma_log = getattr(module, self.name + "_sigma")  # for logging
-        weight_mat = self.reshape_weight_to_matrix(weight)
+        weight_mat = self.reshape_weight_to_matrix(weight) #torch.Size([64, 64])
+
 
         if do_power_iteration:
             with torch.no_grad():
@@ -115,6 +116,7 @@ class SpectralNorm:
         module.register_parameter(self.name, torch.nn.Parameter(weight.detach()))
 
     def __call__(self, module: Module, inputs: Any) -> None:
+        #执行SpectralNorm,因为module.register_forward_pre_hook(fn)
         setattr(
             module, self.name, self.compute_weight(module, do_power_iteration=module.training),
         )
@@ -133,7 +135,7 @@ class SpectralNorm:
         for k, hook in module._forward_pre_hooks.items():
             if isinstance(hook, SpectralNorm) and hook.name == name:
                 raise RuntimeError("Cannot register two spectral_norm hooks on " "the same parameter {}".format(name))
-
+  
         fn = SpectralNorm(coeff, name, n_power_iterations, dim, eps)
         weight = module._parameters[name]
 
@@ -157,9 +159,9 @@ class SpectralNorm:
         module.register_buffer(fn.name + "_v", v)
         module.register_buffer(fn.name + "_sigma", torch.ones(1).to(weight.device))
 
-        module.register_forward_pre_hook(fn)
-        module._register_state_dict_hook(SpectralNormStateDictHook(fn))
-        module._register_load_state_dict_pre_hook(SpectralNormLoadStateDictPreHook(fn))
+        module.register_forward_pre_hook(fn)## forward前触发调用,重点就是这里，在每次模块forward之前，都先执行SpectralNorm,
+        module._register_state_dict_hook(SpectralNormStateDictHook(fn)) ## state_dict()后被触发调用
+        module._register_load_state_dict_pre_hook(SpectralNormLoadStateDictPreHook(fn)) ## load state dict前触发调用
         return fn
 
 
@@ -299,7 +301,7 @@ def remove_spectral_norm(module: T_module, name: str = "weight") -> T_module:
         >>> m = spectral_norm(nn.Linear(40, 10))
         >>> remove_spectral_norm(m)
     """
-    for k, hook in module._forward_pre_hooks.items():
+    for k, hook in module._forward_pre_hooks.items():#这里
         if isinstance(hook, SpectralNorm) and hook.name == name:
             hook.remove(module)
             del module._forward_pre_hooks[k]
@@ -307,12 +309,12 @@ def remove_spectral_norm(module: T_module, name: str = "weight") -> T_module:
     else:
         raise ValueError("spectral_norm of '{}' not found in {}".format(name, module))
 
-    for k, hook in module._state_dict_hooks.items():
+    for k, hook in module._state_dict_hooks.items():  #这里
         if isinstance(hook, SpectralNormStateDictHook) and hook.fn.name == name:
             del module._state_dict_hooks[k]
             break
 
-    for k, hook in module._load_state_dict_pre_hooks.items():
+    for k, hook in module._load_state_dict_pre_hooks.items():#这里
         if isinstance(hook, SpectralNormLoadStateDictPreHook) and hook.fn.name == name:
             del module._load_state_dict_pre_hooks[k]
             break
