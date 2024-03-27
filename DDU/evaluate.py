@@ -216,11 +216,6 @@ if __name__ == "__main__":
                 (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc_logits(
                     logits2, ood_logits2, confidence, device)
 
-                t_m1_auroc = m1_auroc
-                t_m1_auprc = m1_auprc
-                t_m2_auroc = m2_auroc
-                t_m2_auprc = m2_auprc
-
             except RuntimeError as e:
                 print("Runtime Error caught: " + str(e))
                 continue
@@ -261,50 +256,22 @@ if __name__ == "__main__":
                 (_, _, _), (_, _, _), m1_auroc, m1_auprc = get_roc_auc_logits(
                     logits, ood_logits, logsumexp, device, confidence=True)
                 (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc_logits(
-                    logits, ood_logits, entropy, device)
-
-                t_m1_auroc = m1_auroc
-                t_m1_auprc = m1_auprc
-                t_m2_auroc = m2_auroc
-                t_m2_auprc = m2_auprc
+                    logits, ood_logits, entropy, device,conf=True)
 
             except RuntimeError as e:
                 print("Runtime Error caught: " + str(e))
                 continue
-        else:
-            # Evaluate a normal Softmax model
-            print("Softmax Model")
-            import pdb;pdb.set_trace()
-            (_, _, _), (_, _,
-                        _), m1_auroc, m1_auprc = get_roc_auc(net,
-                                                             test_loader,
-                                                             ood_test_loader,
-                                                             logsumexp,
-                                                             device,
-                                                             confidence=True)
-            (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc(
-                net, test_loader, ood_test_loader, entropy, device)
 
-            (_, _, _), (_, _, _), t_m1_auroc, t_m1_auprc = get_roc_auc(
-                temp_scaled_net,
-                test_loader,
-                ood_test_loader,
-                logsumexp,
-                device,
-                confidence=True,
-            )
-            (_, _, _), (_, _, _), t_m2_auroc, t_m2_auprc = get_roc_auc(
-                temp_scaled_net, test_loader, ood_test_loader, entropy, device)
 
         accuracies.append(accuracy)
         # Pre-temperature results
-        eces.append(ece)
-        m1_aurocs.append(m1_auroc)
-        m1_auprcs.append(m1_auprc)
-        m2_aurocs.append(m2_auroc)
-        m2_auprcs.append(m2_auprc)
+        eces.append(round(ece,4))
+        m1_aurocs.append(round(m1_auroc,4))
+        m1_auprcs.append(round(m1_auprc,4))
+        m2_aurocs.append(round(m2_auroc,4))
+        m2_auprcs.append(round(m2_auprc,4))
 
-        print(f"{saved_model_name} accu:{accuracy},m1_auroc1:{m1_auprc},m1_auprc:{m1_auprc},m2_auroc:{m2_auroc},m2_auprc:{m2_auprc}")
+        print(f"{saved_model_name} accu:{accuracy:.4f},ece:{ece:.6f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
 
 
 
