@@ -6,12 +6,12 @@ for i in {1..1}; do
               --seed 1 \
               --gpu 0 \
               --run 3 \
-              -data-aug \
+              --data-aug \
               -b 256 \
               --epochs 300 --dataset cifar10 \
-              --model resnet50 
-              # -mod \
-              # -sn --coeff 3.0 \
-              # --contrastive 1
+              --model resnet50 \
+              --contrastive 1
+              -mod \
+              -sn --coeff 3.0 \
        sleep 5
 done

@@ -27,11 +27,11 @@ from metrics.classification_metrics import (test_classification_net,
                                             test_classification_net_logits,
                                             test_classification_net_ensemble)
 from metrics.calibration_metrics import expected_calibration_error
-from metrics.uncertainty_confidence import entropy, logsumexp
+from metrics.uncertainty_confidence import entropy, logsumexp,confidence
 from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ensemble
 
 # Import GMM utils
-from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit
+from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit,maxp_evaluate
 from utils.kde_utils import kde_evaluate, kde_fit
 from utils.ensemble_utils import load_ensemble, ensemble_forward_pass
 from utils.eval_utils import model_load_name
@@ -107,20 +107,14 @@ if __name__ == "__main__":
     accuracies = []
 
     # Pre temperature scaling
-    # m1 - Uncertainty/Confidence Metric 1 for deterministic model: logsumexp, for ensemble: entropy
-    # m2 - Uncertainty/Confidence Metric 2 for deterministic model: entropy, for ensemble: MI
+    # m1 - Uncertainty/Confidence Metric 1 for deterministic model: logsumexp of probability density
+    # m2 - Uncertainty/Confidence Metric 2 for deterministic model: max p
     eces = []
     m1_aurocs = []
     m1_auprcs = []
     m2_aurocs = []
     m2_auprcs = []
 
-    # Post temperature scaling
-    t_eces = []
-    t_m1_aurocs = []
-    t_m1_auprcs = []
-    t_m2_aurocs = []
-    t_m2_auprcs = []
 
     topt = None
     model_name = model_load_name(args.model, args.sn, args.mod, args.coeff,
@@ -130,13 +124,13 @@ if __name__ == "__main__":
     for saved_model_name in model_files:
         print(f"Run {args.run}, Evaluating: {saved_model_name}")
         #load dataset
-        train_loader, val_loader = dataset_loader[
+        train_loader, _ = dataset_loader[
             args.dataset].get_train_valid_loader(
                 root=args.dataset_root,
                 batch_size=args.batch_size,
                 augment=args.data_aug,
                 val_seed=(args.seed),
-                val_size=0.1,
+                val_size=0.0,
                 pin_memory=args.gpu,
             )
 
@@ -167,26 +161,9 @@ if __name__ == "__main__":
                                          labels_list,
                                          num_bins=15)
 
-        temp_scaled_net = ModelWithTemperature(net, device)
-        temp_scaled_net.set_temperature(val_loader)
-        topt = temp_scaled_net.temperature
-
-        (
-            t_conf_matrix,
-            t_accuracy,
-            t_labels_list,
-            t_predictions,
-            t_confidences,
-        ) = test_classification_net(temp_scaled_net, test_loader, device)
-        t_ece = expected_calibration_error(t_confidences,
-                                           t_predictions,
-                                           t_labels_list,
-                                           num_bins=15)
-
         if (args.model_type == "gmm"):
             # Evaluate a GMM model
             print("GMM Model")
-
             embeddings, labels = get_embeddings(
                 net,
                 train_loader,
@@ -218,10 +195,26 @@ if __name__ == "__main__":
                     storage_device=device,
                 )
 
+                logits2, labels2 = maxp_evaluate(
+                    net,
+                    test_loader,
+                    device=device,
+                    num_classes=num_classes,
+                    storage_device=device,
+                )
+
+                ood_logits2, ood_labels2 = maxp_evaluate(
+                    net,
+                    ood_test_loader,
+                    device=device,
+                    num_classes=num_classes,
+                    storage_device=device,
+                )
+
                 (_, _, _), (_, _, _), m1_auroc, m1_auprc = get_roc_auc_logits(
-                    logits, ood_logits, logsumexp, device, confidence=True)
+                    logits, ood_logits, logsumexp, device, conf=True)
                 (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc_logits(
-                    logits, ood_logits, entropy, device)
+                    logits2, ood_logits2, confidence, device)
 
                 t_m1_auroc = m1_auroc
                 t_m1_auprc = m1_auprc
@@ -278,10 +271,10 @@ if __name__ == "__main__":
             except RuntimeError as e:
                 print("Runtime Error caught: " + str(e))
                 continue
-
         else:
             # Evaluate a normal Softmax model
             print("Softmax Model")
+            import pdb;pdb.set_trace()
             (_, _, _), (_, _,
                         _), m1_auroc, m1_auprc = get_roc_auc(net,
                                                              test_loader,
@@ -304,7 +297,6 @@ if __name__ == "__main__":
                 temp_scaled_net, test_loader, ood_test_loader, entropy, device)
 
         accuracies.append(accuracy)
-
         # Pre-temperature results
         eces.append(ece)
         m1_aurocs.append(m1_auroc)
@@ -312,12 +304,9 @@ if __name__ == "__main__":
         m2_aurocs.append(m2_auroc)
         m2_auprcs.append(m2_auprc)
 
-        # Post-temperature results
-        t_eces.append(t_ece)
-        t_m1_aurocs.append(t_m1_auroc)
-        t_m1_auprcs.append(t_m1_auprc)
-        t_m2_aurocs.append(t_m2_auroc)
-        t_m2_auprcs.append(t_m2_auprc)
+        print(f"{saved_model_name} accu:{accuracy},m1_auroc1:{m1_auprc},m1_auprc:{m1_auprc},m2_auroc:{m2_auroc},m2_auprc:{m2_auprc}")
+
+
 
     accuracy_tensor = torch.tensor(accuracies)
     ece_tensor = torch.tensor(eces)
@@ -326,11 +315,7 @@ if __name__ == "__main__":
     m2_auroc_tensor = torch.tensor(m2_aurocs)
     m2_auprc_tensor = torch.tensor(m2_auprcs)
 
-    t_ece_tensor = torch.tensor(t_eces)
-    t_m1_auroc_tensor = torch.tensor(t_m1_aurocs)
-    t_m1_auprc_tensor = torch.tensor(t_m1_auprcs)
-    t_m2_auroc_tensor = torch.tensor(t_m2_aurocs)
-    t_m2_auprc_tensor = torch.tensor(t_m2_auprcs)
+
 
     mean_accuracy = torch.mean(accuracy_tensor)
     mean_ece = torch.mean(ece_tensor)
@@ -339,11 +324,6 @@ if __name__ == "__main__":
     mean_m2_auroc = torch.mean(m2_auroc_tensor)
     mean_m2_auprc = torch.mean(m2_auprc_tensor)
 
-    mean_t_ece = torch.mean(t_ece_tensor)
-    mean_t_m1_auroc = torch.mean(t_m1_auroc_tensor)
-    mean_t_m1_auprc = torch.mean(t_m1_auprc_tensor)
-    mean_t_m2_auroc = torch.mean(t_m2_auroc_tensor)
-    mean_t_m2_auprc = torch.mean(t_m2_auprc_tensor)
 
     std_accuracy = torch.std(accuracy_tensor) / math.sqrt(
         accuracy_tensor.shape[0])
@@ -357,15 +337,7 @@ if __name__ == "__main__":
     std_m2_auprc = torch.std(m2_auprc_tensor) / math.sqrt(
         m2_auprc_tensor.shape[0])
 
-    std_t_ece = torch.std(t_ece_tensor) / math.sqrt(t_ece_tensor.shape[0])
-    std_t_m1_auroc = torch.std(t_m1_auroc_tensor) / math.sqrt(
-        t_m1_auroc_tensor.shape[0])
-    std_t_m1_auprc = torch.std(t_m1_auprc_tensor) / math.sqrt(
-        t_m1_auprc_tensor.shape[0])
-    std_t_m2_auroc = torch.std(t_m2_auroc_tensor) / math.sqrt(
-        t_m2_auroc_tensor.shape[0])
-    std_t_m2_auprc = torch.std(t_m2_auprc_tensor) / math.sqrt(
-        t_m2_auprc_tensor.shape[0])
+
 
     res_dict = {}
     res_dict["mean"] = {}
@@ -375,11 +347,9 @@ if __name__ == "__main__":
     res_dict["mean"]["m1_auprc"] = mean_m1_auprc.item()
     res_dict["mean"]["m2_auroc"] = mean_m2_auroc.item()
     res_dict["mean"]["m2_auprc"] = mean_m2_auprc.item()
-    res_dict["mean"]["t_ece"] = mean_t_ece.item()
-    res_dict["mean"]["t_m1_auroc"] = mean_t_m1_auroc.item()
-    res_dict["mean"]["t_m1_auprc"] = mean_t_m1_auprc.item()
-    res_dict["mean"]["t_m2_auroc"] = mean_t_m2_auroc.item()
-    res_dict["mean"]["t_m2_auprc"] = mean_t_m2_auprc.item()
+
+
+
 
     res_dict["std"] = {}
     res_dict["std"]["accuracy"] = std_accuracy.item()
@@ -388,24 +358,7 @@ if __name__ == "__main__":
     res_dict["std"]["m1_auprc"] = std_m1_auprc.item()
     res_dict["std"]["m2_auroc"] = std_m2_auroc.item()
     res_dict["std"]["m2_auprc"] = std_m2_auprc.item()
-    res_dict["std"]["t_ece"] = std_t_ece.item()
-    res_dict["std"]["t_m1_auroc"] = std_t_m1_auroc.item()
-    res_dict["std"]["t_m1_auprc"] = std_t_m1_auprc.item()
-    res_dict["std"]["t_m2_auroc"] = std_t_m2_auroc.item()
-    res_dict["std"]["t_m2_auprc"] = std_t_m2_auprc.item()
 
-    res_dict["mean"] = {}
-    res_dict["mean"]["accuracy"] = mean_accuracy.item()
-    res_dict["mean"]["ece"] = mean_ece.item()
-    res_dict["mean"]["m1_auroc"] = mean_m1_auroc.item()
-    res_dict["mean"]["m1_auprc"] = mean_m1_auprc.item()
-    res_dict["mean"]["m2_auroc"] = mean_m2_auroc.item()
-    res_dict["mean"]["m2_auprc"] = mean_m2_auprc.item()
-    res_dict["mean"]["t_ece"] = mean_t_ece.item()
-    res_dict["mean"]["t_m1_auroc"] = mean_t_m1_auroc.item()
-    res_dict["mean"]["t_m1_auprc"] = mean_t_m1_auprc.item()
-    res_dict["mean"]["t_m2_auroc"] = mean_t_m2_auroc.item()
-    res_dict["mean"]["t_m2_auprc"] = mean_t_m2_auprc.item()
 
     res_dict["values"] = {}
     res_dict["values"]["accuracy"] = accuracies
@@ -414,11 +367,6 @@ if __name__ == "__main__":
     res_dict["values"]["m1_auprc"] = m1_auprcs
     res_dict["values"]["m2_auroc"] = m2_aurocs
     res_dict["values"]["m2_auprc"] = m2_auprcs
-    res_dict["values"]["t_ece"] = t_eces
-    res_dict["values"]["t_m1_auroc"] = t_m1_aurocs
-    res_dict["values"]["t_m1_auprc"] = t_m1_auprcs
-    res_dict["values"]["t_m2_auroc"] = t_m2_aurocs
-    res_dict["values"]["t_m2_auprc"] = t_m2_auprcs
 
     res_dict["info"] = vars(args)
     res_dict["files"] = model_files

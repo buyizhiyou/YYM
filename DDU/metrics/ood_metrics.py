@@ -7,17 +7,17 @@ from sklearn import metrics
 
 from utils.ensemble_utils import ensemble_forward_pass
 from metrics.classification_metrics import get_logits_labels
-from metrics.uncertainty_confidence import entropy, logsumexp
+from metrics.uncertainty_confidence import entropy, logsumexp,confidence
 
 
-def get_roc_auc(net, test_loader, ood_test_loader, uncertainty, device, confidence=False):
+def get_roc_auc(net, test_loader, ood_test_loader, uncertainty, device, conf=False):
     logits, _ = get_logits_labels(net, test_loader, device)
     ood_logits, _ = get_logits_labels(net, ood_test_loader, device)
 
-    return get_roc_auc_logits(logits, ood_logits, uncertainty, device, confidence=confidence)
+    return get_roc_auc_logits(logits, ood_logits, uncertainty, device, conf=conf)
 
 
-def get_roc_auc_logits(logits, ood_logits, uncertainty, device, confidence=False):
+def get_roc_auc_logits(logits, ood_logits, uncertainty, device, conf=False):
     uncertainties = uncertainty(logits)#logits: torch.Size([10000, 10])-> uncertainties:torch.Size([10000]
     ood_uncertainties = uncertainty(ood_logits)
 
@@ -25,7 +25,7 @@ def get_roc_auc_logits(logits, ood_logits, uncertainty, device, confidence=False
     bin_labels = torch.zeros(uncertainties.shape[0]).to(device)
     # OOD
     bin_labels = torch.cat((bin_labels, torch.ones(ood_uncertainties.shape[0]).to(device)))
-    if confidence: #True时，指标越高信心越高，这时将in样本置为1，False时，指标越高信心越低，这时将ood样本置为1
+    if conf: #True时，指标越高信心越高，这时将in样本置为1，False时，指标越高信心越低，这时将ood样本置为1
         bin_labels = 1 - bin_labels
 
     in_scores = uncertainties

@@ -8,10 +8,9 @@ for i in {1..1}; do
               --run 3 \
               --data-aug \
               -b 256 \
-              --epochs 350 --dataset cifar10 \
+              --epochs 300 --dataset cifar10 \
               --model resnet50  \
-              -sn
-              # -mod \
-              # -sn --coeff 3.0 
+              -mod \
+              -sn --coeff 3.0 
        sleep 5
 done

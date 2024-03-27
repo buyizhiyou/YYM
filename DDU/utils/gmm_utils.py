@@ -89,6 +89,28 @@ def gmm_evaluate(net, gaussians_model, loader, device, num_classes,
     return logits_N_C, labels_N
 
 
+def maxp_evaluate(net, loader, device, num_classes,storage_device):
+    num_samples = len(loader.dataset)
+    logits_N_C = torch.empty((num_samples, num_classes),
+                             dtype=torch.float,
+                             device=storage_device)
+    labels_N = torch.empty(num_samples, dtype=torch.int, device=storage_device)
+
+    with torch.no_grad():
+        start = 0
+        for data, label in tqdm(loader):
+            data = data.to(device)
+            label = label.to(device)
+            logit_B_C = net(data) #每个batch计算logits,再合并
+
+            end = start + len(data)
+            logits_N_C[start:end].copy_(logit_B_C, non_blocking=True)
+            labels_N[start:end].copy_(label, non_blocking=True)
+            start = end
+
+    return logits_N_C, labels_N
+
+
 def gmm_get_logits(gmm, embeddings):
     log_probs_B_Y = gmm.log_prob(embeddings[:, None, :])
     return log_probs_B_Y

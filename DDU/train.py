@@ -87,6 +87,7 @@ if __name__ == "__main__":
         #     net, device_ids=range(torch.cuda.device_count()))
         cudnn.benchmark = True
 
+
     opt_params = net.parameters()
     #设置optimier
     if args.optimiser == "sgd":
@@ -108,22 +109,29 @@ if __name__ == "__main__":
             optimizer,
             # milestones=[args.first_milestone, args.second_milestone],
             milestones= [0.3*args.epoch,0.6*args.epoch,0.9*args.epoch],
-            gamma=0.1,verbose=True)
+            gamma=0.1,verbose=False)
     elif args.scheduler == "cos":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,
                                                                T_max=300,
-                                                               eta_min=1e-7,verbose=True)
+                                                               eta_min=1e-7,verbose=False)
 
     train_loader, val_loader = dataset_loader[
         args.dataset].get_train_valid_loader(
             root=args.dataset_root,
             batch_size=args.train_batch_size,
             augment=args.data_aug,
-            val_size=0.1,
+            val_size=0.0,
             val_seed=args.seed,
             pin_memory=args.gpu,
             contrastive = args.contrastive
         )
+
+    test_loader = dataset_loader[
+        args.dataset].get_test_loader(
+            root=args.dataset_root,
+            batch_size=args.train_batch_size,
+        )
+
 
     # Creating summary writer in tensorboard
     curr_time = datetime.datetime.now()
@@ -155,7 +163,8 @@ if __name__ == "__main__":
             loss_mean=args.loss_mean,
         )
 
-        val_acc = test_single_epoch(epoch, net, val_loader, device)
+        if(epoch%10==0):
+             val_acc = test_single_epoch(epoch, net, test_loader, device)
 
         writer.add_scalar("train_loss", train_loss, (epoch + 1))
         writer.add_scalar("train_acc", train_acc, (epoch + 1))
@@ -164,7 +173,7 @@ if __name__ == "__main__":
         
         scheduler.step()
 
-        if epoch == 300:#训练完第一阶段
+        if epoch == 350:#训练完第一阶段
             save_path = save_loc + save_name + "_mid" + ".model"
             torch.save(net.state_dict(), save_path)
             print("Model saved to ", save_path)
@@ -172,7 +181,7 @@ if __name__ == "__main__":
         if val_acc > best_acc:
             best_acc = val_acc
             is_best = True
-        if is_best:
+
             save_path = save_loc + save_name + "_best" + ".model"
             torch.save(net.state_dict(), save_path)
             print("Model saved to ", save_path)

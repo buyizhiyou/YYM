@@ -144,7 +144,7 @@ class ResNet(nn.Module):
         self.in_planes = 64
 
         self.mod = mod
-        self.bnsn = spectral_normalization #batcNorm 是否加spetral Normalization
+        self.bnsn = False #batcNorm 是否加spetral Normalization
 
         def wrapped_conv(input_size, in_c, out_c, kernel_size, stride):
             padding = 1 if kernel_size == 3 else 0
