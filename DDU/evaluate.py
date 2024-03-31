@@ -199,8 +199,6 @@ if __name__ == "__main__":
                                                       labels=labels,
                                                       num_classes=num_classes)
                 
-                ldaf_evaluate(gaussians_model,embeddings,test_embeddings,ood_test_embeddings)
-                
                 logits, labels = gmm_evaluate(
                     net,
                     gaussians_model,
@@ -240,13 +238,12 @@ if __name__ == "__main__":
                                                               logsumexp,
                                                               device,
                                                               conf=True)
-                _, _, m2_auroc, m2_auprc = get_roc_auc_logits(logits,
-                                                              ood_logits,
-                                                              sumexp,
-                                                              device,
-                                                              conf=True)
+
+                m2_auroc,m2_auprc = ldaf_evaluate(gaussians_model,embeddings,test_embeddings,ood_test_embeddings)
+
+
                 # _, _, m2_auroc, m2_auprc = get_roc_auc_logits(
-                #     logits2, ood_logits2, confidence, device)
+                #     logits2, ood_logits2, confidence, device)  #最大概率
 
             except RuntimeError as e:
                 print("Runtime Error caught: " + str(e))
