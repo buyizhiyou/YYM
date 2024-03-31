@@ -49,7 +49,6 @@ def get_embeddings(
 
 
 def gmm_forward(net, gaussians_model, data_B_X):
-
     if isinstance(net, nn.DataParallel):
         _ = net.module(data_B_X)  #torch.Size([128, 10]) 这一个不用
         features_B_Z = net.module.feature  #torch.Size([128, 2048]) 用这一个，embedding

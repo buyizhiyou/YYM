@@ -9,7 +9,7 @@ python evaluate.py \
        --ood_dataset svhn \
        --load-path ./saved_models \
        --model resnet50 \
-       --model-type softmax \
+       --model-type gmm \
        --contrastive 1 \
        -mod \
        -sn --coeff 3.0

@@ -1,6 +1,7 @@
 # Utility functions to get OOD detection ROC curves and AUROC scores
 # Ideally should be agnostic of model architectures
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from sklearn import metrics
@@ -27,15 +28,17 @@ def get_roc_auc_logits(logits, ood_logits, uncertainty, device, conf=False):
     bin_labels = torch.cat((bin_labels, torch.ones(ood_uncertainties.shape[0]).to(device)))
     if conf: #True时，指标越高信心越高，这时将in样本置为1，False时，指标越高信心越低，这时将ood样本置为1
         bin_labels = 1 - bin_labels
+    bin_labels = bin_labels.cpu().numpy()
 
     in_scores = uncertainties
     ood_scores = ood_uncertainties  
-    scores = torch.cat((in_scores, ood_scores))
+    scores = torch.cat((in_scores, ood_scores)).cpu().numpy()
+    scores = np.nan_to_num(scores)#处理nan
 
-    fpr, tpr, thresholds = metrics.roc_curve(bin_labels.cpu().numpy(), scores.cpu().numpy())
-    precision, recall, prc_thresholds = metrics.precision_recall_curve(bin_labels.cpu().numpy(), scores.cpu().numpy())
-    auroc = metrics.roc_auc_score(bin_labels.cpu().numpy(), scores.cpu().numpy())
-    auprc = metrics.average_precision_score(bin_labels.cpu().numpy(), scores.cpu().numpy())
+    fpr, tpr, thresholds = metrics.roc_curve(bin_labels, scores)
+    precision, recall, prc_thresholds = metrics.precision_recall_curve(bin_labels, scores)
+    auroc = metrics.roc_auc_score(bin_labels, scores)
+    auprc = metrics.average_precision_score(bin_labels, scores)
 
     return (fpr, tpr, thresholds), (precision, recall, prc_thresholds), auroc, auprc
 

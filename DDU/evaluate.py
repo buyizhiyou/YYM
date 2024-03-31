@@ -27,12 +27,13 @@ from metrics.classification_metrics import (test_classification_net,
                                             test_classification_net_logits,
                                             test_classification_net_ensemble)
 from metrics.calibration_metrics import expected_calibration_error
-from metrics.uncertainty_confidence import entropy, logsumexp,confidence
+from metrics.uncertainty_confidence import entropy, logsumexp, confidence, sumexp
 from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ensemble
 
 # Import GMM utils
-from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit,maxp_evaluate
+from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate
 from utils.kde_utils import kde_evaluate, kde_fit
+from utils.lof_utils import lof_evaluate,ldaf_evaluate
 from utils.ensemble_utils import load_ensemble, ensemble_forward_pass
 from utils.eval_utils import model_load_name
 from utils.train_utils import model_save_name
@@ -115,7 +116,6 @@ if __name__ == "__main__":
     m2_aurocs = []
     m2_auprcs = []
 
-
     topt = None
     model_name = model_load_name(args.model, args.sn, args.mod, args.coeff,
                                  args.seed, args.contrastive) + "_best.model"
@@ -124,15 +124,14 @@ if __name__ == "__main__":
     for saved_model_name in model_files:
         print(f"Run {args.run}, Evaluating: {saved_model_name}")
         #load dataset
-        train_loader, _ = dataset_loader[
-            args.dataset].get_train_valid_loader(
-                root=args.dataset_root,
-                batch_size=args.batch_size,
-                augment=args.data_aug,
-                val_seed=(args.seed),
-                val_size=0.0,
-                pin_memory=args.gpu,
-            )
+        train_loader, _ = dataset_loader[args.dataset].get_train_valid_loader(
+            root=args.dataset_root,
+            batch_size=args.batch_size,
+            augment=args.data_aug,
+            val_seed=(args.seed),
+            val_size=0.0,
+            pin_memory=args.gpu,
+        )
 
         #load model
         print(f"load {saved_model_name}")
@@ -146,7 +145,7 @@ if __name__ == "__main__":
         if args.gpu:
             net.to(device)
             cudnn.benchmark = True
-        net.load_state_dict(torch.load(str(saved_model_name)),strict=False)
+        net.load_state_dict(torch.load(str(saved_model_name)), strict=False)
         net.eval()
 
         (
@@ -173,10 +172,35 @@ if __name__ == "__main__":
                 storage_device=device,
             )
 
+            test_embeddings, test_labels = get_embeddings(
+                net,
+                test_loader,
+                num_dim=model_to_num_dim[args.model],
+                dtype=torch.double,
+                device=device,
+                storage_device=device,
+            )
+
+            ood_test_embeddings, ood_labels = get_embeddings(
+                net,
+                ood_test_loader,
+                num_dim=model_to_num_dim[args.model],
+                dtype=torch.double,
+                device=device,
+                storage_device=device,
+            )
+
+            # lof_evaluate(embeddings.cpu().detach().numpy(),
+            #              test_embeddings.cpu().detach().numpy(),
+            #              ood_test_embeddings.cpu().detach().numpy())
+
             try:
                 gaussians_model, jitter_eps = gmm_fit(embeddings=embeddings,
                                                       labels=labels,
                                                       num_classes=num_classes)
+                
+                ldaf_evaluate(gaussians_model,embeddings,test_embeddings,ood_test_embeddings)
+                
                 logits, labels = gmm_evaluate(
                     net,
                     gaussians_model,
@@ -195,26 +219,34 @@ if __name__ == "__main__":
                     storage_device=device,
                 )
 
-                logits2, labels2 = maxp_evaluate(
-                    net,
-                    test_loader,
-                    device=device,
-                    num_classes=num_classes,
-                    storage_device=device,
-                )
+                # logits2, labels2 = maxp_evaluate(
+                #     net,
+                #     test_loader,
+                #     device=device,
+                #     num_classes=num_classes,
+                #     storage_device=device,
+                # )
 
-                ood_logits2, ood_labels2 = maxp_evaluate(
-                    net,
-                    ood_test_loader,
-                    device=device,
-                    num_classes=num_classes,
-                    storage_device=device,
-                )
+                # ood_logits2, ood_labels2 = maxp_evaluate(
+                #     net,
+                #     ood_test_loader,
+                #     device=device,
+                #     num_classes=num_classes,
+                #     storage_device=device,
+                # )
 
-                (_, _, _), (_, _, _), m1_auroc, m1_auprc = get_roc_auc_logits(
-                    logits, ood_logits, logsumexp, device, conf=True)
-                (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc_logits(
-                    logits2, ood_logits2, confidence, device)
+                _, _, m1_auroc, m1_auprc = get_roc_auc_logits(logits,
+                                                              ood_logits,
+                                                              logsumexp,
+                                                              device,
+                                                              conf=True)
+                _, _, m2_auroc, m2_auprc = get_roc_auc_logits(logits,
+                                                              ood_logits,
+                                                              sumexp,
+                                                              device,
+                                                              conf=True)
+                # _, _, m2_auroc, m2_auprc = get_roc_auc_logits(
+                #     logits2, ood_logits2, confidence, device)
 
             except RuntimeError as e:
                 print("Runtime Error caught: " + str(e))
@@ -255,25 +287,29 @@ if __name__ == "__main__":
 
                 (_, _, _), (_, _, _), m1_auroc, m1_auprc = get_roc_auc_logits(
                     logits, ood_logits, logsumexp, device, confidence=True)
-                (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc_logits(
-                    logits, ood_logits, entropy, device,conf=True)
+                (_, _,
+                 _), (_, _,
+                      _), m2_auroc, m2_auprc = get_roc_auc_logits(logits,
+                                                                  ood_logits,
+                                                                  entropy,
+                                                                  device,
+                                                                  conf=True)
 
             except RuntimeError as e:
                 print("Runtime Error caught: " + str(e))
                 continue
 
-
         accuracies.append(accuracy)
         # Pre-temperature results
-        eces.append(round(ece,4))
-        m1_aurocs.append(round(m1_auroc,4))
-        m1_auprcs.append(round(m1_auprc,4))
-        m2_aurocs.append(round(m2_auroc,4))
-        m2_auprcs.append(round(m2_auprc,4))
+        eces.append(round(ece, 4))
+        m1_aurocs.append(round(m1_auroc, 4))
+        m1_auprcs.append(round(m1_auprc, 4))
+        m2_aurocs.append(round(m2_auroc, 4))
+        m2_auprcs.append(round(m2_auprc, 4))
 
-        print(f"{saved_model_name} accu:{accuracy:.4f},ece:{ece:.6f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
-
-
+        print(
+            f"{saved_model_name} accu:{accuracy:.4f},ece:{ece:.6f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"
+        )
 
     accuracy_tensor = torch.tensor(accuracies)
     ece_tensor = torch.tensor(eces)
@@ -282,15 +318,12 @@ if __name__ == "__main__":
     m2_auroc_tensor = torch.tensor(m2_aurocs)
     m2_auprc_tensor = torch.tensor(m2_auprcs)
 
-
-
     mean_accuracy = torch.mean(accuracy_tensor)
     mean_ece = torch.mean(ece_tensor)
     mean_m1_auroc = torch.mean(m1_auroc_tensor)
     mean_m1_auprc = torch.mean(m1_auprc_tensor)
     mean_m2_auroc = torch.mean(m2_auroc_tensor)
     mean_m2_auprc = torch.mean(m2_auprc_tensor)
-
 
     std_accuracy = torch.std(accuracy_tensor) / math.sqrt(
         accuracy_tensor.shape[0])
@@ -304,8 +337,6 @@ if __name__ == "__main__":
     std_m2_auprc = torch.std(m2_auprc_tensor) / math.sqrt(
         m2_auprc_tensor.shape[0])
 
-
-
     res_dict = {}
     res_dict["mean"] = {}
     res_dict["mean"]["accuracy"] = mean_accuracy.item()
@@ -315,9 +346,6 @@ if __name__ == "__main__":
     res_dict["mean"]["m2_auroc"] = mean_m2_auroc.item()
     res_dict["mean"]["m2_auprc"] = mean_m2_auprc.item()
 
-
-
-
     res_dict["std"] = {}
     res_dict["std"]["accuracy"] = std_accuracy.item()
     res_dict["std"]["ece"] = std_ece.item()
@@ -325,7 +353,6 @@ if __name__ == "__main__":
     res_dict["std"]["m1_auprc"] = std_m1_auprc.item()
     res_dict["std"]["m2_auroc"] = std_m2_auroc.item()
     res_dict["std"]["m2_auprc"] = std_m2_auprc.item()
-
 
     res_dict["values"] = {}
     res_dict["values"]["accuracy"] = accuracies
