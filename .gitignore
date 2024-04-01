@@ -11,4 +11,5 @@ DDU/saved_models
 DDU/data
 DDU/logs
 DDU/results
+DDU/utils/*.pth
 .vscode/

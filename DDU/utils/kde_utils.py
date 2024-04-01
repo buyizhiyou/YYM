@@ -10,17 +10,21 @@ import numpy as np
 
 
 class KdeModel():
+
     def __init__(self, kdes, weights):
         self.N = len(kdes)
         self.kdes = kdes
         self.weights = weights
 
-    def evaluate(self, x):
+    def log_prob(self, x):
         pdf = []
         for i in range(self.N):
-            pdf.append(self.weights[i] * self.kdes[i].score_samples(x)) #log prob
-        pdf = np.stack(pdf,axis=1)
+            pdf.append(self.kdes[i].score_samples(x))  # log prob
+        pdf = np.stack(pdf, axis=1)
         return pdf
+
+    def prob(self, x):
+        return np.sum(self.weights * np.exp(self.log_prob(x)))
 
 
 def kde_forward(net, kde_model, data_B_X):
@@ -32,7 +36,7 @@ def kde_forward(net, kde_model, data_B_X):
         features_B_Z = net(data_B_X)
         features_B_Z = net.feature
 
-    log_probs_B_Y = kde_model.evaluate(features_B_Z.cpu().numpy())
+    log_probs_B_Y = kde_model.log_prob(features_B_Z.cpu().numpy())
 
     return log_probs_B_Y
 
@@ -60,12 +64,6 @@ def kde_evaluate(net, kde_model, loader, device, num_classes, storage_device):
     return logits_N_C, labels_N
 
 
-def kde_get_logits(kde, embeddings):
-
-    log_probs_B_Y = kde.log_prob(embeddings[:, None, :])
-    return log_probs_B_Y
-
-
 def kde_fit(embeddings, labels, num_classes):
     with torch.no_grad():
         # bandwidths = [0.01, 0.1, 1, 10]
@@ -75,7 +73,7 @@ def kde_fit(embeddings, labels, num_classes):
         # # The best estimated bandwidth density is used as the truth value
         # best_KDEbandwidth = grid.best_params_['bandwidth']
         best_KDEbandwidth = 0.1
-        print(f"best bandwidth:{best_KDEbandwidth}")
+        # print(f"best bandwidth:{best_KDEbandwidth}")
         kernel = "gaussian"
 
         # kdes = [NaiveKDE(kernel='gaussian', bw=1).fit(embeddings[labels == c].cpu().numpy()) for c in range(num_classes)]
