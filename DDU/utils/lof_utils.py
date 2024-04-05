@@ -14,8 +14,8 @@ from metrics.ood_metrics import fpr_at_95_tpr
 import faiss
 import numpy as np
 import torch
-from gmm_utils import gmm_fit
-from kde_utils import kde_fit, KdeModel
+from utils.gmm_utils import gmm_fit
+from utils.kde_utils import kde_fit, KdeModel
 from sklearn import metrics
 from sklearn.neighbors import LocalOutlierFactor as LOF
 from tqdm import tqdm
@@ -184,24 +184,24 @@ def ldaf_evaluate(prob_model,
 
 
 # test
-if __name__ == '__main__':
-    device = "cuda:0"
-    train_embeddings = torch.load("train_embeddings.pth")
-    test_embeddings = torch.load("test_embeddings.pth")
-    ood_test_embeddings = torch.load("ood_test_embeddings.pth")
-    labels = torch.load("labels.pth")
-    gaussians_model, jitter_eps = gmm_fit(embeddings=train_embeddings, labels=labels, num_classes=10)
-    # kde_model = kde_fit(train_embeddings, labels, 10)
-    #k_neighbors:100,sigma:0.1,auroc:0.1913,auprc:0.5535
-    # k_neighbors:100,sigma:0.1,auroc2:0.8755,auprc2:0.8710
+# if __name__ == '__main__':
+#     device = "cuda:0"
+#     train_embeddings = torch.load("train_embeddings.pth")
+#     test_embeddings = torch.load("test_embeddings.pth")
+#     ood_test_embeddings = torch.load("ood_test_embeddings.pth")
+#     labels = torch.load("labels.pth")
+#     gaussians_model, jitter_eps = gmm_fit(embeddings=train_embeddings, labels=labels, num_classes=10)
+#     # kde_model = kde_fit(train_embeddings, labels, 10)
+#     #k_neighbors:100,sigma:0.1,auroc:0.1913,auprc:0.5535
+#     # k_neighbors:100,sigma:0.1,auroc2:0.8755,auprc2:0.8710
 
-    ldaf_evaluate(gaussians_model,
-                  train_embeddings,
-                  test_embeddings,
-                  ood_test_embeddings,
-                  device="cuda:0",
-                  faiss_gpu_id=1,
-                  sigma=0.1,
-                  k=100,
-                  cos=False,
-                  conf=True)
+#     ldaf_evaluate(gaussians_model,
+#                   train_embeddings,
+#                   test_embeddings,
+#                   ood_test_embeddings,
+#                   device="cuda:0",
+#                   faiss_gpu_id=1,
+#                   sigma=0.1,
+#                   k=100,
+#                   cos=False,
+#                   conf=True)

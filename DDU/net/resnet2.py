@@ -206,7 +206,10 @@ class ResNet(nn.Module):
                 block, 16, 256, num_blocks[2], stride=2)
             self.layer4 = self._make_layer(
                 block, 8, 512, num_blocks[3], stride=2)
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
+        self.fc_add = nn.Linear(512 * block.expansion, 512 * block.expansion)#添加一层线性层，为了dropout
+        self.drop = nn.Dropout()
+        self.fc = nn.Linear(512 * block.expansion,num_classes) 
+
         self.activation = mod_activation if self.mod else F.relu
         self.feature = None  # 这里抽出来倒数第二层feature，作为密度估计的高维特征
         self.embedding = None  # 对比loss的embedding
@@ -237,6 +240,9 @@ class ResNet(nn.Module):
         self.embedding = self.projection_head(out)  # 对比loss的embedding
 
         self.feature = out.clone().detach()  # 这里直接抽出来倒数第二层feature，作为embedding
+
+        out = self.fc_add(out)
+        out = self.drop(self.activation(out))
 
         out = self.fc(out) / self.temp
 

@@ -4,7 +4,7 @@ for i in {1..1}; do
        echo "训练第$i次"
        python train.py \
               --seed 1 \
-              --gpu 1 \
+              --gpu 0 \
               --run 3 \
               --data-aug \
               -b 256 \
