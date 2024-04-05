@@ -132,9 +132,11 @@ if __name__ == "__main__":
     time_str = datetime.datetime.strftime(curr_time, "%Y_%m_%d_%H_%M_%S")
     save_name = model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive)
     print("Model save name", save_name)
-    save_loc = f"{args.save_loc}/run{args.run}/{time_str}/"  # 保存模型路径
+   
     if args.ls:
-        save_loc = f"{args.save_loc}/run{args.run}/{time_str}_labelsmooth/"
+        save_loc = f"{args.save_loc}/run{args.run}/{save_name}/{time_str}_labelsmooth/"
+    else:
+        save_loc = f"{args.save_loc}/run{args.run}/{save_name}/{time_str}/"  # 保存模型路径
     if not os.path.exists(save_loc):
         os.makedirs(save_loc)
     log_loc = f"{args.log_loc}/run{args.run}/{save_name}/{time_str}"

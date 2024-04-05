@@ -15,18 +15,8 @@ from utils.simclr_utils import ContrastiveLearningViewTransform, get_simclr_pipe
 from utils.loss import LabelSmoothing
 from torchvision.transforms import transforms
 
-import torch
-import torch.nn.functional as F
 
-
-def train_single_epoch(epoch,
-                       model,
-                       train_loader,
-                       optimizer,
-                       device,
-                       contrastive,
-                       label_smooth=False,
-                       loss_mean=False):
+def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastive, label_smooth=False, loss_mean=False):
     """
     Util method for training a model for a single epoch.
     """
@@ -39,20 +29,23 @@ def train_single_epoch(epoch,
         activation = {}
 
         def get_activation1(name):
+
             def hook(model, input, output):
                 activation[name] = input[0]
+
             return hook
-        
+
         def get_activation2(name):
+
             def hook(model, input, output):
                 activation[name] = output
+
             return hook
 
         if contrastive == 1:
             model.fc.register_forward_hook(get_activation1('embedding'))
-        elif contrastive ==2:
-            model.projection_head.out.register_forward_hook(
-                get_activation2('embedding'))
+        elif contrastive == 2:
+            model.projection_head.out.register_forward_hook(get_activation2('embedding'))
 
     if label_smooth:  #使用label smoothing，使特征空间更紧密
         loss_func = LabelSmoothing()
@@ -60,12 +53,12 @@ def train_single_epoch(epoch,
         loss_func = nn.CrossEntropyLoss()
 
     for batch_idx, (x, y) in enumerate(tqdm(train_loader)):
-        if (type(x) == list):  #生成的多个视角的增强图片
+        if (isinstance(x,list)):  #生成的多个视角的增强图片
             data = torch.cat(x, dim=0)
             labels = torch.cat([y, y], dim=0)
         else:
             data = x
-            labels = y 
+            labels = y
         data = data.to(device)
         labels = labels.to(device)
         batch_size = data.shape[0]
@@ -77,13 +70,10 @@ def train_single_epoch(epoch,
             """
             embeddings = activation['embedding']
             loss1 = loss_func(logits, labels)
-            loss2 = supervisedContrastiveLoss(embeddings,
-                                              labels,
-                                              device,
-                                              temperature=0.5)
+            loss2 = supervisedContrastiveLoss(embeddings, labels, device, temperature=0.5)
             # if(epoch):第一阶段,只训练对比loss
-            loss = loss1 - 0.01 * loss2  #这个好一些？？
-            # loss = loss1 + 0.01 * loss2
+            loss = loss1 - 0.01 * loss2  #这个好一些？？让同一类尽量分散
+            # loss = loss1 + 0.01 * loss2 #让同一类尽量拥挤
             acc1, _ = accuracy(logits, labels, (1, 5))
             acc += acc1.item() * len(data)
         elif contrastive == 2:
@@ -91,8 +81,7 @@ def train_single_epoch(epoch,
             样本间对比loss
             """
             embeddings = activation['embedding']
-            logits2, labels2 = info_nce_loss(embeddings, batch_size / 2,
-                                             device)  #这里/2
+            logits2, labels2 = info_nce_loss(embeddings, batch_size / 2, device)  #这里/2
             loss2 = F.cross_entropy(logits2, labels2)
             if (epoch < 300):  #第一阶段，只训练对比loss
                 loss = loss2
@@ -109,17 +98,12 @@ def train_single_epoch(epoch,
             acc1, _ = accuracy(logits, labels, (1, 5))
             acc += acc1.item() * len(data)
 
-
         loss.backward()
         train_loss += loss.item()
         optimizer.step()
         num_samples += len(data)
 
-
-
-    tqdm.write(
-        "====> Epoch: {}  Average loss: {:.4f}\t Average Acc:{:.4f}".format(
-            epoch, train_loss / num_samples, acc / num_samples))
+    tqdm.write("====> Epoch: {}  Average loss: {:.4f}\t Average Acc:{:.4f}".format(epoch, train_loss / num_samples, acc / num_samples))
     return train_loss / num_samples, acc / num_samples
 
 
@@ -142,8 +126,7 @@ def test_single_epoch(epoch, model, test_val_loader, device):
             acc += acc1.item() * len(data)
             num_samples += len(data)
 
-    print("====>  Epoch: {}  Test set ,accu:{:.4f}".format(
-        epoch, acc / num_samples))
+    print("====>  Epoch: {}  Test set ,accu:{:.4f}".format(epoch, acc / num_samples))
     return acc / num_samples
 
 
@@ -159,8 +142,7 @@ def model_save_name(model_name, sn, mod, coeff, seed, contrastive):
         else:
             strn = "_"
     if contrastive:
-        return str(model_name) + strn + "seed_" + str(
-            seed) + f"_contrastive{contrastive}"
+        return str(model_name) + strn + "seed_" + str(seed) + f"_contrastive{contrastive}"
     else:
         return str(model_name) + strn + "seed_" + str(seed)
 
@@ -168,6 +150,5 @@ def model_save_name(model_name, sn, mod, coeff, seed, contrastive):
 def save_config_file(model_checkpoints_folder, args):
     if not os.path.exists(model_checkpoints_folder):
         os.makedirs(model_checkpoints_folder)
-    with open(os.path.join(model_checkpoints_folder, 'config.yml'),
-              'w') as outfile:
+    with open(os.path.join(model_checkpoints_folder, 'config.yml'), 'w') as outfile:
         yaml.dump(args, outfile, default_flow_style=False)

@@ -117,12 +117,12 @@ if __name__ == "__main__":
     m2_auprcs = []
 
     topt = None
-    model_name = model_load_name(args.model, args.sn, args.mod, args.coeff,
-                                 args.seed, args.contrastive) + "_best.model"
-    model_files = glob.glob(f"{args.load_loc}/run{args.run}/*/{model_name}")
+    save_name = model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive)
+    model_name = model_load_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive) + "_best.model"
+    model_files = glob.glob(f"{args.load_loc}/run{args.run}/{save_name}/*/{model_name}")
 
     for saved_model_name in model_files:
-        saved_model_name =  "./saved_models/run2/2024_03_14_18_02_26/resnet50_sn_3.0_mod_seed_1_best.model"        
+        # saved_model_name = "./saved_models/run2/2024_03_14_18_02_26/resnet50_sn_3.0_mod_seed_1_best.model"       
         print(f"Run {args.run}, Evaluating: {saved_model_name}")
         #load dataset
         train_loader, _ = dataset_loader[args.dataset].get_train_valid_loader(
