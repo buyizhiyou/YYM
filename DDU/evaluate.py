@@ -23,17 +23,15 @@ from net.wide_resnet import wrn
 from net.vgg import vgg16
 
 # Import metrics to compute
-from metrics.classification_metrics import (test_classification_net,
-                                            test_classification_net_logits,
-                                            test_classification_net_ensemble)
+from metrics.classification_metrics import (test_classification_net, test_classification_net_logits, test_classification_net_ensemble)
 from metrics.calibration_metrics import expected_calibration_error
 from metrics.uncertainty_confidence import entropy, logsumexp, confidence, sumexp
 from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ensemble
 
 # Import GMM utils
-from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate
+from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate, gmm_evaluate_with_perturbation
 from utils.kde_utils import kde_evaluate, kde_fit
-from utils.lof_utils import lof_evaluate,ldaf_evaluate
+from utils.lof_utils import lof_evaluate, ldaf_evaluate
 from utils.ensemble_utils import load_ensemble, ensemble_forward_pass
 from utils.eval_utils import model_load_name
 from utils.train_utils import model_save_name
@@ -43,19 +41,9 @@ from utils.args import eval_args
 from utils.temperature_scaling import ModelWithTemperature
 
 # Dataset params
-dataset_num_classes = {
-    "cifar10": 10,
-    "cifar100": 100,
-    "svhn": 10,
-    "tiny_iamgenet": 200
-}
+dataset_num_classes = {"cifar10": 10, "cifar100": 100, "svhn": 10, "tiny_iamgenet": 200}
 
-dataset_loader = {
-    "cifar10": cifar10,
-    "cifar100": cifar100,
-    "svhn": svhn,
-    "tiny_imagenet": tiny_imagenet
-}
+dataset_loader = {"cifar10": cifar10, "cifar100": cifar100, "svhn": svhn, "tiny_imagenet": tiny_imagenet}
 
 # Mapping model name to model function
 models = {
@@ -69,14 +57,7 @@ models = {
     "vgg16": vgg16,
 }
 
-model_to_num_dim = {
-    "resnet18": 512,
-    "resnet50": 2048,
-    "resnet101": 2048,
-    "resnet152": 2048,
-    "wide_resnet": 640,
-    "vgg16": 512
-}
+model_to_num_dim = {"resnet18": 512, "resnet50": 2048, "resnet101": 2048, "resnet152": 2048, "wide_resnet": 640, "vgg16": 512}
 
 torch.backends.cudnn.enabled = False
 
@@ -95,14 +76,8 @@ if __name__ == "__main__":
 
     # Taking input for the dataset
     num_classes = dataset_num_classes[args.dataset]
-    test_loader = dataset_loader[args.dataset].get_test_loader(
-        root=args.dataset_root,
-        batch_size=args.batch_size,
-        pin_memory=args.gpu)
-    ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(
-        root=args.dataset_root,
-        batch_size=args.batch_size,
-        pin_memory=args.gpu)
+    test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=args.batch_size, pin_memory=args.gpu)
+    ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root, batch_size=args.batch_size, pin_memory=args.gpu)
 
     # Evaluating the models
     accuracies = []
@@ -122,7 +97,7 @@ if __name__ == "__main__":
     model_files = glob.glob(f"{args.load_loc}/run{args.run}/{save_name}/*/{model_name}")
 
     for saved_model_name in model_files:
-        # saved_model_name = "./saved_models/run2/2024_03_14_18_02_26/resnet50_sn_3.0_mod_seed_1_best.model"       
+        # saved_model_name = "./saved_models/run2/2024_03_14_18_02_26/resnet50_sn_3.0_mod_seed_1_best.model"
         print(f"Run {args.run}, Evaluating: {saved_model_name}")
         #load dataset
         train_loader, _ = dataset_loader[args.dataset].get_train_valid_loader(
@@ -156,10 +131,7 @@ if __name__ == "__main__":
             predictions,
             confidences,
         ) = test_classification_net(net, test_loader, device)
-        ece = expected_calibration_error(confidences,
-                                         predictions,
-                                         labels_list,
-                                         num_bins=15)
+        ece = expected_calibration_error(confidences, predictions, labels_list, num_bins=15)
 
         if (args.model_type == "gmm"):
             # Evaluate a GMM model
@@ -173,33 +145,50 @@ if __name__ == "__main__":
                 storage_device=device,
             )
 
-            test_embeddings, test_labels = get_embeddings(
-                net,
-                test_loader,
-                num_dim=model_to_num_dim[args.model],
-                dtype=torch.double,
-                device=device,
-                storage_device=device,
-            )
+            # test_embeddings, test_labels = get_embeddings(
+            #     net,
+            #     test_loader,
+            #     num_dim=model_to_num_dim[args.model],
+            #     dtype=torch.double,
+            #     device=device,
+            #     storage_device=device,
+            # )
 
-            ood_test_embeddings, ood_labels = get_embeddings(
-                net,
-                ood_test_loader,
-                num_dim=model_to_num_dim[args.model],
-                dtype=torch.double,
-                device=device,
-                storage_device=device,
-            )
+            # ood_test_embeddings, ood_labels = get_embeddings(
+            #     net,
+            #     ood_test_loader,
+            #     num_dim=model_to_num_dim[args.model],
+            #     dtype=torch.double,
+            #     device=device,
+            #     storage_device=device,
+            # )
 
             # lof_evaluate(embeddings.cpu().detach().numpy(),
             #              test_embeddings.cpu().detach().numpy(),
             #              ood_test_embeddings.cpu().detach().numpy())
 
             try:
-                gaussians_model, jitter_eps = gmm_fit(embeddings=embeddings,
-                                                      labels=labels,
-                                                      num_classes=num_classes)
-                
+                gaussians_model, jitter_eps = gmm_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
+
+                logits2, labels2 = gmm_evaluate_with_perturbation(
+                    net,
+                    gaussians_model,
+                    test_loader,
+                    device=device,
+                    num_classes=num_classes,
+                    storage_device=device,
+                )
+
+                ood_logits2, ood_labels2 = gmm_evaluate_with_perturbation(
+                    net,
+                    gaussians_model,
+                    ood_test_loader,
+                    device=device,
+                    num_classes=num_classes,
+                    storage_device=device,
+                )
+
+
                 logits, labels = gmm_evaluate(
                     net,
                     gaussians_model,
@@ -218,6 +207,9 @@ if __name__ == "__main__":
                     storage_device=device,
                 )
 
+
+
+
                 # logits2, labels2 = maxp_evaluate(
                 #     net,
                 #     test_loader,
@@ -234,17 +226,11 @@ if __name__ == "__main__":
                 #     storage_device=device,
                 # )
 
-                _, _, m1_auroc, m1_auprc = get_roc_auc_logits(logits,
-                                                              ood_logits,
-                                                              logsumexp,
-                                                              device,
-                                                              conf=True)
+                _, _, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, conf=True)
 
-                m2_auroc,m2_auprc = ldaf_evaluate(gaussians_model,embeddings,test_embeddings,ood_test_embeddings)
+                # m2_auroc,m2_auprc = ldaf_evaluate(gaussians_model,embeddings,test_embeddings,ood_test_embeddings)
 
-
-                # _, _, m2_auroc, m2_auprc = get_roc_auc_logits(
-                #     logits2, ood_logits2, confidence, device)  #最大概率
+                _, _, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device,conf=True)  #最大概率
 
             except RuntimeError as e:
                 print("Runtime Error caught: " + str(e))
@@ -262,9 +248,7 @@ if __name__ == "__main__":
             )
 
             try:
-                kde_model = kde_fit(embeddings=embeddings,
-                                    labels=labels,
-                                    num_classes=num_classes)
+                kde_model = kde_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
                 logits, labels = kde_evaluate(
                     net,
                     kde_model,
@@ -283,15 +267,8 @@ if __name__ == "__main__":
                     storage_device=device,
                 )
 
-                (_, _, _), (_, _, _), m1_auroc, m1_auprc = get_roc_auc_logits(
-                    logits, ood_logits, logsumexp, device, confidence=True)
-                (_, _,
-                 _), (_, _,
-                      _), m2_auroc, m2_auprc = get_roc_auc_logits(logits,
-                                                                  ood_logits,
-                                                                  entropy,
-                                                                  device,
-                                                                  conf=True)
+                (_, _, _), (_, _, _), m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, confidence=True)
+                (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc_logits(logits, ood_logits, entropy, device, conf=True)
 
             except RuntimeError as e:
                 print("Runtime Error caught: " + str(e))
@@ -323,17 +300,12 @@ if __name__ == "__main__":
     mean_m2_auroc = torch.mean(m2_auroc_tensor)
     mean_m2_auprc = torch.mean(m2_auprc_tensor)
 
-    std_accuracy = torch.std(accuracy_tensor) / math.sqrt(
-        accuracy_tensor.shape[0])
+    std_accuracy = torch.std(accuracy_tensor) / math.sqrt(accuracy_tensor.shape[0])
     std_ece = torch.std(ece_tensor) / math.sqrt(ece_tensor.shape[0])
-    std_m1_auroc = torch.std(m1_auroc_tensor) / math.sqrt(
-        m1_auroc_tensor.shape[0])
-    std_m1_auprc = torch.std(m1_auprc_tensor) / math.sqrt(
-        m1_auprc_tensor.shape[0])
-    std_m2_auroc = torch.std(m2_auroc_tensor) / math.sqrt(
-        m2_auroc_tensor.shape[0])
-    std_m2_auprc = torch.std(m2_auprc_tensor) / math.sqrt(
-        m2_auprc_tensor.shape[0])
+    std_m1_auroc = torch.std(m1_auroc_tensor) / math.sqrt(m1_auroc_tensor.shape[0])
+    std_m1_auprc = torch.std(m1_auprc_tensor) / math.sqrt(m1_auprc_tensor.shape[0])
+    std_m2_auroc = torch.std(m2_auroc_tensor) / math.sqrt(m2_auroc_tensor.shape[0])
+    std_m2_auprc = torch.std(m2_auprc_tensor) / math.sqrt(m2_auprc_tensor.shape[0])
 
     res_dict = {}
     res_dict["mean"] = {}

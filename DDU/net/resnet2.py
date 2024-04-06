@@ -237,13 +237,13 @@ class ResNet(nn.Module):
         out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
 
+        # self.feature = out.clone().detach()  # 这里直接抽出来倒数第二层feature，作为embedding
+        self.feature = out
+
         self.embedding = self.projection_head(out)  # 对比loss的embedding
-
-        self.feature = out.clone().detach()  # 这里直接抽出来倒数第二层feature，作为embedding
-
+        
         out = self.fc_add(out)
         out = self.drop(self.activation(out))
-
         out = self.fc(out) / self.temp
 
         return out

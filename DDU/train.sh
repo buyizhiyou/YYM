@@ -1,6 +1,6 @@
 #! /bin/bash
 
-for i in {1..1}; do
+for i in {1..15}; do
        echo "训练第$i次"
        python train.py \
               --seed 1 \
