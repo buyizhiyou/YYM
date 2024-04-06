@@ -6,7 +6,7 @@ python evaluate.py \
        --gpu 0 \
        --run 5 \
        --dataset cifar10 \
-       --ood_dataset svhn \
+       --ood_dataset lsun \
        --load-path ./saved_models \
        --model resnet50 \
        --model-type gmm \

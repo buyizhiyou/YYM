@@ -10,7 +10,7 @@ from utils.ensemble_utils import ensemble_forward_pass
 from metrics.classification_metrics import get_logits_labels
 from metrics.uncertainty_confidence import entropy, logsumexp,confidence
 from sklearn.metrics import auc, precision_recall_curve, roc_curve
-from matplotlib import pyplot as plt 
+from matplotlib import pyplot as plt
 
 def plot_roc(preds, labels, title="Receiver operating characteristic"):
     """Plot an ROC curve based on unthresholded predictions and true binary labels.
@@ -159,11 +159,11 @@ def get_roc_auc_logits(logits, ood_logits, uncertainty, device, conf=False):
     precision, recall, prc_thresholds = metrics.precision_recall_curve(bin_labels, scores)
     auroc = metrics.roc_auc_score(bin_labels, scores)
     auprc = metrics.average_precision_score(bin_labels, scores)
-
+    fpr95 = fpr_at_95_tpr(scores, bin_labels)
     # auroc2 = metrics.auc(fpr, tpr)  # the value of roc_auc1
     # aupr2 = metrics.auc(recall, precision)  # the value of roc_auc1
 
-    return (fpr, tpr, thresholds), (precision, recall, prc_thresholds), auroc, auprc
+    return fpr95, auroc, auprc
 
 
 def get_roc_auc_ensemble(model_ensemble, test_loader, ood_test_loader, uncertainty, device):
@@ -213,5 +213,7 @@ def get_roc_auc_ensemble(model_ensemble, test_loader, ood_test_loader, uncertain
     )
     auroc = metrics.roc_auc_score(bin_labels_uncertainties.cpu().numpy(), uncertainties.cpu().numpy())
     auprc = metrics.average_precision_score(bin_labels_uncertainties.cpu().numpy(), uncertainties.cpu().numpy())
+
+
 
     return (fpr, tpr, roc_thresholds), (precision, recall, prc_thresholds), auroc, auprc

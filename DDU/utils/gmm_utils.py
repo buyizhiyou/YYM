@@ -58,16 +58,16 @@ def get_embeddings(
 
 def gmm_forward(net, gaussians_model, data_B_X):
 
-    if net.drop.training:
-        feature_B_Z_list = []
-        for i in range(10):#mc dropout
-            _ = net(data_B_X)
-            feature = net.feature.cpu().detach()
-            feature_B_Z_list.append(feature)
-        features_B_Z = torch.mean(torch.stack(feature_B_Z_list), axis=0).to(data_B_X.device)
-    else:
-        _ = net(data_B_X)
-        features_B_Z = net.feature
+    # if net.drop.training:
+    #     feature_B_Z_list = []
+    #     for i in range(10):#mc dropout
+    #         _ = net(data_B_X)
+    #         feature = net.feature.cpu().detach()
+    #         feature_B_Z_list.append(feature)
+    #     features_B_Z = torch.mean(torch.stack(feature_B_Z_list), axis=0).to(data_B_X.device)
+    # else:
+    _ = net(data_B_X)
+    features_B_Z = net.feature
 
     log_probs_B_Y = gaussians_model.log_prob(features_B_Z[:, None, :])  # torch.Size([128, 10]),每个类别一个多元高斯模型
     # 对数概率密度，作为logits

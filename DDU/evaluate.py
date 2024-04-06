@@ -12,6 +12,7 @@ import torch.backends.cudnn as cudnn
 # Import dataloaders
 import data_utils.ood_detection.cifar10 as cifar10
 import data_utils.ood_detection.cifar100 as cifar100
+import data_utils.ood_detection.lsun as lsun 
 import data_utils.ood_detection.svhn as svhn
 import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
 
@@ -43,7 +44,7 @@ from utils.temperature_scaling import ModelWithTemperature
 # Dataset params
 dataset_num_classes = {"cifar10": 10, "cifar100": 100, "svhn": 10, "tiny_iamgenet": 200}
 
-dataset_loader = {"cifar10": cifar10, "cifar100": cifar100, "svhn": svhn, "tiny_imagenet": tiny_imagenet}
+dataset_loader = {"cifar10": cifar10, "cifar100": cifar100, "svhn": svhn,"lsun":lsun, "tiny_imagenet": tiny_imagenet}
 
 # Mapping model name to model function
 models = {
@@ -100,12 +101,12 @@ if __name__ == "__main__":
         # saved_model_name = "./saved_models/run2/2024_03_14_18_02_26/resnet50_sn_3.0_mod_seed_1_best.model"
         print(f"Run {args.run}, Evaluating: {saved_model_name}")
         #load dataset
-        train_loader, _ = dataset_loader[args.dataset].get_train_valid_loader(
+        train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(
             root=args.dataset_root,
             batch_size=args.batch_size,
             augment=args.data_aug,
             val_seed=(args.seed),
-            val_size=0.0,
+            val_size=0.1,
             pin_memory=args.gpu,
         )
 
@@ -122,16 +123,7 @@ if __name__ == "__main__":
             net.to(device)
             cudnn.benchmark = True
         net.load_state_dict(torch.load(str(saved_model_name)), strict=False)
-
         net.eval()
-        if args.mcdropout:
-            print("打开 dropout")
-            for module in net.children():
-                if isinstance(module,torch.nn.Dropout):
-                    module.train(True)
-   
-
-
         (
             conf_matrix,
             accuracy,
@@ -141,7 +133,19 @@ if __name__ == "__main__":
         ) = test_classification_net(net, test_loader, device)
         ece = expected_calibration_error(confidences, predictions, labels_list, num_bins=15)
 
+        #校准
+        temp_net = ModelWithTemperature(net, device)
+        temp_net.set_temperature(val_loader)
+        topt = temp_net.temperature
+        print(f"best temperature:{topt}")
+
         if (args.model_type == "gmm"):
+            if args.mcdropout:
+                print("打开 dropout")
+                for module in net.children():
+                    if isinstance(module, torch.nn.Dropout):
+                        module.train(True)
+
             # Evaluate a GMM model
             print("GMM Model")
             embeddings, labels = get_embeddings(
@@ -153,30 +157,27 @@ if __name__ == "__main__":
                 storage_device=device,
             )
 
-            # test_embeddings, test_labels = get_embeddings(
-            #     net,
-            #     test_loader,
-            #     num_dim=model_to_num_dim[args.model],
-            #     dtype=torch.double,
-            #     device=device,
-            #     storage_device=device,
-            # )
-
-            # ood_test_embeddings, ood_labels = get_embeddings(
-            #     net,
-            #     ood_test_loader,
-            #     num_dim=model_to_num_dim[args.model],
-            #     dtype=torch.double,
-            #     device=device,
-            #     storage_device=device,
-            # )
-
-            # lof_evaluate(embeddings.cpu().detach().numpy(),
-            #              test_embeddings.cpu().detach().numpy(),
-            #              ood_test_embeddings.cpu().detach().numpy())
-
             try:
                 gaussians_model, jitter_eps = gmm_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
+
+                for i in range(1):
+                    logits, labels = gmm_evaluate(
+                        net,
+                        gaussians_model,
+                        test_loader,
+                        device=device,
+                        num_classes=num_classes,
+                        storage_device=device,
+                    )
+
+                    ood_logits, ood_labels = gmm_evaluate(
+                        net,
+                        gaussians_model,
+                        ood_test_loader,
+                        device=device,
+                        num_classes=num_classes,
+                        storage_device=device,
+                    )
 
                 logits2, labels2 = gmm_evaluate_with_perturbation(
                     net,
@@ -196,50 +197,27 @@ if __name__ == "__main__":
                     storage_device=device,
                 )
 
-
-                logits, labels = gmm_evaluate(
-                    net,
-                    gaussians_model,
+                logits3, labels3 = maxp_evaluate(
+                    temp_net,
                     test_loader,
                     device=device,
                     num_classes=num_classes,
                     storage_device=device,
                 )
 
-                ood_logits, ood_labels = gmm_evaluate(
-                    net,
-                    gaussians_model,
+                ood_logits3, ood_labels3 = maxp_evaluate(
+                    temp_net,
                     ood_test_loader,
                     device=device,
                     num_classes=num_classes,
                     storage_device=device,
                 )
 
+                m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, conf=True)
 
+                m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device, conf=True)
 
-
-                # logits2, labels2 = maxp_evaluate(
-                #     net,
-                #     test_loader,
-                #     device=device,
-                #     num_classes=num_classes,
-                #     storage_device=device,
-                # )
-
-                # ood_logits2, ood_labels2 = maxp_evaluate(
-                #     net,
-                #     ood_test_loader,
-                #     device=device,
-                #     num_classes=num_classes,
-                #     storage_device=device,
-                # )
-
-                _, _, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, conf=True)
-
-                # m2_auroc,m2_auprc = ldaf_evaluate(gaussians_model,embeddings,test_embeddings,ood_test_embeddings)
-
-                _, _, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device,conf=True)  #最大概率
-
+                m3_fpr95, m3_auroc, m3_auprc = get_roc_auc_logits(logits2, ood_logits2, confidence, device)
             except RuntimeError as e:
                 print("Runtime Error caught: " + str(e))
                 continue
@@ -291,7 +269,7 @@ if __name__ == "__main__":
         m2_auprcs.append(round(m2_auprc, 4))
 
         print(
-            f"{saved_model_name} accu:{accuracy:.4f},ece:{ece:.6f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"
+            f"{saved_model_name} accu:{accuracy:.4f},ece:{ece:.6f},m1_fpr95:{m1_fpr95:.4f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_fpr95:{m2_fpr95:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f},m3_fpr95:{m3_fpr95:.4f} m3_auroc:{m3_auroc:.4f},m3_auprc:{m3_auprc:.4f}"
         )
 
     accuracy_tensor = torch.tensor(accuracies)
@@ -342,7 +320,6 @@ if __name__ == "__main__":
 
     res_dict["info"] = vars(args)
     res_dict["files"] = model_files
-
 
     if args.mcdropout:
         saved_name = "res_" + model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed,args.contrastive) + "_mcdropout_" \

@@ -115,7 +115,7 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
 
     data_dir = kwargs['root']
     dataset = datasets.LSUN(
-        root=data_dir,
+        root=os.path.join(data_dir,"lsun"),
         classes="test",
         transform=transform,
     )
