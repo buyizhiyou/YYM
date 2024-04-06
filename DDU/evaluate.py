@@ -213,7 +213,7 @@ if __name__ == "__main__":
                 m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device, conf=True)
                 m3_fpr95, m3_auroc, m3_auprc = get_roc_auc_logits(logits2, ood_logits2, confidence, device, conf=True)
                 print(
-                    f"{saved_model_name} accu:{accuracy:.4f},ece:{ece:.6f},m1_fpr95:{m1_fpr95:.4f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_fpr95:{m2_fpr95:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f},m3_fpr95:{m3_fpr95:.4f} m3_auroc:{m3_auroc:.4f},m3_auprc:{m3_auprc:.4f}"
+                    f"accu:{accuracy:.4f},ece:{ece:.6f},m1_fpr95:{m1_fpr95:.4f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_fpr95:{m2_fpr95:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f},m3_fpr95:{m3_fpr95:.4f} m3_auroc:{m3_auroc:.4f},m3_auprc:{m3_auprc:.4f}"
                 )
             except RuntimeError as e:
                 print("Runtime Error caught: " + str(e))

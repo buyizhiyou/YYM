@@ -84,7 +84,7 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     transform = transforms.Compose([transforms.ToTensor(), normalize,])
 
     data_dir = kwargs['root']
-    dataset = datasets.SVHN(root=data_dir, split="test", download=True, transform=transform,)
+    dataset = datasets.SVHN(root=os.path.join(data_dir,"svhn"), split="test", download=True, transform=transform,)
 
     data_loader = torch.utils.data.DataLoader(
         dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=pin_memory,

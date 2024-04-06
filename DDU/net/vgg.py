@@ -40,6 +40,19 @@ inp_size_mnist = {
     "VGG19": [28, 28, 28, 28, 14, 14, 14, 14, 14, 7, 7, 7, 7, 7, 3, 3, 3, 3, 3, 1],
 }
 
+class ProjectionHead(nn.Module):
+
+    def __init__(self, emb_size, head_size=512):
+        super(ProjectionHead, self).__init__()
+        self.hidden = nn.Linear(emb_size, emb_size)
+        self.out = nn.Linear(emb_size, head_size)
+
+    def forward(self, h: torch.Tensor) -> torch.Tensor:
+        h = self.hidden(h)
+        h = F.relu(h)
+        h = self.out(h)
+        return h
+
 
 class VGG(nn.Module):
     def __init__(
@@ -91,12 +104,17 @@ class VGG(nn.Module):
             self.features = self._make_layers(cfg_cifar[vgg_name])
 
         self.classifier = nn.Linear(512, num_classes)
+
+        self.projection_head = ProjectionHead(512, 256)
         self.feature = None
 
     def forward(self, x):
         out = self.features(x)
         out = out.view(out.size(0), -1)
-        self.feature = out.clone().detach()
+
+        self.embedding = self.projection_head(out)  # 对比loss的embedding
+        self.feature = out
+
         out = self.classifier(out) / self.temp
         return out
 
