@@ -12,7 +12,7 @@ import torch.backends.cudnn as cudnn
 # Import dataloaders
 import data_utils.ood_detection.cifar10 as cifar10
 import data_utils.ood_detection.cifar100 as cifar100
-import data_utils.ood_detection.lsun as lsun 
+import data_utils.ood_detection.lsun as lsun
 import data_utils.ood_detection.svhn as svhn
 import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
 
@@ -44,7 +44,7 @@ from utils.temperature_scaling import ModelWithTemperature
 # Dataset params
 dataset_num_classes = {"cifar10": 10, "cifar100": 100, "svhn": 10, "tiny_iamgenet": 200}
 
-dataset_loader = {"cifar10": cifar10, "cifar100": cifar100, "svhn": svhn,"lsun":lsun, "tiny_imagenet": tiny_imagenet}
+dataset_loader = {"cifar10": cifar10, "cifar100": cifar100, "svhn": svhn, "lsun": lsun, "tiny_imagenet": tiny_imagenet}
 
 # Mapping model name to model function
 models = {
@@ -97,7 +97,7 @@ if __name__ == "__main__":
     model_name = model_load_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive) + "_best.model"
     model_files = glob.glob(f"{args.load_loc}/run{args.run}/{save_name}/*/{model_name}")
 
-    for saved_model_name in model_files[:1]:
+    for saved_model_name in model_files:
         # saved_model_name = "./saved_models/run2/2024_03_14_18_02_26/resnet50_sn_3.0_mod_seed_1_best.model"
         print(f"Run {args.run}, Evaluating: {saved_model_name}")
         #load dataset
@@ -160,24 +160,22 @@ if __name__ == "__main__":
             try:
                 gaussians_model, jitter_eps = gmm_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
 
-                for i in range(1):
-                    logits, labels = gmm_evaluate(
-                        net,
-                        gaussians_model,
-                        test_loader,
-                        device=device,
-                        num_classes=num_classes,
-                        storage_device=device,
-                    )
-
-                    ood_logits, ood_labels = gmm_evaluate(
-                        net,
-                        gaussians_model,
-                        ood_test_loader,
-                        device=device,
-                        num_classes=num_classes,
-                        storage_device=device,
-                    )
+                logits, labels = gmm_evaluate(
+                    net,
+                    gaussians_model,
+                    test_loader,
+                    device=device,
+                    num_classes=num_classes,
+                    storage_device=device,
+                )
+                ood_logits, ood_labels = gmm_evaluate(
+                    net,
+                    gaussians_model,
+                    ood_test_loader,
+                    device=device,
+                    num_classes=num_classes,
+                    storage_device=device,
+                )
 
                 logits2, labels2 = gmm_evaluate_with_perturbation(
                     net,
@@ -187,7 +185,6 @@ if __name__ == "__main__":
                     num_classes=num_classes,
                     storage_device=device,
                 )
-
                 ood_logits2, ood_labels2 = gmm_evaluate_with_perturbation(
                     net,
                     gaussians_model,
@@ -204,7 +201,6 @@ if __name__ == "__main__":
                     num_classes=num_classes,
                     storage_device=device,
                 )
-
                 ood_logits3, ood_labels3 = maxp_evaluate(
                     temp_net,
                     ood_test_loader,
@@ -214,10 +210,11 @@ if __name__ == "__main__":
                 )
 
                 m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, conf=True)
-
                 m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device, conf=True)
-
-                m3_fpr95, m3_auroc, m3_auprc = get_roc_auc_logits(logits2, ood_logits2, confidence, device)
+                m3_fpr95, m3_auroc, m3_auprc = get_roc_auc_logits(logits2, ood_logits2, confidence, device, conf=True)
+                print(
+                    f"{saved_model_name} accu:{accuracy:.4f},ece:{ece:.6f},m1_fpr95:{m1_fpr95:.4f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_fpr95:{m2_fpr95:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f},m3_fpr95:{m3_fpr95:.4f} m3_auroc:{m3_auroc:.4f},m3_auprc:{m3_auprc:.4f}"
+                )
             except RuntimeError as e:
                 print("Runtime Error caught: " + str(e))
                 continue
@@ -267,10 +264,6 @@ if __name__ == "__main__":
         m1_auprcs.append(round(m1_auprc, 4))
         m2_aurocs.append(round(m2_auroc, 4))
         m2_auprcs.append(round(m2_auprc, 4))
-
-        print(
-            f"{saved_model_name} accu:{accuracy:.4f},ece:{ece:.6f},m1_fpr95:{m1_fpr95:.4f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_fpr95:{m2_fpr95:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f},m3_fpr95:{m3_fpr95:.4f} m3_auroc:{m3_auroc:.4f},m3_auprc:{m3_auprc:.4f}"
-        )
 
     accuracy_tensor = torch.tensor(accuracies)
     ece_tensor = torch.tensor(eces)

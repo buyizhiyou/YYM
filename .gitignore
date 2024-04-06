@@ -12,4 +12,5 @@ DDU/data
 DDU/logs
 DDU/results
 DDU/utils/*.pth
+DDU/_cache_datalsuntestlmdb
 .vscode/

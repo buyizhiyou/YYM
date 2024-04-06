@@ -41,12 +41,8 @@ def get_embeddings(
             data = data.to(device)
             label = label.to(device)
 
-            if isinstance(net, nn.DataParallel):
-                out = net.module(data)
-                out = net.module.feature
-            else:
-                out = net(data)
-                out = net.feature
+            out = net(data)
+            out = net.feature
 
             end = start + len(data)
             embeddings[start:end].copy_(out, non_blocking=True)
