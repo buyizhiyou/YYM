@@ -96,7 +96,7 @@ if __name__ == "__main__":
     model_name = model_load_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive) + "_best.model"
     model_files = glob.glob(f"{args.load_loc}/run{args.run}/{save_name}/*/{model_name}")
 
-    for saved_model_name in model_files:
+    for saved_model_name in model_files[:1]:
         # saved_model_name = "./saved_models/run2/2024_03_14_18_02_26/resnet50_sn_3.0_mod_seed_1_best.model"
         print(f"Run {args.run}, Evaluating: {saved_model_name}")
         #load dataset
@@ -122,7 +122,15 @@ if __name__ == "__main__":
             net.to(device)
             cudnn.benchmark = True
         net.load_state_dict(torch.load(str(saved_model_name)), strict=False)
+
         net.eval()
+        if args.mcdropout:
+            print("打开 dropout")
+            for module in net.children():
+                if isinstance(module,torch.nn.Dropout):
+                    module.train(True)
+   
+
 
         (
             conf_matrix,
@@ -336,7 +344,11 @@ if __name__ == "__main__":
     res_dict["files"] = model_files
 
 
-    saved_name = "res_" + model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed,args.contrastive) + "_" \
+    if args.mcdropout:
+        saved_name = "res_" + model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed,args.contrastive) + "_mcdropout_" \
+                            +args.model_type + "_" + args.dataset + "_" + args.ood_dataset +".json"
+    else:
+        saved_name = "res_" + model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed,args.contrastive) + "_" \
                             +args.model_type + "_" + args.dataset + "_" + args.ood_dataset +".json"
     saved_dir = f"./results/run{args.run}/"
     if (not os.path.exists(saved_dir)):

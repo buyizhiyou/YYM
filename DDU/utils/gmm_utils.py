@@ -1,4 +1,4 @@
-import sys 
+import sys
 
 sys.path.append("../")
 
@@ -57,9 +57,14 @@ def get_embeddings(
 
 
 def gmm_forward(net, gaussians_model, data_B_X):
-    if isinstance(net, nn.DataParallel):
-        _ = net.module(data_B_X)  # torch.Size([128, 10]) 这一个不用
-        features_B_Z = net.module.feature  # torch.Size([128, 2048]) 用这一个，embedding
+
+    if net.drop.training:
+        feature_B_Z_list = []
+        for i in range(10):#mc dropout
+            _ = net(data_B_X)
+            feature = net.feature.cpu().detach()
+            feature_B_Z_list.append(feature)
+        features_B_Z = torch.mean(torch.stack(feature_B_Z_list), axis=0).to(data_B_X.device)
     else:
         _ = net(data_B_X)
         features_B_Z = net.feature
@@ -109,7 +114,7 @@ def gmm_evaluate_with_perturbation(
     device,
     num_classes,
     storage_device,
-    epsilon=0.01,
+    epsilon=0.001,
     mean=[0.4914, 0.4822, 0.4465],
     std=[0.2023, 0.1994, 0.2010],
 ):
@@ -159,7 +164,6 @@ def gmm_evaluate_with_perturbation(
         logits_N_C[start:end].copy_(logit_B_C.cpu().detach(), non_blocking=True)
         labels_N[start:end].copy_(label.cpu().detach(), non_blocking=True)
         start = end
-
 
     return logits_N_C.to(device), labels_N.to(device)
 
@@ -215,28 +219,29 @@ def gmm_fit(embeddings, labels, num_classes):
 
 
 # test
-if __name__ == '__main__':
-    device = "cuda:0"
-    train_embeddings = torch.load("train_embeddings.pth")
-    test_embeddings = torch.load("test_embeddings.pth")
-    ood_test_embeddings = torch.load("ood_test_embeddings.pth")
-    labels = torch.load("labels.pth")
-    gaussians_model, jitter_eps = gmm_fit(embeddings=train_embeddings, labels=labels, num_classes=10)
-    net = resnet50(
-        spectral_normalization=True,
-        mod=True,
-        coeff=3.0,
-        num_classes=10,
-        temp=1.0,
-    ).to(device)
-    net.eval()
-    test_loader = cifar10.get_test_loader(root="../data", batch_size=64, pin_memory=0)
+# if __name__ == '__main__':
+#     device = "cuda:0"
+#     train_embeddings = torch.load("train_embeddings.pth")
+#     test_embeddings = torch.load("test_embeddings.pth")
+#     ood_test_embeddings = torch.load("ood_test_embeddings.pth")
+#     labels = torch.load("labels.pth")
+#     gaussians_model, jitter_eps = gmm_fit(embeddings=train_embeddings, labels=labels, num_classes=10)
+#     net = resnet50(
+#         spectral_normalization=True,
+#         mod=True,
+#         coeff=3.0,
+#         num_classes=10,
+#         temp=1.0,
+#     ).to(device)
+#     net.eval()
+#     net.drop.training = True
+#     test_loader = cifar10.get_test_loader(root="../data", batch_size=64, pin_memory=0)
 
-    logits2, labels2 = gmm_evaluate_with_perturbation(
-        net,
-        gaussians_model,
-        test_loader,
-        device=device,
-        num_classes=10,
-        storage_device=device,
-    )
+#     logits2, labels2 = gmm_evaluate_with_perturbation(
+#         net,
+#         gaussians_model,
+#         test_loader,
+#         device=device,
+#         num_classes=10,
+#         storage_device=device,
+#     )

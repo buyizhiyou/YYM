@@ -11,4 +11,5 @@ python evaluate.py \
        --model resnet50 \
        --model-type gmm \
        -mod \
-       -sn --coeff 3.0
+       -sn --coeff 3.0 \
+       --mcdropout true

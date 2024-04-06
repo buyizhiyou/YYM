@@ -249,6 +249,11 @@ def eval_args():
                         default=False,
                         help="using label smoothing")
 
+    parser.add_argument("--mcdropout",
+                        type=bool,
+                        default=False,
+                        help="using mc dropout")
+
                 
     
     parser.add_argument("--seed",
