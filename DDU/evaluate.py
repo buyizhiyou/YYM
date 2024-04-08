@@ -87,8 +87,10 @@ if __name__ == "__main__":
     # m1 - Uncertainty/Confidence Metric 1 for deterministic model: logsumexp of probability density
     # m2 - Uncertainty/Confidence Metric 2 for deterministic model: max p
     eces = []
+    m1_fpr95s = []
     m1_aurocs = []
     m1_auprcs = []
+    m2_fpr95s = []
     m2_aurocs = []
     m2_auprcs = []
 
@@ -211,7 +213,7 @@ if __name__ == "__main__":
 
                 m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, conf=True)
                 m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device, conf=True)
-                m3_fpr95, m3_auroc, m3_auprc = get_roc_auc_logits(logits2, ood_logits2, confidence, device, conf=True)
+                m3_fpr95, m3_auroc, m3_auprc = get_roc_auc_logits(logits3, ood_logits3, confidence, device, conf=True)
                 print(
                     f"accu:{accuracy:.4f},ece:{ece:.6f},m1_fpr95:{m1_fpr95:.4f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_fpr95:{m2_fpr95:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f},m3_fpr95:{m3_fpr95:.4f} m3_auroc:{m3_auroc:.4f},m3_auprc:{m3_auprc:.4f}"
                 )
@@ -260,29 +262,38 @@ if __name__ == "__main__":
         accuracies.append(accuracy)
         # Pre-temperature results
         eces.append(round(ece, 4))
+        m1_fpr95s.append(round(m1_fpr95, 4))
         m1_aurocs.append(round(m1_auroc, 4))
         m1_auprcs.append(round(m1_auprc, 4))
+        m2_fpr95s.append(round(m1_fpr95, 4))
         m2_aurocs.append(round(m2_auroc, 4))
         m2_auprcs.append(round(m2_auprc, 4))
 
     accuracy_tensor = torch.tensor(accuracies)
     ece_tensor = torch.tensor(eces)
+    m1_fpr95_tensor = torch.tensor(m1_fpr95s)
     m1_auroc_tensor = torch.tensor(m1_aurocs)
     m1_auprc_tensor = torch.tensor(m1_auprcs)
+    m2_fpr95_tensor = torch.tensor(m2_fpr95s)
     m2_auroc_tensor = torch.tensor(m2_aurocs)
     m2_auprc_tensor = torch.tensor(m2_auprcs)
 
+
     mean_accuracy = torch.mean(accuracy_tensor)
     mean_ece = torch.mean(ece_tensor)
+    mean_m1_fpr95 = torch.mean(m1_fpr95_tensor)
     mean_m1_auroc = torch.mean(m1_auroc_tensor)
     mean_m1_auprc = torch.mean(m1_auprc_tensor)
+    mean_m2_fpr95 = torch.mean(m2_auprc_tensor)
     mean_m2_auroc = torch.mean(m2_auroc_tensor)
     mean_m2_auprc = torch.mean(m2_auprc_tensor)
 
     std_accuracy = torch.std(accuracy_tensor) / math.sqrt(accuracy_tensor.shape[0])
     std_ece = torch.std(ece_tensor) / math.sqrt(ece_tensor.shape[0])
+    std_m1_fpr95 = torch.std(m1_fpr95_tensor) / math.sqrt(m1_fpr95_tensor.shape[0])
     std_m1_auroc = torch.std(m1_auroc_tensor) / math.sqrt(m1_auroc_tensor.shape[0])
     std_m1_auprc = torch.std(m1_auprc_tensor) / math.sqrt(m1_auprc_tensor.shape[0])
+    std_m2_fpr95 = torch.std(m2_fpr95_tensor) / math.sqrt(m2_fpr95_tensor.shape[0])
     std_m2_auroc = torch.std(m2_auroc_tensor) / math.sqrt(m2_auroc_tensor.shape[0])
     std_m2_auprc = torch.std(m2_auprc_tensor) / math.sqrt(m2_auprc_tensor.shape[0])
 
@@ -290,24 +301,30 @@ if __name__ == "__main__":
     res_dict["mean"] = {}
     res_dict["mean"]["accuracy"] = mean_accuracy.item()
     res_dict["mean"]["ece"] = mean_ece.item()
+    res_dict["mean"]["m1_fpr95"] = mean_m1_fpr95.item()
     res_dict["mean"]["m1_auroc"] = mean_m1_auroc.item()
     res_dict["mean"]["m1_auprc"] = mean_m1_auprc.item()
+    res_dict["mean"]["m2_fpr95"] = mean_m2_fpr95.item()
     res_dict["mean"]["m2_auroc"] = mean_m2_auroc.item()
     res_dict["mean"]["m2_auprc"] = mean_m2_auprc.item()
 
     res_dict["std"] = {}
     res_dict["std"]["accuracy"] = std_accuracy.item()
     res_dict["std"]["ece"] = std_ece.item()
+    res_dict["std"]["m1_fpr95"] = std_m1_fpr95.item()
     res_dict["std"]["m1_auroc"] = std_m1_auroc.item()
     res_dict["std"]["m1_auprc"] = std_m1_auprc.item()
+    res_dict["std"]["m2_fpr95"] = std_m2_fpr95.item()
     res_dict["std"]["m2_auroc"] = std_m2_auroc.item()
     res_dict["std"]["m2_auprc"] = std_m2_auprc.item()
 
     res_dict["values"] = {}
     res_dict["values"]["accuracy"] = accuracies
     res_dict["values"]["ece"] = eces
+    res_dict["values"]["m1_fpr95"] = m1_fpr95s
     res_dict["values"]["m1_auroc"] = m1_aurocs
     res_dict["values"]["m1_auprc"] = m1_auprcs
+    res_dict["values"]["m2_fpr95"] = m2_fpr95s
     res_dict["values"]["m2_auroc"] = m2_aurocs
     res_dict["values"]["m2_auprc"] = m2_auprcs
 

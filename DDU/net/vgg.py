@@ -6,11 +6,12 @@ Reference:
 
 import torch
 import torch.nn as nn
-
+import torch.nn.functional as F
 from net.spectral_normalization.spectral_norm_conv_inplace import spectral_norm_conv
 from net.spectral_normalization.spectral_norm_fc import spectral_norm_fc
 
-mod_activation =  nn.LeakyReLU(inplace=True)
+
+mod_activation = F.leaky_relu
 
 cfg_cifar = {
     "VGG11": [64, "M", 128, "M", 256, 256, "M", 512, 512, "M", 512, 512, "M"],
@@ -103,7 +104,17 @@ class VGG(nn.Module):
             self.inp_sizes = inp_size_cifar[vgg_name]
             self.features = self._make_layers(cfg_cifar[vgg_name])
 
+        self.fc_add = nn.Linear(512,512)
+        self.activation = mod_activation if self.mod else F.relu
+        self.drop = nn.Dropout()
+
         self.classifier = nn.Linear(512, num_classes)
+        # self.classifier = nn.Sequential(
+        #     nn.Linear(512, 512),
+        #     nn.ReLU(True),
+        #     nn.Dropout(p=0.5),
+        #     nn.Linear(512, num_classes),
+        # )
 
         self.projection_head = ProjectionHead(512, 256)
         self.feature = None
@@ -112,10 +123,13 @@ class VGG(nn.Module):
         out = self.features(x)
         out = out.view(out.size(0), -1)
 
+        out = self.fc_add(out)
+        out = self.drop(self.activation(out))
+
         self.embedding = self.projection_head(out)  # 对比loss的embedding
         self.feature = out
-
         out = self.classifier(out) / self.temp
+        
         return out
 
     def _make_layers(self, cfg):

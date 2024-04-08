@@ -6,8 +6,22 @@ Refernece:
 """
 import torch.nn as nn
 import torch.nn.functional as F
+import torch
 
 
+class ProjectionHead(nn.Module):
+
+    def __init__(self, emb_size, head_size=512):
+        super(ProjectionHead, self).__init__()
+        self.hidden = nn.Linear(emb_size, emb_size)
+        self.out = nn.Linear(emb_size, head_size)
+
+    def forward(self, h: torch.Tensor) -> torch.Tensor:
+        h = self.hidden(h)
+        h = F.relu(h)
+        h = self.out(h)
+        return h
+    
 class LeNet(nn.Module):
     def __init__(self, num_classes, temp=1.0, mnist=True, **kwargs):
         super(LeNet, self).__init__()
@@ -18,7 +32,10 @@ class LeNet(nn.Module):
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, num_classes)
         self.temp = temp
+        self.embedding = None  # 对比loss的embedding
         self.feature = None
+
+        self.projection_head = ProjectionHead(84, 256)
 
     def forward(self, x):
         out = F.relu(self.conv1(x))
@@ -28,6 +45,8 @@ class LeNet(nn.Module):
         out = out.view(out.size(0), -1)
         out = F.relu(self.fc1(out))
         out = F.relu(self.fc2(out))
+
+        self.embedding = self.projection_head(out)  # 对比loss的embedding
         self.feature = out
         out = self.fc3(out) / self.temp
         return out

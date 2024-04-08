@@ -59,7 +59,19 @@ class WideBasic(nn.Module):
 
         return out
 
+class ProjectionHead(nn.Module):
 
+    def __init__(self, emb_size, head_size=512):
+        super(ProjectionHead, self).__init__()
+        self.hidden = nn.Linear(emb_size, emb_size)
+        self.out = nn.Linear(emb_size, head_size)
+
+    def forward(self, h: torch.Tensor) -> torch.Tensor:
+        h = self.hidden(h)
+        h = F.relu(h)
+        h = self.out(h)
+        return h
+    
 class WideResNet(nn.Module):
     def __init__(
         self,
@@ -139,7 +151,12 @@ class WideResNet(nn.Module):
                 nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity=nonlinearity)
                 nn.init.constant_(m.bias, 0)
         self.feature = None
+        self.embedding = None  # 对比loss的embedding
         self.temp = temp
+
+
+        # add projection head for simclr
+        self.projection_head = ProjectionHead(640, 256)
 
     def _wide_layer(self, channels, num_blocks, stride, input_size):
         strides = [stride] + [1] * (num_blocks - 1)
@@ -162,7 +179,9 @@ class WideResNet(nn.Module):
         out = self.activation(self.bn1(out))
         out = F.avg_pool2d(out, 8)
         out = out.flatten(1)
-        self.feature = out.clone().detach()
+
+        self.embedding = self.projection_head(out)  # 对比loss的embedding
+        self.feature = out
 
         if self.num_classes is not None:
             out = self.linear(out) / self.temp
