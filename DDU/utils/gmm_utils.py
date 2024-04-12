@@ -8,7 +8,6 @@ from torch import nn
 from tqdm import tqdm
 import numpy as np
 from torch.nn import functional as F
-from net.resnet2 import resnet18, resnet50, resnet101, resnet110, resnet152
 import data_utils.ood_detection.cifar10 as cifar10
 
 DOUBLE_INFO = torch.finfo(torch.double)

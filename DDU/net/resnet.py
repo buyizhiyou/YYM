@@ -3,17 +3,17 @@ Pytorch implementation of ResNet models.
 Reference:
 [1] He, K., Zhang, X., Ren, S., Sun, J.: Deep residual learning for image recognition. In: CVPR, 2016.
 """
-import torch
 import math
+
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from net.spectral_normalization.spectral_norm_conv_inplace import spectral_norm_conv
+from net.spectral_normalization.spectral_norm_conv_inplace import \
+    spectral_norm_conv
 from net.spectral_normalization.spectral_norm_fc import spectral_norm_fc
+from torch.nn.utils import spectral_norm
 
-mod_activation = F.leaky_relu
-# mod_activation = F.gelu
-# mod_activation = nn.PReLU
+from net.extra import ProjectionHead
 
 class AvgPoolShortCut(nn.Module):
     def __init__(self, stride, out_c, in_c):
@@ -24,10 +24,11 @@ class AvgPoolShortCut(nn.Module):
 
     def forward(self, x):
         if x.shape[2] % 2 != 0:
-            x = F.avg_pool2d(x, 1, self.stride)#(input,kernel_size,stride)
+            x = F.avg_pool2d(x, 1, self.stride)  # (input,kernel_size,stride)
         else:
             x = F.avg_pool2d(x, self.stride, self.stride)
-        pad = torch.zeros(x.shape[0], self.out_c - self.in_c, x.shape[2], x.shape[3], device=x.device,)
+        pad = torch.zeros(x.shape[0], self.out_c - self.in_c,
+                          x.shape[2], x.shape[3], device=x.device,)
         x = torch.cat((x, pad), dim=1)
         return x
 
@@ -35,22 +36,30 @@ class AvgPoolShortCut(nn.Module):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, input_size, wrapped_conv, in_planes, planes, stride=1, mod=True):
+    def __init__(self, input_size, wrapped_conv, in_planes, planes, stride=1, mod=True, bnsn=True):
         super(BasicBlock, self).__init__()
-        self.conv1 = wrapped_conv(input_size, in_planes, planes, kernel_size=3, stride=stride)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = wrapped_conv(math.ceil(input_size / stride), planes, planes, kernel_size=3, stride=1)
-        self.bn2 = nn.BatchNorm2d(planes)
+        self.conv1 = wrapped_conv(
+            input_size, in_planes, planes, kernel_size=3, stride=stride)
+        if bnsn:
+            self.bn1 = spectral_norm(nn.BatchNorm2d(planes))
+            self.bn2 = spectral_norm(nn.BatchNorm2d(planes))
+        else:
+            self.bn1 = nn.BatchNorm2d(planes)
+            self.bn2 = nn.BatchNorm2d(planes)
+        self.conv2 = wrapped_conv(
+            math.ceil(input_size / stride), planes, planes, kernel_size=3, stride=1)
         self.mod = mod
-        self.activation = mod_activation if self.mod else F.relu
+        self.activation = F.leaky_relu if self.mod else F.relu
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion * planes:
             if mod:
-                self.shortcut = nn.Sequential(AvgPoolShortCut(stride, self.expansion * planes, in_planes))
+                self.shortcut = nn.Sequential(AvgPoolShortCut(
+                    stride, self.expansion * planes, in_planes))
             else:
                 self.shortcut = nn.Sequential(
-                    wrapped_conv(input_size, in_planes, self.expansion * planes, kernel_size=1, stride=stride,),
+                    wrapped_conv(input_size, in_planes, self.expansion *
+                                 planes, kernel_size=1, stride=stride,),
                     nn.BatchNorm2d(planes),
                 )
 
@@ -65,25 +74,37 @@ class BasicBlock(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, input_size, wrapped_conv, in_planes, planes, stride=1, mod=True):
+    def __init__(self, input_size, wrapped_conv, in_planes, planes, stride=1, mod=True, bnsn=True):
         super(Bottleneck, self).__init__()
-        self.conv1 = wrapped_conv(input_size, in_planes, planes, kernel_size=1, stride=1)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = wrapped_conv(input_size, planes, planes, kernel_size=3, stride=stride)
-        self.bn2 = nn.BatchNorm2d(planes)
-        self.conv3 = wrapped_conv(math.ceil(input_size / stride), planes, self.expansion * planes, kernel_size=1, stride=1)
-        self.bn3 = nn.BatchNorm2d(self.expansion * planes)
+        self.conv1 = wrapped_conv(
+            input_size, in_planes, planes, kernel_size=1, stride=1)
+        if bnsn:
+            self.bn1 = spectral_norm(nn.BatchNorm2d(planes))
+            self.bn2 = spectral_norm(nn.BatchNorm2d(planes))
+            self.bn3 = spectral_norm(nn.BatchNorm2d(self.expansion * planes))
+        else:
+            self.bn1 = nn.BatchNorm2d(planes)
+            self.bn2 = nn.BatchNorm2d(planes)
+            self.bn3 = nn.BatchNorm2d(self.expansion * planes)
+        self.conv2 = wrapped_conv(
+            input_size, planes, planes, kernel_size=3, stride=stride)
+        self.conv3 = wrapped_conv(math.ceil(
+            input_size / stride), planes, self.expansion * planes, kernel_size=1, stride=1)
+
         self.mod = mod
-        self.activation = mod_activation if self.mod else F.relu
+        self.activation = F.leaky_relu if self.mod else F.relu
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion * planes:
             if mod:
-                self.shortcut = nn.Sequential(AvgPoolShortCut(stride, self.expansion * planes, in_planes))
+                self.shortcut = nn.Sequential(AvgPoolShortCut(
+                    stride, self.expansion * planes, in_planes))
             else:
                 self.shortcut = nn.Sequential(
-                    wrapped_conv(input_size, in_planes, self.expansion * planes, kernel_size=1, stride=stride,),
-                    nn.BatchNorm2d(self.expansion * planes),
+                    wrapped_conv(input_size, in_planes, self.expansion *
+                                 planes, kernel_size=1, stride=stride,),
+                    nn.BatchNorm2d(self.expansion * planes) if not bnsn else spectral_norm(
+                        nn.BatchNorm2d(self.expansion * planes)),
                 )
 
     def forward(self, x):
@@ -95,19 +116,6 @@ class Bottleneck(nn.Module):
         return out
 
 
-class ProjectionHead(nn.Module):
-
-    def __init__(self, emb_size, head_size=512):
-        super(ProjectionHead, self).__init__()
-        self.hidden = nn.Linear(emb_size, emb_size)
-        self.out = nn.Linear(emb_size, head_size)
-
-    def forward(self, h: torch.Tensor) -> torch.Tensor:
-        h = self.hidden(h)
-        h = F.relu(h)
-        h = self.out(h)
-        return h
-
 
 class ResNet(nn.Module):
     def __init__(
@@ -118,7 +126,7 @@ class ResNet(nn.Module):
         temp=1.0,
         spectral_normalization=True,
         mod=True,
-        coeff=3,
+        coeff=3.0,
         n_power_iterations=1,
         mnist=False,
     ):
@@ -131,11 +139,13 @@ class ResNet(nn.Module):
         self.in_planes = 64
 
         self.mod = mod
+        self.bnsn = False  # batcNorm 是否加spetral Normalization
 
         def wrapped_conv(input_size, in_c, out_c, kernel_size, stride):
             padding = 1 if kernel_size == 3 else 0
 
-            conv = nn.Conv2d(in_c, out_c, kernel_size, stride, padding, bias=False)
+            conv = nn.Conv2d(in_c, out_c, kernel_size,
+                             stride, padding, bias=False)
 
             if not spectral_normalization:
                 return conv
@@ -143,43 +153,61 @@ class ResNet(nn.Module):
             # NOTE: Google uses the spectral_norm_fc in all cases
             if kernel_size == 1:
                 # use spectral norm fc, because bound are tight for 1x1 convolutions
-                wrapped_conv = spectral_norm_fc(conv, coeff, n_power_iterations)
+                wrapped_conv = spectral_norm_fc(
+                    conv, coeff, n_power_iterations)
             else:
                 # Otherwise use spectral norm conv, with loose bound
                 shapes = (in_c, input_size, input_size)
-                wrapped_conv = spectral_norm_conv(conv, coeff, shapes, n_power_iterations)
+                wrapped_conv = spectral_norm_conv(
+                    conv, coeff, shapes, n_power_iterations)
 
             return wrapped_conv
 
         self.wrapped_conv = wrapped_conv
+        if self.bnsn:
+            self.bn1 = spectral_norm(nn.BatchNorm2d(64))
 
-        self.bn1 = nn.BatchNorm2d(64)
+        else:
+            self.bn1 = nn.BatchNorm2d(64)
 
         if mnist:
             self.conv1 = wrapped_conv(28, 1, 64, kernel_size=3, stride=1)
-            self.layer1 = self._make_layer(block, 28, 64, num_blocks[0], stride=1)
-            self.layer2 = self._make_layer(block, 28, 128, num_blocks[1], stride=2)
-            self.layer3 = self._make_layer(block, 14, 256, num_blocks[2], stride=2)
-            self.layer4 = self._make_layer(block, 7, 512, num_blocks[3], stride=2)
+            self.layer1 = self._make_layer(
+                block, 28, 64, num_blocks[0], stride=1)
+            self.layer2 = self._make_layer(
+                block, 28, 128, num_blocks[1], stride=2)
+            self.layer3 = self._make_layer(
+                block, 14, 256, num_blocks[2], stride=2)
+            self.layer4 = self._make_layer(
+                block, 7, 512, num_blocks[3], stride=2)
         else:
             self.conv1 = wrapped_conv(32, 3, 64, kernel_size=3, stride=1)
-            self.layer1 = self._make_layer(block, 32, 64, num_blocks[0], stride=1)
-            self.layer2 = self._make_layer(block, 32, 128, num_blocks[1], stride=2)
-            self.layer3 = self._make_layer(block, 16, 256, num_blocks[2], stride=2)
-            self.layer4 = self._make_layer(block, 8, 512, num_blocks[3], stride=2)
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
-        self.activation = mod_activation if self.mod else F.relu
-        self.feature = None   #这里抽出来倒数第二层feature，作为embedding
+            self.layer1 = self._make_layer(
+                block, 32, 64, num_blocks[0], stride=1)
+            self.layer2 = self._make_layer(
+                block, 32, 128, num_blocks[1], stride=2)
+            self.layer3 = self._make_layer(
+                block, 16, 256, num_blocks[2], stride=2)
+            self.layer4 = self._make_layer(
+                block, 8, 512, num_blocks[3], stride=2)
+        self.fc_add = nn.Linear(512 * block.expansion, 512 * block.expansion)#添加一层线性层，为了dropout
+        self.drop = nn.Dropout()
+        self.fc = nn.Linear(512 * block.expansion,num_classes) 
+
+        self.activation = F.leaky_relu if self.mod else F.relu
+        self.feature = None  # 这里抽出来倒数第二层feature，作为密度估计的高维特征
+        self.embedding = None  # 对比loss的embedding
         self.temp = temp
 
-        #add projection head for simclr
-        # self.projection_head = ProjectionHead(512 * block.expansion,256)
+        # add projection head for simclr
+        self.projection_head = ProjectionHead(512 * block.expansion, 256)
 
     def _make_layer(self, block, input_size, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
         layers = []
         for stride in strides:
-            layers.append(block(input_size, self.wrapped_conv, self.in_planes, planes, stride, self.mod,))
+            layers.append(block(input_size, self.wrapped_conv,
+                          self.in_planes, planes, stride, self.mod, self.bnsn))
             self.in_planes = planes * block.expansion
             input_size = math.ceil(input_size / stride)
         return nn.Sequential(*layers)
@@ -192,13 +220,15 @@ class ResNet(nn.Module):
         out = self.layer4(out)
         out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
-        
-        # self.embedding = self.projection_head(out)
-        
-        self.feature = out.clone().detach()#这里抽出来倒数第二层feature，作为embedding
 
+        # self.feature = out.clone().detach()  # 这里直接抽出来倒数第二层feature，作为embedding
+
+        out = self.fc_add(out)
+        out = self.drop(self.activation(out))
+
+        self.embedding = self.projection_head(out)  # 对比loss的embedding
+        self.feature = out
         out = self.fc(out) / self.temp
-
 
         return out
 

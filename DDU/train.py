@@ -11,9 +11,10 @@ import torch
 import torch.backends.cudnn as cudnn
 
 from net.lenet import lenet
-# from net.resnet import resnet18, resnet50, resnet101, resnet110, resnet152
-from net.resnet2 import resnet18, resnet50, resnet101, resnet110, resnet152
-from net.vgg import vgg16
+# from net.resnet import resnet18, resnet50  #自己实现的spectral norm
+from net.resnet import resnet18, resnet50 #官方实现的spectral norm
+# from net.vgg import vgg16 #自己实现的
+from net.vgg2 import vgg16 #官方实现的
 from net.wide_resnet import wrn
 from torch import optim
 from torch.utils.tensorboard import SummaryWriter
@@ -47,9 +48,6 @@ models = {
     "lenet": lenet,
     "resnet18": resnet18,
     "resnet50": resnet50,
-    "resnet101": resnet101,
-    "resnet110": resnet110,
-    "resnet152": resnet152,
     "wide_resnet": wrn,
     "vgg16": vgg16,
 }
@@ -72,16 +70,11 @@ if __name__ == "__main__":
     net = models[args.model](
         spectral_normalization=args.sn,
         mod=args.mod,
-        coeff=args.coeff,
-        num_classes=num_classes,
-        mnist="mnist" in args.dataset,
+        num_classes=num_classes
     )
 
     if args.gpu:
         net.to(device)
-        # 不使用分布式训练
-        # net = torch.nn.DataParallel(
-        #     net, device_ids=range(torch.cuda.device_count()))
         cudnn.benchmark = True
 
     opt_params = net.parameters()

@@ -10,8 +10,8 @@ import torch.nn.functional as F
 from net.spectral_normalization.spectral_norm_conv_inplace import spectral_norm_conv
 from net.spectral_normalization.spectral_norm_fc import spectral_norm_fc
 
+from net.extra import ProjectionHead
 
-mod_activation = F.leaky_relu
 
 cfg_cifar = {
     "VGG11": [64, "M", 128, "M", 256, 256, "M", 512, 512, "M", 512, 512, "M"],
@@ -41,18 +41,6 @@ inp_size_mnist = {
     "VGG19": [28, 28, 28, 28, 14, 14, 14, 14, 14, 7, 7, 7, 7, 7, 3, 3, 3, 3, 3, 1],
 }
 
-class ProjectionHead(nn.Module):
-
-    def __init__(self, emb_size, head_size=512):
-        super(ProjectionHead, self).__init__()
-        self.hidden = nn.Linear(emb_size, emb_size)
-        self.out = nn.Linear(emb_size, head_size)
-
-    def forward(self, h: torch.Tensor) -> torch.Tensor:
-        h = self.hidden(h)
-        h = F.relu(h)
-        h = self.out(h)
-        return h
 
 
 class VGG(nn.Module):
@@ -63,7 +51,7 @@ class VGG(nn.Module):
         temp=1.0,
         spectral_normalization=True,
         mod=True,
-        coeff=3,
+        coeff=3.0,
         n_power_iterations=1,
         mnist=False,
     ):
@@ -105,7 +93,7 @@ class VGG(nn.Module):
             self.features = self._make_layers(cfg_cifar[vgg_name])
 
         self.fc_add = nn.Linear(512,512)
-        self.activation = mod_activation if self.mod else F.relu
+        self.activation = nn.LeakyReLU(inplace=True) if mod else nn.ReLU(inplace=True)
         self.drop = nn.Dropout()
 
         self.classifier = nn.Linear(512, num_classes)
@@ -129,7 +117,7 @@ class VGG(nn.Module):
         self.embedding = self.projection_head(out)  # 对比loss的embedding
         self.feature = out
         out = self.classifier(out) / self.temp
-        
+
         return out
 
     def _make_layers(self, cfg):
@@ -142,7 +130,7 @@ class VGG(nn.Module):
                 layers += [
                     self.wrapped_conv(self.inp_sizes[i], in_channels, x, kernel_size=3, stride=1),
                     nn.BatchNorm2d(x),
-                    mod_activation if self.mod else nn.ReLU(inplace=True),
+                    nn.LeakyReLU(inplace=True) if self.mod else nn.ReLU(inplace=True),
                 ]
                 in_channels = x
         layers += [nn.AvgPool2d(kernel_size=1, stride=1)]

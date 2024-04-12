@@ -18,10 +18,11 @@ import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
 
 # Import network models
 from net.lenet import lenet
-# from net.resnet import resnet18, resnet50, resnet101, resnet110, resnet152
-from net.resnet2 import resnet18, resnet50, resnet101, resnet110, resnet152
+# from net.resnet import resnet18, resnet50
+from net.resnet2 import resnet18, resnet50
 from net.wide_resnet import wrn
-from net.vgg import vgg16
+# from net.vgg import vgg16
+from net.vgg2 import vgg16
 
 # Import metrics to compute
 from metrics.classification_metrics import (test_classification_net, test_classification_net_logits, test_classification_net_ensemble)
@@ -51,9 +52,6 @@ models = {
     "lenet": lenet,
     "resnet18": resnet18,
     "resnet50": resnet50,
-    "resnet101": resnet101,
-    "resnet110": resnet110,
-    "resnet152": resnet152,
     "wide_resnet": wrn,
     "vgg16": vgg16,
 }
@@ -117,7 +115,6 @@ if __name__ == "__main__":
         net = models[args.model](
             spectral_normalization=args.sn,
             mod=args.mod,
-            coeff=args.coeff,
             num_classes=num_classes,
             temp=1.0,
         )
