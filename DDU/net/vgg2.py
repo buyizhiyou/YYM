@@ -10,7 +10,7 @@
 
 import torch
 import torch.nn as nn
-from torch.nn.utils import spectral_norm
+from net.spectral_normalization.spectral_norm_official import spectral_norm
 import torch.nn.functional as F
 
 from net.extra import ProjectionHead
@@ -31,6 +31,7 @@ class VGG(nn.Module):
         num_classes=10,
         dropout=0.5,
         temp=1.0,
+        coeff=3.0,
         spectral_normalization=True,
         mod=True,
     ):
@@ -43,7 +44,7 @@ class VGG(nn.Module):
 
         self.fc_add = nn.Linear(512, 512)
         self.drop = nn.Dropout()
-        self.classifier = nn.Linear(512, num_classes)
+        self.fc = nn.Linear(512, num_classes)
 
         self.projection_head = ProjectionHead(512, 256)
         self.feature = None
@@ -59,7 +60,7 @@ class VGG(nn.Module):
 
         self.embedding = self.projection_head(out)  # 对比loss的embedding
         self.feature = out
-        out = self.classifier(out) / self.temp
+        out = self.fc(out) / self.temp
 
         return out
 
@@ -72,8 +73,7 @@ class VGG(nn.Module):
             else:
                 layers += [
                     self.wrapped_conv(nn.Conv2d(in_channels, x, kernel_size=3, padding=1)),
-                    self.wrapped_bn(nn.BatchNorm2d(x)),
-                    self.activation
+                    self.wrapped_bn(nn.BatchNorm2d(x)), self.activation
                 ]
                 in_channels = x
         layers += [nn.AvgPool2d(kernel_size=1, stride=1)]

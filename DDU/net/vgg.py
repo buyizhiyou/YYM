@@ -96,13 +96,7 @@ class VGG(nn.Module):
         self.activation = nn.LeakyReLU(inplace=True) if mod else nn.ReLU(inplace=True)
         self.drop = nn.Dropout()
 
-        self.classifier = nn.Linear(512, num_classes)
-        # self.classifier = nn.Sequential(
-        #     nn.Linear(512, 512),
-        #     nn.ReLU(True),
-        #     nn.Dropout(p=0.5),
-        #     nn.Linear(512, num_classes),
-        # )
+        self.fc = nn.Linear(512, num_classes)
 
         self.projection_head = ProjectionHead(512, 256)
         self.feature = None
@@ -116,7 +110,7 @@ class VGG(nn.Module):
 
         self.embedding = self.projection_head(out)  # 对比loss的embedding
         self.feature = out
-        out = self.classifier(out) / self.temp
+        out = self.fc(out) / self.temp
 
         return out
 

@@ -16,8 +16,13 @@ def entropy(logits):
 def logsumexp(logits):
     return torch.logsumexp(logits, dim=1, keepdim=False)
 
+
 def sumexp(logits):
-    return  torch.sum(torch.exp(logits),axis=1)
+    return torch.sum(torch.exp(logits), axis=1)
+
+
+def max(logits):
+    return torch.max(logits, axis=1)[0]
 
 
 def confidence(logits):

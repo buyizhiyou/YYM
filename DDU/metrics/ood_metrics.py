@@ -8,7 +8,7 @@ from sklearn import metrics
 
 from utils.ensemble_utils import ensemble_forward_pass
 from metrics.classification_metrics import get_logits_labels
-from metrics.uncertainty_confidence import entropy, logsumexp,confidence
+from metrics.uncertainty_confidence import entropy, logsumexp,confidence,max
 from sklearn.metrics import auc, precision_recall_curve, roc_curve
 from matplotlib import pyplot as plt
 

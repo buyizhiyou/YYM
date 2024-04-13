@@ -11,9 +11,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.utils import spectral_norm
-
+from net.spectral_normalization.spectral_norm_official import spectral_norm
 from net.extra import ProjectionHead
+
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -67,13 +67,11 @@ class Bottleneck(nn.Module):
         return out
 
 
-
 class ResNet(nn.Module):
 
-    def __init__(self, block, num_blocks, spectral_normalization=True, mod=True,temp=1.0, num_classes=10, dropout=0.5):
+    def __init__(self, block, num_blocks, spectral_normalization=True, mod=True, temp=1.0, coeff=3.0, num_classes=10, dropout=0.5):
         super(ResNet, self).__init__()
         self.in_planes = 64
-        self.activation = F.leaky_relu if mod else F.relu
         self.wrapped_conv = spectral_norm if spectral_normalization else nn.Identity()
         # self.wrapped_bn = spectral_norm if spectral_normalization else nn.Identity()
         self.wrapped_bn = nn.Identity()
@@ -86,7 +84,7 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
 
-        self.fc_add = nn.Linear(512 * block.expansion, 512 * block.expansion)#添加一层线性层，为了dropout
+        self.fc_add = nn.Linear(512 * block.expansion, 512 * block.expansion)  #添加一层线性层，为了dropout
         self.drop = nn.Dropout()
         self.fc = nn.Linear(512 * block.expansion, num_classes)
         # self.classifier = nn.Sequential(
@@ -131,37 +129,20 @@ class ResNet(nn.Module):
 
 
 def resnet18(spectral_normalization=True, mod=True, temp=1.0, mnist=False, **kwargs):
-    model = ResNet(
-        BasicBlock,
-        [2, 2, 2, 2],
-        spectral_normalization=spectral_normalization,
-        mod=mod,
-        temp=temp,
-        **kwargs
-    )
+    model = ResNet(BasicBlock, [2, 2, 2, 2], spectral_normalization=spectral_normalization, mod=mod, temp=temp, **kwargs)
     return model
 
 
 def resnet50(spectral_normalization=True, mod=True, temp=1.0, mnist=False, **kwargs):
-    model = ResNet(
-        Bottleneck,
-        [3, 4, 6, 3],
-        spectral_normalization=spectral_normalization,
-        mod=mod,
-        temp=temp,
-        **kwargs
-    )
+    model = ResNet(Bottleneck, [3, 4, 6, 3], spectral_normalization=spectral_normalization, mod=mod, temp=temp, **kwargs)
     return model
+
 
 # def ResNet18():
 #     return ResNet(BasicBlock, [2, 2, 2, 2])
 
-
 # def ResNet34():
 #     return ResNet(BasicBlock, [3, 4, 6, 3])
 
-
 # def ResNet50():
 #     return ResNet(Bottleneck, [3, 4, 6, 3])
-
-

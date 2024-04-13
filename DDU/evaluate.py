@@ -18,8 +18,8 @@ import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
 
 # Import network models
 from net.lenet import lenet
-# from net.resnet import resnet18, resnet50
-from net.resnet2 import resnet18, resnet50
+from net.resnet import resnet18, resnet50
+# from net.resnet2 import resnet18, resnet50
 from net.wide_resnet import wrn
 # from net.vgg import vgg16
 from net.vgg2 import vgg16
@@ -27,11 +27,11 @@ from net.vgg2 import vgg16
 # Import metrics to compute
 from metrics.classification_metrics import (test_classification_net, test_classification_net_logits, test_classification_net_ensemble)
 from metrics.calibration_metrics import expected_calibration_error
-from metrics.uncertainty_confidence import entropy, logsumexp, confidence, sumexp
+from metrics.uncertainty_confidence import entropy, logsumexp, confidence, sumexp, max
 from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ensemble
 
 # Import GMM utils
-from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate, gmm_evaluate_with_perturbation
+from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate, gmm_evaluate_with_perturbation, maxp_evaluate_with_perturbation
 from utils.kde_utils import kde_evaluate, kde_fit
 from utils.lof_utils import lof_evaluate, ldaf_evaluate
 from utils.ensemble_utils import load_ensemble, ensemble_forward_pass
@@ -135,8 +135,7 @@ if __name__ == "__main__":
         #校准
         temp_net = ModelWithTemperature(net, device)
         temp_net.set_temperature(val_loader)
-        topt = temp_net.temperature
-        print(f"best temperature:{topt}")
+        net.temp = temp_net.temperature
 
         if (args.model_type == "gmm"):
             if args.mcdropout:
@@ -193,15 +192,16 @@ if __name__ == "__main__":
                     storage_device=device,
                 )
 
-                logits3, labels3 = maxp_evaluate(
-                    temp_net,
+                logits3, labels3 = maxp_evaluate_with_perturbation(
+                    net,
                     test_loader,
                     device=device,
                     num_classes=num_classes,
                     storage_device=device,
                 )
-                ood_logits3, ood_labels3 = maxp_evaluate(
-                    temp_net,
+
+                ood_logits3, ood_labels3 = maxp_evaluate_with_perturbation(
+                    net,
                     ood_test_loader,
                     device=device,
                     num_classes=num_classes,
@@ -274,7 +274,6 @@ if __name__ == "__main__":
     m2_fpr95_tensor = torch.tensor(m2_fpr95s)
     m2_auroc_tensor = torch.tensor(m2_aurocs)
     m2_auprc_tensor = torch.tensor(m2_auprcs)
-
 
     mean_accuracy = torch.mean(accuracy_tensor)
     mean_ece = torch.mean(ece_tensor)

@@ -9,6 +9,7 @@ from tqdm import tqdm
 import numpy as np
 from torch.nn import functional as F
 import data_utils.ood_detection.cifar10 as cifar10
+from net.resnet2 import resnet50
 
 DOUBLE_INFO = torch.finfo(torch.double)
 JITTERS = [0, DOUBLE_INFO.tiny] + [10**exp for exp in range(-308, 0, 1)]
@@ -113,25 +114,24 @@ def gmm_evaluate_with_perturbation(
     mean=[0.4914, 0.4822, 0.4465],
     std=[0.2023, 0.1994, 0.2010],
 ):
-
     num_samples = len(loader.dataset)
     logits_N_C = torch.empty((num_samples, num_classes), dtype=torch.float, device=storage_device)
     labels_N = torch.empty(num_samples, dtype=torch.int, device=storage_device)
 
     std = torch.tensor(std).to(device)
     mean = torch.tensor(mean).to(device)
-
+    loss_func = nn.CrossEntropyLoss()
     start = 0
     for data, label in tqdm(loader):
         data = data.to(device)
         data.requires_grad = True  #data.required_grad区分,用required_grad梯度为None
 
-        _ = net(data)
-
-        embedding = net.feature
-        log_probs = gaussians_model.log_prob(embedding[:, None, :])
-        max_log_probs = log_probs.max(1, keepdim=True)[0]  # get the index of the max log-probability
-        loss = max_log_probs.sum()
+        out = net(data)
+        # embedding = net.feature
+        # log_probs = gaussians_model.log_prob(embedding[:, None, :])
+        # max_log_probs = log_probs.max(1, keepdim=True)[0]  # get the index of the max log-probability
+        # loss = max_log_probs.sum()
+        loss = -loss_func(out,label.to(device))  #这个loss效果好一些
 
         net.zero_grad()
         loss.backward()
@@ -163,6 +163,54 @@ def gmm_evaluate_with_perturbation(
     return logits_N_C.to(device), labels_N.to(device)
 
 
+
+def maxp_evaluate_with_perturbation(
+    net,
+    loader,
+    device,
+    num_classes,
+    storage_device,
+    epsilon=0.001,
+    mean=[0.4914, 0.4822, 0.4465],
+    std=[0.2023, 0.1994, 0.2010],
+):
+    num_samples = len(loader.dataset)
+    logits_N_C = torch.empty((num_samples, num_classes), dtype=torch.float, device=storage_device)
+    labels_N = torch.empty(num_samples, dtype=torch.int, device=storage_device)
+    
+    loss_func = nn.CrossEntropyLoss()
+    std = torch.tensor(std).to(device)
+    mean = torch.tensor(mean).to(device)
+    start = 0
+    for data, label in tqdm(loader):
+        data = data.to(device)
+        data.requires_grad = True  #data.required_grad区分,用required_grad梯度为None
+
+        label = label.to(device)
+
+        out = net(data)
+        loss = -loss_func(out, label.to(device))
+
+        net.zero_grad()
+        loss.backward()
+
+        # Collect ``datagrad``
+        data_grad = data.grad.data
+        data_denorm = data * std.view(1, -1, 1, 1) + mean.view(1, -1, 1, 1)
+        perturbed_data = fgsm_attack(data_denorm, epsilon, data_grad)
+
+        perturbed_data_normalized = (perturbed_data - mean.view(1, -1, 1, 1)) / std.view(1, -1, 1, 1)
+        logit_B_C = net(perturbed_data_normalized)  # 每个batch计算logits,再合并
+
+        logit_B_C = logit_B_C.cpu().detach()
+        end = start + len(data)
+        logits_N_C[start:end].copy_(logit_B_C.cpu().detach(), non_blocking=True)
+        labels_N[start:end].copy_(label.cpu().detach(), non_blocking=True)
+        start = end
+
+    return logits_N_C.to(device), labels_N.to(device)
+
+
 def maxp_evaluate(net, loader, device, num_classes, storage_device):
     num_samples = len(loader.dataset)
     logits_N_C = torch.empty((num_samples, num_classes), dtype=torch.float, device=storage_device)
@@ -173,6 +221,7 @@ def maxp_evaluate(net, loader, device, num_classes, storage_device):
         for data, label in tqdm(loader):
             data = data.to(device)
             label = label.to(device)
+
             logit_B_C = net(data)  # 每个batch计算logits,再合并
 
             end = start + len(data)
@@ -231,10 +280,17 @@ def gmm_fit(embeddings, labels, num_classes):
 #     net.eval()
 #     net.drop.training = True
 #     test_loader = cifar10.get_test_loader(root="../data", batch_size=64, pin_memory=0)
+#     # logits2, labels2 = gmm_evaluate_with_perturbation(
+#     #     net,
+#     #     gaussians_model,
+#     #     test_loader,
+#     #     device=device,
+#     #     num_classes=10,
+#     #     storage_device=device,
+#     # )
 
-#     logits2, labels2 = gmm_evaluate_with_perturbation(
+#     logits2, labels2 = maxp_evaluate_with_perturbation(
 #         net,
-#         gaussians_model,
 #         test_loader,
 #         device=device,
 #         num_classes=10,

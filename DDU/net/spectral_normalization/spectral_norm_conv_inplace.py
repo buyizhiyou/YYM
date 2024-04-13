@@ -101,7 +101,6 @@ class SpectralNormConv(object):
         sigma = torch.dot(u.view(-1), weight_v)
         # enforce spectral norm only as constraint
         factorReverse = torch.max(torch.ones(1, device=weight.device), sigma / self.coeff)
-
         # rescaling
         weight = weight / (factorReverse + 1e-5)  # for stability
 
