@@ -6,6 +6,7 @@ import argparse
 
 dataset_root = "./data/"
 
+
 def training_args():
 
     default_dataset = "cifar10"
@@ -24,7 +25,6 @@ def training_args():
     log_loc = "./logs"
     epoch = 350
 
-
     model = "resnet50"
     sn_coeff = 3.0
 
@@ -34,17 +34,18 @@ def training_args():
     )
 
     # add extra arguments
-    parser.add_argument("--contrastive",
-                        type=int,
-                        default=0,#0:不需要对比学习，1:类间有监督的对比学习 2:样本间自监督的对比学习
-                        help="add contrastive loss")
-                        
-    parser.add_argument("--ls",
-                        type=bool,
-                        default=False,
-                        help="using label smoothing")
-                
-        
+    parser.add_argument(
+        "--contrastive",
+        type=int,
+        default=0,  #0:不需要对比学习，1:类间有监督的对比学习 2:样本间自监督的对比学习
+        help="add contrastive loss")
+    parser.add_argument(
+        "--adv",
+        type=int,
+        default=0,  #0:不需要对抗训练
+        help="advasarial training")
+    parser.add_argument("--ls", type=bool, default=False, help="using label smoothing")
+
     parser.add_argument(
         "--run",
         type=int,
@@ -52,11 +53,7 @@ def training_args():
         dest="run",
         help="Number of models to aggregate over",
     )
-    parser.add_argument("--seed",
-                        type=int,
-                        dest="seed",
-                        required=True,
-                        help="Seed to use")
+    parser.add_argument("--seed", type=int, dest="seed", required=True, help="Seed to use")
     parser.add_argument(
         "--dataset",
         type=str,
@@ -88,8 +85,8 @@ def training_args():
         help="Test Batch size",
     )
 
-    parser.add_argument("--gpu", default=1, help="Use GPU")   
-    parser.add_argument("--model",type=str,default=model,dest="model",help="Model to train")
+    parser.add_argument("--gpu", default=1, help="Use GPU")
+    parser.add_argument("--model", type=str, default=model, dest="model", help="Model to train")
 
     parser.add_argument(
         "-sn",
@@ -113,11 +110,7 @@ def training_args():
         help="whether to use architectural modifications during training",
     )
 
-    parser.add_argument("--epochs",
-                        type=int,
-                        default=epoch,
-                        dest="epoch",
-                        help="Number of training epochs")
+    parser.add_argument("--epochs", type=int, default=epoch, dest="epoch", help="Number of training epochs")
 
     parser.add_argument(
         "--lr",
@@ -133,11 +126,7 @@ def training_args():
         default="step",
         help="Learning rate scheduler",
     )
-    parser.add_argument("--mom",
-                        type=float,
-                        default=momentum,
-                        dest="momentum",
-                        help="Momentum")
+    parser.add_argument("--mom", type=float, default=momentum, dest="momentum", help="Momentum")
     parser.add_argument(
         "--nesterov",
         action="store_true",
@@ -240,28 +229,22 @@ def eval_args():
     )
 
     #add extra arguments
-    parser.add_argument("--contrastive",
-                        type=int,
-                        default=0,#0:不需要对比学习，1:类间有监督的对比学习 2:样本间自监督的对比学习
-                        help="add contrastive loss")
-    parser.add_argument("--ls",
-                        type=bool,
-                        default=False,
-                        help="using label smoothing")
+    parser.add_argument(
+        "--contrastive",
+        type=int,
+        default=0,  #0:不需要对比学习，1:类间有监督的对比学习 2:样本间自监督的对比学习
+        help="add contrastive loss")
+    parser.add_argument(
+        "--adv",
+        type=int,
+        default=0,  #0:不需要对抗训练
+        help="advasarial training")
+    parser.add_argument("--ls", type=bool, default=False, help="using label smoothing")
 
-    parser.add_argument("--mcdropout",
-                        type=bool,
-                        default=False,
-                        help="using mc dropout")
+    parser.add_argument("--mcdropout", type=bool, default=False, help="using mc dropout")
 
-                
-    
-    parser.add_argument("--seed",
-                        type=int,
-                        dest="seed",
-                        required=True,
-                        help="Seed to use")
-    
+    parser.add_argument("--seed", type=int, dest="seed", required=True, help="Seed to use")
+
     parser.add_argument(
         "--dataset-root",
         type=str,
@@ -286,15 +269,9 @@ def eval_args():
     parser.add_argument("--data-aug", action="store_true", dest="data_aug")
     parser.set_defaults(data_aug=False)
 
-    parser.add_argument("--gpu",
-                        default=1,
-                        help="Use GPU")
+    parser.add_argument("--gpu", default=1, help="Use GPU")
 
-    parser.add_argument("-b",
-                        type=int,
-                        default=batch_size,
-                        dest="batch_size",
-                        help="Batch size")
+    parser.add_argument("-b", type=int, default=batch_size, dest="batch_size", help="Batch size")
     parser.add_argument(
         "--load-path",
         type=str,
@@ -302,11 +279,7 @@ def eval_args():
         dest="load_loc",
         help="Path to load the model from",
     )
-    parser.add_argument("--model",
-                        type=str,
-                        default=model,
-                        dest="model",
-                        help="Model to train")
+    parser.add_argument("--model", type=str, default=model, dest="model", help="Model to train")
     parser.add_argument(
         "--run",
         type=int,
@@ -336,11 +309,7 @@ def eval_args():
         help="whether to use architectural modifications during training",
     )
     parser.set_defaults(mod=False)
-    parser.add_argument("--ensemble",
-                        type=int,
-                        default=ensemble,
-                        dest="ensemble",
-                        help="Number of models in ensemble")
+    parser.add_argument("--ensemble", type=int, default=ensemble, dest="ensemble", help="Number of models in ensemble")
     parser.add_argument(
         "--model-type",
         type=str,
@@ -375,11 +344,7 @@ def al_args():
     scoring_batch_size = 128
 
     parser = argparse.ArgumentParser(description="Active Learning Experiments")
-    parser.add_argument("--seed",
-                        type=int,
-                        dest="seed",
-                        required=True,
-                        help="Seed to use")
+    parser.add_argument("--seed", type=int, dest="seed", required=True, help="Seed to use")
     parser.add_argument(
         "--model",
         type=str,
@@ -493,10 +458,7 @@ def al_args():
         help="Type of model to use for AL.",
     )
 
-    parser.add_argument("-mi",
-                        action="store_true",
-                        dest="mi",
-                        help="Use MI as acquisition function")
+    parser.add_argument("-mi", action="store_true", dest="mi", help="Use MI as acquisition function")
     parser.set_defaults(mi=False)
 
     parser.add_argument(

@@ -14,9 +14,21 @@ from utils.eval_utils import accuracy
 from utils.simclr_utils import ContrastiveLearningViewTransform, get_simclr_pipeline_transform, info_nce_loss, supervisedContrastiveLoss
 from utils.loss import LabelSmoothing
 from torchvision.transforms import transforms
+import torchattacks
 
 
-def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastive, label_smooth=False, loss_mean=False):
+def fgsm_attack(image, epsilon, data_grad):
+    # Collect the element-wise sign of the data gradient
+    sign_data_grad = data_grad.sign()
+    # Create the perturbed image by adjusting each pixel of the input image
+    perturbed_image = image + epsilon * sign_data_grad
+    # Adding clipping to maintain [0,1] range
+    perturbed_image = torch.clamp(perturbed_image, 0, 1)
+    # Return the perturbed image
+    return perturbed_image
+
+
+def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastive, adv=0, label_smooth=False, loss_mean=False):
     """
     Util method for training a model for a single epoch.
     """
@@ -24,7 +36,10 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
     train_loss = 0
     num_samples = 0
     acc = 0
-
+    mean = [0.4914, 0.4822, 0.4465]
+    std = [0.2023, 0.1994, 0.2010]
+    std = torch.tensor(std).to(device)
+    mean = torch.tensor(mean).to(device)
     if contrastive:
         activation = {}
 
@@ -53,7 +68,7 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
         loss_func = nn.CrossEntropyLoss()
 
     for batch_idx, (x, y) in enumerate(tqdm(train_loader)):
-        if (isinstance(x,list)):  #生成的多个视角的增强图片
+        if (isinstance(x, list)):  #生成的多个视角的增强图片
             data = torch.cat(x, dim=0)
             labels = torch.cat([y, y], dim=0)
         else:
@@ -63,11 +78,12 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
         labels = labels.to(device)
         batch_size = data.shape[0]
         optimizer.zero_grad()
-        logits = model(data)  #TODO:ADD projection head for model 使用resnet2
+
         if contrastive == 1:
             """
             类间对比loss
             """
+            logits = model(data)
             embeddings = activation['embedding']
             loss1 = loss_func(logits, labels)
             loss2 = supervisedContrastiveLoss(embeddings, labels, device, temperature=0.5)
@@ -80,6 +96,7 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
             """
             样本间对比loss
             """
+            logits = model(data)
             embeddings = activation['embedding']
             logits2, labels2 = info_nce_loss(embeddings, batch_size / 2, device)  #这里/2
             loss2 = F.cross_entropy(logits2, labels2)
@@ -91,7 +108,33 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
 
             acc1, _ = accuracy(logits2, labels2, (1, 5))
             acc += acc1.item() * len(data)
+        elif adv == 1:
+            """对抗训练"""
+            if batch_idx % 20==0:
+                data.requires_grad = True  #data.required_grad区分,用required_grad梯度为None
+                logits = model(data)
+                loss = loss_func(logits, labels)
+
+                model.zero_grad()
+                loss.backward()
+
+                # Collect ``datagrad``
+                data_grad = data.grad.data
+                data_denorm = data * std.view(1, -1, 1, 1) + mean.view(1, -1, 1, 1)
+                perturbed_data = fgsm_attack(data_denorm, 0.01, data_grad)
+                perturbed_data_normalized = (perturbed_data - mean.view(1, -1, 1, 1)) / std.view(1, -1, 1, 1)
+
+                data2 = torch.concat([data, perturbed_data_normalized])
+                labels2 = torch.concat([labels, labels])
+                logits2 = model(data2)
+            else:
+                logits2 = model(data)
+                labels2 = labels
+            loss = loss_func(logits2, labels2)
+            acc1, _ = accuracy(logits2, labels2, (1, 5))
+            acc += acc1.item() * len(data)
         else:
+            logits = model(data)
             loss1 = loss_func(logits, labels)
             loss = loss1
 

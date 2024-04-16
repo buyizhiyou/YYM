@@ -1,8 +1,8 @@
 #! /bin/bash
 
-echo "Usage ./train.sh --gpu  0 --run 8 --batchsize 64 --epochs 300 --model  vgg16 --contrastive 0"
+echo "Usage: ./train.sh --gpu  0 --run 8 --batchsize 64 --epochs 300 --model  vgg16 --contrastive 0 --adv 0"
 # 解析命令行参数
-options=$(getopt -o g:r:b:e:m:c --long gpu:,run:,batchsize:,epochs:,model:,contrastive:, -- "$@")
+options=$(getopt -o g:r:b:e:m:c:a --long gpu:,run:,batchsize:,epochs:,model:,contrastive:,adv:, -- "$@")
 eval set -- "$options"
 
 # 提取选项和参数
@@ -38,6 +38,11 @@ while true; do
               contrastive=$1
               shift
               ;;
+       -a | --adv)
+              shift
+              adv=$1
+              shift
+              ;;
        --)
               shift
               break
@@ -52,6 +57,11 @@ if [ -z "$gpu" ]; then
        exit 1
 fi
 
+if [ -z "$adv" ]; then
+       echo "Error: parameter adv is required"
+       exit 1
+fi
+
 for i in {1..10}; do
        echo "训练第$i次"
        python train.py \
@@ -63,6 +73,7 @@ for i in {1..10}; do
               --epochs $epochs --dataset cifar10 \
               --model $model \
               --contrastive $contrastive \
+              --adv $adv \
               -mod \
               -sn
        sleep 5

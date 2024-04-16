@@ -1,5 +1,5 @@
 """
-Script to evaluate a single model. 
+Script to evaluate a single model.
 """
 import os
 import json
@@ -18,8 +18,8 @@ import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
 
 # Import network models
 from net.lenet import lenet
-from net.resnet import resnet18, resnet50
-# from net.resnet2 import resnet18, resnet50
+# from net.resnet import resnet18, resnet50
+from net.resnet2 import resnet18, resnet50
 from net.wide_resnet import wrn
 # from net.vgg import vgg16
 from net.vgg2 import vgg16

@@ -91,7 +91,6 @@ class SpectralNorm:
         sigma = torch.dot(u, torch.mv(weight_mat, v))
         # weight = weight / sigma
         factorReverse = torch.max(torch.ones(1, device=weight.device), sigma / self.coeff)
-        # rescaling
         weight = weight / (factorReverse + 1e-5)  # for stability
 
         return weight

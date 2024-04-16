@@ -140,7 +140,7 @@ class SpectralNorm:
         weight = module._parameters[name]
 
         with torch.no_grad():
-            weight_mat = fn.reshape_weight_to_matrix(weight)
+            weight_mat = fn.reshape_weight_to_matrix(weight)#torch.Size([64, 64, 1, 1])->torch.Size([64, 64]]
 
             h, w = weight_mat.size()
             # randomly initialize `u` and `v`

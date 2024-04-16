@@ -79,7 +79,9 @@ class SpectralNormConv(object):
                 if stride[0] > 1:
                     # Note: the below does not generalize to stride > 2
                     output_padding = 1 - self.input_dim[-1] % 2
+                
                 for _ in range(self.n_power_iterations):
+                    #使用这种方式求奇异值效果更好，有什么依据嘛
                     v_s = conv_transpose2d(
                         u.view(self.out_shape),
                         weight,
