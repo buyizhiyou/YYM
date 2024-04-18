@@ -13,8 +13,8 @@ import torch.backends.cudnn as cudnn
 from net.lenet import lenet
 from net.resnet import resnet18, resnet50  #自己实现的spectral norm
 # from net.resnet2 import resnet18, resnet50 #官方实现的spectral norm
-# from net.vgg import vgg16 #自己实现的
-from net.vgg2 import vgg16 #官方实现的
+from net.vgg import vgg16 #自己实现的
+# from net.vgg2 import vgg16 #官方实现的
 from net.wide_resnet import wrn
 from torch import optim
 from torch.utils.tensorboard import SummaryWriter
