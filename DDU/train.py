@@ -13,7 +13,7 @@ import torch.backends.cudnn as cudnn
 from net.lenet import lenet
 from net.resnet import resnet18, resnet50  #自己实现的spectral norm
 # from net.resnet2 import resnet18, resnet50 #官方实现的spectral norm
-from net.vgg import vgg16 #自己实现的
+from net.vgg import vgg16  #自己实现的
 # from net.vgg2 import vgg16 #官方实现的
 from net.wide_resnet import wrn
 from torch import optim
@@ -27,15 +27,9 @@ import data_utils.ood_detection.svhn as svhn
 
 from utils.args import training_args
 from utils.eval_utils import get_eval_stats
-from utils.train_utils import (model_save_name, save_config_file,
-                               test_single_epoch, train_single_epoch)
+from utils.train_utils import (model_save_name, save_config_file, test_single_epoch, train_single_epoch)
 
-dataset_num_classes = {
-    "cifar10": 10,
-    "cifar100": 100,
-    "svhn": 10,
-    "dirty_mnist": 10
-}
+dataset_num_classes = {"cifar10": 10, "cifar100": 100, "svhn": 10, "dirty_mnist": 10}
 
 dataset_loader = {
     "cifar10": cifar10,
@@ -66,11 +60,7 @@ if __name__ == "__main__":
     num_classes = dataset_num_classes[args.dataset]
 
     # Choosing the model to train
-    net = models[args.model](
-        spectral_normalization=args.sn,
-        mod=args.mod,
-        num_classes=num_classes
-    )
+    net = models[args.model](spectral_normalization=args.sn, mod=args.mod, num_classes=num_classes)
 
     if args.gpu:
         net.to(device)
@@ -87,9 +77,7 @@ if __name__ == "__main__":
             nesterov=args.nesterov,
         )
     elif args.optimiser == "adam":
-        optimizer = optim.Adam(opt_params,
-                               lr=args.learning_rate,
-                               weight_decay=args.weight_decay)
+        optimizer = optim.Adam(opt_params, lr=args.learning_rate, weight_decay=args.weight_decay)
 
     # 学习率schduler
     if args.scheduler == "step":
@@ -100,19 +88,15 @@ if __name__ == "__main__":
             gamma=0.1,
             verbose=False)
     elif args.scheduler == "cos":
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,
-                                                               T_max=300,
-                                                               eta_min=1e-7,
-                                                               verbose=False)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=300, eta_min=1e-7, verbose=False)
 
-    train_loader, val_loader = dataset_loader[
-        args.dataset].get_train_valid_loader(root=args.dataset_root,
-                                             batch_size=args.train_batch_size,
-                                             augment=args.data_aug,
-                                             val_size=0.0,
-                                             val_seed=args.seed,
-                                             pin_memory=args.gpu,
-                                             contrastive=args.contrastive)
+    train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(root=args.dataset_root,
+                                                                                   batch_size=args.train_batch_size,
+                                                                                   augment=args.data_aug,
+                                                                                   val_size=0.0,
+                                                                                   val_seed=args.seed,
+                                                                                   pin_memory=args.gpu,
+                                                                                   contrastive=args.contrastive)
 
     test_loader = dataset_loader[args.dataset].get_test_loader(
         root=args.dataset_root,
@@ -124,7 +108,7 @@ if __name__ == "__main__":
     time_str = datetime.datetime.strftime(curr_time, "%Y_%m_%d_%H_%M_%S")
     save_name = model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive)
     print("Model save name", save_name)
-   
+
     if args.ls:
         save_loc = f"{args.save_loc}/run{args.run}/{save_name}/{time_str}_labelsmooth/"
     else:
@@ -136,7 +120,6 @@ if __name__ == "__main__":
     save_config_file(save_loc, args)
 
     best_acc = 0
-    is_best = False
     for epoch in range(0, args.epoch):
         print("Starting epoch", epoch)
         train_loss, train_acc = train_single_epoch(
@@ -168,7 +151,6 @@ if __name__ == "__main__":
 
         if val_acc > best_acc:
             best_acc = val_acc
-            is_best = True
 
             save_path = save_loc + save_name + "_best" + ".model"
             torch.save(net.state_dict(), save_path)

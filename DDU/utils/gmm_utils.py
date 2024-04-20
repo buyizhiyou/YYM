@@ -131,7 +131,7 @@ def gmm_evaluate_with_perturbation(
         # log_probs = gaussians_model.log_prob(embedding[:, None, :])
         # max_log_probs = log_probs.max(1, keepdim=True)[0]  # get the index of the max log-probability
         # loss = max_log_probs.sum()
-        loss = -loss_func(out,label.to(device))  #这个loss效果好一些
+        loss = -loss_func(out, label.to(device))  #这个loss效果好一些
 
         net.zero_grad()
         loss.backward()
@@ -163,7 +163,6 @@ def gmm_evaluate_with_perturbation(
     return logits_N_C.to(device), labels_N.to(device)
 
 
-
 def maxp_evaluate_with_perturbation(
     net,
     loader,
@@ -177,7 +176,7 @@ def maxp_evaluate_with_perturbation(
     num_samples = len(loader.dataset)
     logits_N_C = torch.empty((num_samples, num_classes), dtype=torch.float, device=storage_device)
     labels_N = torch.empty(num_samples, dtype=torch.int, device=storage_device)
-    
+
     loss_func = nn.CrossEntropyLoss()
     std = torch.tensor(std).to(device)
     mean = torch.tensor(mean).to(device)

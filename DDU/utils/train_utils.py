@@ -11,10 +11,10 @@ from torch import nn
 import torch.distributed as dist
 from tqdm import tqdm
 from utils.eval_utils import accuracy
-from utils.simclr_utils import ContrastiveLearningViewTransform, get_simclr_pipeline_transform, info_nce_loss, supervisedContrastiveLoss
+from utils.simclr_utils import ContrastiveLearningViewTransform, get_simclr_pipeline_transform, info_nce_loss
+from utils.loss import supervisedContrastiveLoss
 from utils.loss import LabelSmoothing
 from torchvision.transforms import transforms
-import torchattacks
 
 
 def fgsm_attack(image, epsilon, data_grad):
@@ -86,10 +86,10 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
             logits = model(data)
             embeddings = activation['embedding']
             loss1 = loss_func(logits, labels)
-            loss2 = supervisedContrastiveLoss(embeddings, labels, device, temperature=0.5)
+            loss2 = supervisedContrastiveLoss(embeddings, labels, device, temperature=0.1)
             # if(epoch):第一阶段,只训练对比loss
-            loss = loss1 - 0.01 * loss2  #这个好一些？？让同一类尽量分散
-            # loss = loss1 + 0.01 * loss2 #让同一类尽量拥挤
+            # loss = loss1 - 0.01 * loss2  #这个好一些？？让同一类尽量分散
+            loss = loss1 + 0.01 * loss2  #让同一类尽量拥挤 #TODO:是距离选择有问题嘛？
             acc1, _ = accuracy(logits, labels, (1, 5))
             acc += acc1.item() * len(data)
         elif contrastive == 2:
@@ -110,7 +110,7 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
             acc += acc1.item() * len(data)
         elif adv == 1:
             """对抗训练"""
-            if batch_idx % 20==0:
+            if batch_idx % 20 == 0:
                 data.requires_grad = True  #data.required_grad区分,用required_grad梯度为None
                 logits = model(data)
                 loss = loss_func(logits, labels)
