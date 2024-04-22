@@ -14,6 +14,7 @@ import data_utils.ood_detection.cifar10 as cifar10
 import data_utils.ood_detection.cifar100 as cifar100
 import data_utils.ood_detection.lsun as lsun
 import data_utils.ood_detection.svhn as svhn
+import data_utils.ood_detection.mnist as mnist
 import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
 
 # Import network models
@@ -22,7 +23,7 @@ from net.resnet import resnet18, resnet50
 # from net.resnet2 import resnet18, resnet50
 from net.wide_resnet import wrn
 # from net.vgg import vgg16
-from net.vgg2 import vgg16
+from net.vgg import vgg16
 
 # Import metrics to compute
 from metrics.classification_metrics import (test_classification_net, test_classification_net_logits, test_classification_net_ensemble)
@@ -43,9 +44,9 @@ from utils.args import eval_args
 from utils.temperature_scaling import ModelWithTemperature
 
 # Dataset params
-dataset_num_classes = {"cifar10": 10, "cifar100": 100, "svhn": 10, "tiny_iamgenet": 200}
+dataset_num_classes = {"cifar10": 10, "cifar100": 100, "svhn": 10, "lsun": 10, "tiny_iamgenet": 200}
 
-dataset_loader = {"cifar10": cifar10, "cifar100": cifar100, "svhn": svhn, "lsun": lsun, "tiny_imagenet": tiny_imagenet}
+dataset_loader = {"cifar10": cifar10, "cifar100": cifar100, "svhn": svhn, "mnist": mnist, "lsun": lsun, "tiny_imagenet": tiny_imagenet}
 
 # Mapping model name to model function
 models = {
@@ -59,6 +60,7 @@ models = {
 model_to_num_dim = {"resnet18": 512, "resnet50": 2048, "resnet101": 2048, "resnet152": 2048, "wide_resnet": 640, "vgg16": 512}
 
 torch.backends.cudnn.enabled = False
+os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 if __name__ == "__main__":
 
@@ -99,7 +101,7 @@ if __name__ == "__main__":
     model_files = glob.glob(f"{args.load_loc}/run{args.run}/{save_name}/*/{model_name}")
 
     for i, saved_model_name in enumerate(model_files):
-        # saved_model_name = "./saved_models/run2/2024_03_14_18_02_26/resnet50_sn_3.0_mod_seed_1_best.model"
+        saved_model_name = "./saved_models/resnet50_sn_3.0_mod_seed_1_best.model"
         print(f"Run {args.run}, Evaluating for {i}: {saved_model_name}")
         #load dataset
         train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(
@@ -202,27 +204,27 @@ if __name__ == "__main__":
                     storage_device=device,
                 )
 
-                logits3, labels3 = maxp_evaluate_with_perturbation(
-                    net,
-                    test_loader,
-                    device=device,
-                    num_classes=num_classes,
-                    storage_device=device,
-                )
+                # logits3, labels3 = maxp_evaluate_with_perturbation(
+                #     net,
+                #     test_loader,
+                #     device=device,
+                #     num_classes=num_classes,
+                #     storage_device=device,
+                # )
 
-                ood_logits3, ood_labels3 = maxp_evaluate_with_perturbation(
-                    net,
-                    ood_test_loader,
-                    device=device,
-                    num_classes=num_classes,
-                    storage_device=device,
-                )
+                # ood_logits3, ood_labels3 = maxp_evaluate_with_perturbation(
+                #     net,
+                #     ood_test_loader,
+                #     device=device,
+                #     num_classes=num_classes,
+                #     storage_device=device,
+                # )
 
                 m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, conf=True)
                 m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device, conf=True)
-                m3_fpr95, m3_auroc, m3_auprc = get_roc_auc_logits(logits3, ood_logits3, confidence, device, conf=True)
+                # m3_fpr95, m3_auroc, m3_auprc = get_roc_auc_logits(logits3, ood_logits3, confidence, device, conf=True)
                 print(
-                    f"accu:{accuracy:.4f},ece:{ece:.6f},t_ece:{t_ece:.6f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f},m3_fpr95:{m3_fpr95:.4f} m3_auroc:{m3_auroc:.4f},m3_auprc:{m3_auprc:.4f}"
+                    f"accu:{accuracy:.4f},ece:{ece:.6f},t_ece:{t_ece:.6f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"
                 )
             except RuntimeError as e:
                 print("Runtime Error caught: " + str(e))

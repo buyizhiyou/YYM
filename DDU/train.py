@@ -93,7 +93,7 @@ if __name__ == "__main__":
     train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(root=args.dataset_root,
                                                                                    batch_size=args.train_batch_size,
                                                                                    augment=args.data_aug,
-                                                                                   val_size=0.0,
+                                                                                   val_size=0.1,
                                                                                    val_seed=args.seed,
                                                                                    pin_memory=args.gpu,
                                                                                    contrastive=args.contrastive)
@@ -135,12 +135,11 @@ if __name__ == "__main__":
         )
 
         if (epoch % 5 == 0):
-            val_acc = test_single_epoch(epoch, net, test_loader, device)
-
-        writer.add_scalar("train_loss", train_loss, (epoch + 1))
-        writer.add_scalar("train_acc", train_acc, (epoch + 1))
-        writer.add_scalar("val_acc", val_acc, (epoch + 1))
-        writer.add_scalar('learning_rate', scheduler.get_last_lr()[0], global_step=(epoch + 1))
+            val_acc = test_single_epoch(epoch, net, val_loader, device)
+            writer.add_scalar("train_loss", train_loss, (epoch + 1))
+            writer.add_scalar("train_acc", train_acc, (epoch + 1))
+            writer.add_scalar("val_acc", val_acc, (epoch + 1))
+            writer.add_scalar('learning_rate', scheduler.get_last_lr()[0], global_step=(epoch + 1))
 
         scheduler.step()
 

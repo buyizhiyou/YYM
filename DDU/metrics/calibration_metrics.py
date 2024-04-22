@@ -15,7 +15,6 @@ import matplotlib.pyplot as plt
 
 plt.rcParams.update({"font.size": 20})
 
-
 # Some keys used for the following dictionaries
 COUNT = "count"
 CONF = "conf"
@@ -113,7 +112,7 @@ def reliability_plot(confs, preds, labels, num_bins=15, model_name='model'):
     y = []
     for i in range(num_bins):
         y.append(bin_dict[i][BIN_ACC])
-    plt.figure(figsize=(10, 8))  # width:20, height:3
+    plt.figure(figsize=(5, 4))  # width:20, height:3
     plt.bar(bns, bns, align="edge", width=0.03, color="pink", label="Expected")
     plt.bar(bns, y, align="edge", width=0.03, color="blue", alpha=0.5, label="Actual")
     plt.ylabel("Accuracy", fontsize=30)
@@ -121,6 +120,6 @@ def reliability_plot(confs, preds, labels, num_bins=15, model_name='model'):
     plt.xticks(fontsize=30)
     plt.yticks(fontsize=30)
     plt.legend(fontsize=30, loc='upper left')
-    plt.savefig(f'./reliability_plot_{model_name}.pdf')
-    plt.savefig(f'./reliability_plot_{model_name}.png')
+    # plt.savefig(f'./reliability_plot_{model_name}.pdf')
+    # plt.savefig(f'./reliability_plot_{model_name}.png')
     plt.show()

@@ -59,7 +59,7 @@ class ModelWithTemperature(nn.Module):
 
         return self.set_temperature_logits(logits, labels, cross_validate=cross_validate)
 
-    def set_temperature_logits(self, logits, labels, cross_validate="nll"):
+    def set_temperature_logits(self, logits, labels, cross_validate="ece"):
         """
         Tune the tempearature of the model (using the validation set) with cross-validation on ECE or NLL
         """
@@ -73,8 +73,8 @@ class ModelWithTemperature(nn.Module):
         if self.log:
             print("Before temperature - NLL: %.3f, ECE: %.3f" % (before_temperature_nll, before_temperature_ece))
 
-        nll_val = 10 ** 7
-        ece_val = 10 ** 7
+        nll_val = 10**7
+        ece_val = 10**7
         T_opt_nll = 1.0
         T_opt_ece = 1.0
         T = 0.1

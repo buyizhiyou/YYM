@@ -186,6 +186,7 @@ def maxp_evaluate_with_perturbation(
         data.requires_grad = True  #data.required_grad区分,用required_grad梯度为None
 
         label = label.to(device)
+        label = label % 10
 
         out = net(data)
         loss = -loss_func(out, label.to(device))

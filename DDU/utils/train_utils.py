@@ -88,8 +88,8 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
             loss1 = loss_func(logits, labels)
             loss2 = supervisedContrastiveLoss(embeddings, labels, device, temperature=0.1)
             # if(epoch):第一阶段,只训练对比loss
-            # loss = loss1 - 0.01 * loss2  #这个好一些？？让同一类尽量分散
-            loss = loss1 + 0.01 * loss2  #让同一类尽量拥挤 #TODO:是距离选择有问题嘛？
+            loss = loss1 - 0.1 * loss2  #这个好一些？？让同一类尽量分散
+            # loss = loss1 + 0.01 * loss2  #让同一类尽量拥挤 #TODO:是距离选择有问题嘛？
             acc1, _ = accuracy(logits, labels, (1, 5))
             acc += acc1.item() * len(data)
         elif contrastive == 2:

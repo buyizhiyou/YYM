@@ -11,6 +11,7 @@ from torch.utils.data import Subset
 
 from torchvision import datasets
 from torchvision import transforms
+
 from utils.simclr_utils import ContrastiveLearningViewTransform, get_simclr_pipeline_transform
 
 
@@ -38,11 +39,6 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_work
     error_msg = "[!] val_size should be in the range [0, 1]."
     assert (val_size >= 0) and (val_size <= 1), error_msg
 
-    auto_aug = transforms.AutoAugment(
-        policy=transforms.AutoAugmentPolicy("cifar10"),
-        interpolation=transforms.InterpolationMode.BILINEAR,
-    )  # torchvision里的autoaugmentation
-
     normalize = transforms.Normalize(
         mean=[0.4914, 0.4822, 0.4465],
         std=[0.2023, 0.1994, 0.2010],
@@ -50,22 +46,26 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_work
 
     # define transforms
     valid_transform = transforms.Compose([
+        transforms.Resize((32, 32)),
         transforms.ToTensor(),
+        transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
         normalize,
     ])
 
     if augment:
         train_transform = transforms.Compose([
+            transforms.Resize((32, 32)),
             transforms.RandomCrop(32, padding=4),
-            transforms.RandomGrayscale(),  # add
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
+            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
             normalize,
         ])
-        train_transform.transforms.insert(1, auto_aug)
     else:
         train_transform = transforms.Compose([
+            transforms.Resize((32, 32)),
             transforms.ToTensor(),
+            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
             normalize,
         ])
 
@@ -74,14 +74,14 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_work
 
     # load the dataset
     data_dir = kwargs['root']
-    train_dataset = datasets.CIFAR10(
+    train_dataset = datasets.MNIST(
         root=data_dir,
         train=True,
         download=False,
         transform=train_transform,
     )
 
-    valid_dataset = datasets.CIFAR10(
+    valid_dataset = datasets.MNIST(
         root=data_dir,
         train=True,
         download=False,
@@ -140,12 +140,14 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
 
     # define transform
     transform = transforms.Compose([
+        transforms.Resize((32, 32)),
         transforms.ToTensor(),
+        transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
         normalize,
     ])
 
     data_dir = kwargs['root']
-    dataset = datasets.CIFAR10(
+    dataset = datasets.MNIST(
         root=data_dir,
         train=False,
         download=False,
@@ -161,3 +163,8 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     )
 
     return data_loader
+
+
+# dataloader = get_test_loader(32, root="../../data")
+# for x in dataloader:
+#     print(x[0].shape)

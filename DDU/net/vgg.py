@@ -12,12 +12,52 @@ from net.spectral_normalization.spectral_norm_fc import spectral_norm_fc
 
 from net.extra import ProjectionHead
 
-
 cfg_cifar = {
     "VGG11": [64, "M", 128, "M", 256, 256, "M", 512, 512, "M", 512, 512, "M"],
     "VGG13": [64, 64, "M", 128, 128, "M", 256, 256, "M", 512, 512, "M", 512, 512, "M"],
-    "VGG16": [64, 64, "M", 128, 128, "M", 256, 256, 256, "M", 512, 512, 512, "M", 512, 512, 512, "M",],
-    "VGG19": [64, 64, "M", 128, 128, "M", 256, 256, 256, 256, "M", 512, 512, 512, 512, "M", 512, 512, 512, 512, "M",],
+    "VGG16": [
+        64,
+        64,
+        "M",
+        128,
+        128,
+        "M",
+        256,
+        256,
+        256,
+        "M",
+        512,
+        512,
+        512,
+        "M",
+        512,
+        512,
+        512,
+        "M",
+    ],
+    "VGG19": [
+        64,
+        64,
+        "M",
+        128,
+        128,
+        "M",
+        256,
+        256,
+        256,
+        256,
+        "M",
+        512,
+        512,
+        512,
+        512,
+        "M",
+        512,
+        512,
+        512,
+        512,
+        "M",
+    ],
 }
 
 inp_size_cifar = {
@@ -30,8 +70,47 @@ inp_size_cifar = {
 cfg_mnist = {
     "VGG11": [64, 128, "M", 256, 256, "M", 512, 512, "M", 512, 512, "M"],
     "VGG13": [64, 64, 128, 128, "M", 256, 256, "M", 512, 512, "M", 512, 512, "M"],
-    "VGG16": [64, 64, 128, 128, "M", 256, 256, 256, "M", 512, 512, 512, "M", 512, 512, 512, "M",],
-    "VGG19": [64, 64, 128, 128, "M", 256, 256, 256, 256, "M", 512, 512, 512, 512, "M", 512, 512, 512, 512, "M",],
+    "VGG16": [
+        64,
+        64,
+        128,
+        128,
+        "M",
+        256,
+        256,
+        256,
+        "M",
+        512,
+        512,
+        512,
+        "M",
+        512,
+        512,
+        512,
+        "M",
+    ],
+    "VGG19": [
+        64,
+        64,
+        128,
+        128,
+        "M",
+        256,
+        256,
+        256,
+        256,
+        "M",
+        512,
+        512,
+        512,
+        512,
+        "M",
+        512,
+        512,
+        512,
+        512,
+        "M",
+    ],
 }
 
 inp_size_mnist = {
@@ -42,8 +121,8 @@ inp_size_mnist = {
 }
 
 
-
 class VGG(nn.Module):
+
     def __init__(
         self,
         vgg_name,
@@ -92,7 +171,7 @@ class VGG(nn.Module):
             self.inp_sizes = inp_size_cifar[vgg_name]
             self.features = self._make_layers(cfg_cifar[vgg_name])
 
-        self.fc_add = nn.Linear(512,512)
+        self.fc_add = nn.Linear(512, 512)
         self.activation = nn.LeakyReLU(inplace=True) if mod else nn.ReLU(inplace=True)
         self.drop = nn.Dropout()
 
