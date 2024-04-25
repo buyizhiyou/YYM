@@ -137,7 +137,7 @@ class WideResNet(nn.Module):
 
         self.num_classes = num_classes
         if num_classes is not None:
-            self.linear = nn.Linear(nStages[3], num_classes)
+            self.fc = nn.Linear(nStages[3], num_classes)
 
         nonlinearity = "leaky_relu" if self.mod else "relu"
         for m in self.modules():
@@ -150,10 +150,10 @@ class WideResNet(nn.Module):
                 # https://github.com/szagoruyko/wide-residual-networks/blob/master/pytorch/utils.py#L21
                 nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity=nonlinearity)
                 nn.init.constant_(m.bias, 0)
+
         self.feature = None
         self.embedding = None  # 对比loss的embedding
         self.temp = temp
-
 
         # add projection head for simclr
         self.projection_head = ProjectionHead(640, 256)
@@ -184,7 +184,7 @@ class WideResNet(nn.Module):
         self.feature = out
 
         if self.num_classes is not None:
-            out = self.linear(out) / self.temp
+            out = self.fc(out) / self.temp
         return out
 
 

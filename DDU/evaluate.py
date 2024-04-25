@@ -15,6 +15,7 @@ import data_utils.ood_detection.cifar100 as cifar100
 import data_utils.ood_detection.lsun as lsun
 import data_utils.ood_detection.svhn as svhn
 import data_utils.ood_detection.mnist as mnist
+import data_utils.ood_detection.gauss as gauss
 import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
 
 # Import network models
@@ -24,6 +25,7 @@ from net.resnet import resnet18, resnet50
 from net.wide_resnet import wrn
 # from net.vgg import vgg16
 from net.vgg import vgg16
+from net.vit import vit
 
 # Import metrics to compute
 from metrics.classification_metrics import (test_classification_net, test_classification_net_logits, test_classification_net_ensemble)
@@ -34,8 +36,6 @@ from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ens
 # Import GMM utils
 from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate, gmm_evaluate_with_perturbation, maxp_evaluate_with_perturbation
 from utils.kde_utils import kde_evaluate, kde_fit
-from utils.lof_utils import lof_evaluate, ldaf_evaluate
-from utils.ensemble_utils import load_ensemble, ensemble_forward_pass
 from utils.eval_utils import model_load_name
 from utils.train_utils import model_save_name
 from utils.args import eval_args
@@ -46,7 +46,7 @@ from utils.temperature_scaling import ModelWithTemperature
 # Dataset params
 dataset_num_classes = {"cifar10": 10, "cifar100": 100, "svhn": 10, "lsun": 10, "tiny_iamgenet": 200}
 
-dataset_loader = {"cifar10": cifar10, "cifar100": cifar100, "svhn": svhn, "mnist": mnist, "lsun": lsun, "tiny_imagenet": tiny_imagenet}
+dataset_loader = {"cifar10": cifar10, "cifar100": cifar100, "svhn": svhn, "mnist": mnist, "lsun": lsun,"gauss":gauss, "tiny_imagenet": tiny_imagenet}
 
 # Mapping model name to model function
 models = {
@@ -55,9 +55,10 @@ models = {
     "resnet50": resnet50,
     "wide_resnet": wrn,
     "vgg16": vgg16,
+    "vit":vit
 }
 
-model_to_num_dim = {"resnet18": 512, "resnet50": 2048, "resnet101": 2048, "resnet152": 2048, "wide_resnet": 640, "vgg16": 512}
+model_to_num_dim = {"resnet18": 512, "resnet50": 2048, "resnet101": 2048, "resnet152": 2048, "wide_resnet": 640, "vgg16": 512,"vit":512}
 
 torch.backends.cudnn.enabled = False
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
@@ -101,7 +102,7 @@ if __name__ == "__main__":
     model_files = glob.glob(f"{args.load_loc}/run{args.run}/{save_name}/*/{model_name}")
 
     for i, saved_model_name in enumerate(model_files):
-        saved_model_name = "./saved_models/resnet50_sn_3.0_mod_seed_1_best.model"
+        # saved_model_name = "./saved_models/resnet50_sn_3.0_mod_seed_1_best.model"
         print(f"Run {args.run}, Evaluating for {i}: {saved_model_name}")
         #load dataset
         train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(
@@ -178,6 +179,7 @@ if __name__ == "__main__":
                     num_classes=num_classes,
                     storage_device=device,
                 )
+
                 ood_logits, ood_labels = gmm_evaluate(
                     net,
                     gaussians_model,

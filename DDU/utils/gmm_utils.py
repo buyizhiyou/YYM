@@ -123,6 +123,7 @@ def gmm_evaluate_with_perturbation(
     loss_func = nn.CrossEntropyLoss()
     start = 0
     for data, label in tqdm(loader):
+        label = label % 10
         data = data.to(device)
         data.requires_grad = True  #data.required_grad区分,用required_grad梯度为None
 

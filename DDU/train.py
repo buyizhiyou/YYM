@@ -16,6 +16,7 @@ from net.resnet import resnet18, resnet50  #自己实现的spectral norm
 from net.vgg import vgg16  #自己实现的
 # from net.vgg2 import vgg16 #官方实现的
 from net.wide_resnet import wrn
+from net.vit import vit
 from torch import optim
 from torch.utils.tensorboard import SummaryWriter
 
@@ -38,13 +39,7 @@ dataset_loader = {
     "dirty_mnist": dirty_mnist,
 }
 
-models = {
-    "lenet": lenet,
-    "resnet18": resnet18,
-    "resnet50": resnet50,
-    "wide_resnet": wrn,
-    "vgg16": vgg16,
-}
+models = {"lenet": lenet, "resnet18": resnet18, "resnet50": resnet50, "wide_resnet": wrn, "vgg16": vgg16, "vit": vit}
 
 # torch.backends.cudnn.benchmark = False
 if __name__ == "__main__":

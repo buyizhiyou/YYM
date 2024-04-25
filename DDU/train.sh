@@ -69,6 +69,7 @@ for i in {1..10}; do
               --gpu $gpu \
               --run $run \
               --data-aug \
+              --lr 0.1 \
               -b $batchsize \
               --epochs $epochs --dataset cifar10 \
               --model $model \

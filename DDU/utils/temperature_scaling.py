@@ -36,7 +36,7 @@ class ModelWithTemperature(nn.Module):
         # Expand temperature to match the size of logits
         return logits / self.temperature
 
-    def set_temperature(self, valid_loader, cross_validate="nll"):
+    def set_temperature(self, valid_loader, cross_validate="ece"):
         """
         Tune the tempearature of the model (using the validation set) with cross-validation on ECE or NLL
         """

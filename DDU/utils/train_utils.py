@@ -12,8 +12,7 @@ import torch.distributed as dist
 from tqdm import tqdm
 from utils.eval_utils import accuracy
 from utils.simclr_utils import ContrastiveLearningViewTransform, get_simclr_pipeline_transform, info_nce_loss
-from utils.loss import supervisedContrastiveLoss
-from utils.loss import LabelSmoothing
+from utils.loss import supervisedContrastiveLoss, LabelSmoothing, CenterLoss
 from torchvision.transforms import transforms
 
 
@@ -57,7 +56,7 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
 
             return hook
 
-        if contrastive == 1:
+        if contrastive == 1 or contrastive==3:
             model.fc.register_forward_hook(get_activation1('embedding'))
         elif contrastive == 2:
             model.projection_head.out.register_forward_hook(get_activation2('embedding'))
@@ -67,6 +66,7 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
     else:
         loss_func = nn.CrossEntropyLoss()
 
+    centerloss = CenterLoss(10,model.fc.in_features)
     for batch_idx, (x, y) in enumerate(tqdm(train_loader)):
         if (isinstance(x, list)):  #生成的多个视角的增强图片
             data = torch.cat(x, dim=0)
@@ -86,9 +86,9 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
             logits = model(data)
             embeddings = activation['embedding']
             loss1 = loss_func(logits, labels)
-            loss2 = supervisedContrastiveLoss(embeddings, labels, device, temperature=0.1)
+            loss2 = supervisedContrastiveLoss(embeddings, labels, device, temperature=0.5)
             # if(epoch):第一阶段,只训练对比loss
-            loss = loss1 - 0.1 * loss2  #这个好一些？？让同一类尽量分散
+            loss = loss1 - 0.01 * loss2  #这个好一些？？让同一类尽量分散
             # loss = loss1 + 0.01 * loss2  #让同一类尽量拥挤 #TODO:是距离选择有问题嘛？
             acc1, _ = accuracy(logits, labels, (1, 5))
             acc += acc1.item() * len(data)
@@ -107,6 +107,15 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
                 loss = 100 * loss1 + loss2
 
             acc1, _ = accuracy(logits2, labels2, (1, 5))
+            acc += acc1.item() * len(data)
+        elif contrastive == 3:
+            logits = model(data)
+            embeddings = activation['embedding']
+            loss1 = loss_func(logits, labels)
+            loss2 = centerloss(labels,embeddings)
+            loss = loss1 + 0.01 * loss2
+
+            acc1, _ = accuracy(logits, labels, (1, 5))
             acc += acc1.item() * len(data)
         elif adv == 1:
             """对抗训练"""

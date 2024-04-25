@@ -151,12 +151,11 @@ class CenterLoss(nn.Module):
             raise ValueError("Center's dim: {0} should be equal to input feature's \
                             dim: {1}".format(self.feat_dim, feat.size(1)))
         batch_size_tensor = feat.new_empty(1).fill_(batch_size if self.size_average else 1)
-        loss = self.centerlossfunc(feat, label, self.centers, batch_size_tensor)
+        loss = self.centerlossfunc(feat, label, self.centers.to(feat.device), batch_size_tensor)
         return loss
 
 
 class CenterlossFunc(Function):
-
     @staticmethod
     def forward(ctx, feature, label, centers, batch_size):
         ctx.save_for_backward(feature, label, centers, batch_size)
@@ -227,8 +226,8 @@ def supervisedContrastiveLoss(representations, labels, device, temperature=0.5):
     #接下来就是算一个批次中的loss了
     loss = -torch.log(loss)  #求-log
     # loss = torch.sum(torch.sum(loss, dim=1)) / (2 * n)  #将所有数据都加起来除以2n
-    # loss = torch.sum(torch.sum(loss, dim=1)) / (len(torch.nonzero(loss)))
-    loss = torch.sum(torch.sum(loss, dim=1) / (torch.sum((loss != 0), dim=1)))
+    loss = torch.sum(torch.sum(loss, dim=1)) / (len(torch.nonzero(loss)))
+    # loss = torch.sum(torch.sum(loss, dim=1) / (torch.sum((loss != 0), dim=1)))#不收敛
 
     return loss
 
