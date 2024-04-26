@@ -7,7 +7,6 @@ use_amp: True
 mode: deterministic
 aug: True
 use_cutmix: False 
-use_cutmix: False
 size: 32
 workers: 4
 epochs: 16000

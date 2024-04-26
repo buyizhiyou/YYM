@@ -156,11 +156,17 @@ class CenterLoss(nn.Module):
 
 
 class CenterlossFunc(Function):
+
     @staticmethod
     def forward(ctx, feature, label, centers, batch_size):
         ctx.save_for_backward(feature, label, centers, batch_size)
         centers_batch = centers.index_select(0, label.long())
-        return (feature - centers_batch).pow(2).sum() / 2.0 / batch_size
+        dist1 = (feature - centers_batch).pow(2).sum() / 2.0 / batch_size  #类内最小
+        #类间最大
+        centers2 = centers.reshape(centers.shape[0], 1, centers.shape[1])
+        dist2 = (centers - centers2).pow(2).sum() / 2.0 / batch_size
+
+        return dist1 / dist2
 
     @staticmethod
     def backward(ctx, grad_output):

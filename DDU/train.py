@@ -129,7 +129,7 @@ if __name__ == "__main__":
             loss_mean=args.loss_mean,
         )
 
-        if (epoch % 5 == 0):
+        if (epoch % 3 == 0):
             val_acc = test_single_epoch(epoch, net, val_loader, device)
             writer.add_scalar("train_loss", train_loss, (epoch + 1))
             writer.add_scalar("train_acc", train_acc, (epoch + 1))

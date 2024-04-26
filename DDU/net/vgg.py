@@ -175,7 +175,7 @@ class VGG(nn.Module):
         self.activation = nn.LeakyReLU(inplace=True) if mod else nn.ReLU(inplace=True)
         self.drop = nn.Dropout()
 
-        self.fc = nn.Linear(512, num_classes)
+        self.fc = nn.Linear(512, num_classes, bias=False)
 
         self.projection_head = ProjectionHead(512, 256)
         self.feature = None

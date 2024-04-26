@@ -56,7 +56,7 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
 
             return hook
 
-        if contrastive == 1 or contrastive==3:
+        if contrastive == 1 or contrastive == 3:
             model.fc.register_forward_hook(get_activation1('embedding'))
         elif contrastive == 2:
             model.projection_head.out.register_forward_hook(get_activation2('embedding'))
@@ -66,7 +66,7 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
     else:
         loss_func = nn.CrossEntropyLoss()
 
-    centerloss = CenterLoss(10,model.fc.in_features)
+    centerloss = CenterLoss(10, model.fc.in_features)
     for batch_idx, (x, y) in enumerate(tqdm(train_loader)):
         if (isinstance(x, list)):  #生成的多个视角的增强图片
             data = torch.cat(x, dim=0)
@@ -112,7 +112,7 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
             logits = model(data)
             embeddings = activation['embedding']
             loss1 = loss_func(logits, labels)
-            loss2 = centerloss(labels,embeddings)
+            loss2 = centerloss(labels, embeddings)
             loss = loss1 + 0.01 * loss2
 
             acc1, _ = accuracy(logits, labels, (1, 5))
@@ -164,7 +164,6 @@ def test_single_epoch(epoch, model, test_val_loader, device):
     Util method for testing a model for a single epoch.
     """
     model.eval()
-    loss = 0
     num_samples = 0
     acc = 0
     with torch.no_grad():
