@@ -4,11 +4,13 @@ import numpy as np
 import torch.backends.cudnn as cudnn
 
 # Import data utilities
+import torch.utils.data as data
 import data_utils.active_learning.active_learning as active_learning
+from data_utils.ambiguous_mnist.ambiguous_mnist_dataset import AmbiguousMNIST
 from data_utils.fast_mnist import create_MNIST_dataset
 
 # Import network architectures
-from net.resnet import resnet18
+from net.resnet import resnet50
 from net.vgg import vgg16
 
 # Import train and test utils
@@ -27,7 +29,7 @@ from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit
 from utils.ensemble_utils import ensemble_forward_pass
 
 # Mapping model name to model function
-models = {"resnet18": resnet18, "vgg16": vgg16}
+models = {"resnet50": resnet50, "vgg16": vgg16}
 
 
 def class_probs(data_loader):
@@ -45,19 +47,58 @@ def compute_density(logits, class_probs):
     return torch.sum((torch.exp(logits) * class_probs), dim=1)
 
 
+def ambiguous_acquired(data_loader, threshold, model):
+    """
+    This method is required to identify the ambiguous samples which are acquired.
+    """
+    model.eval()
+    logits = []
+    with torch.no_grad():
+        for data, label in data_loader:
+            data = data.to(device)
+            label = label.to(device)
+
+            op = model(data)
+            logits.append(op)
+
+        logits = torch.cat(logits, dim=0)
+    entropies = entropy(logits)
+
+    return entropies.cpu().numpy().tolist(), (torch.sum(entropies > threshold).item() / len(data_loader.dataset))
+
+
 if __name__ == "__main__":
 
     args = al_args().parse_args()
     print(args)
+    import pdb;pdb.set_trace()
+
+    # Checking if GPU is available
+    cuda = torch.cuda.is_available()
+
     # Setting additional parameters
     torch.manual_seed(args.seed)
-    device = torch.device(f"cuda:{args.gpu}")
+    device = torch.device("cuda" if cuda else "cpu")
 
     model_fn = models[args.model_name]
 
+    # Load pretrained network for checking ambiguous samples
+    if args.ambiguous:
+        pretrained_net = models[args.trained_model_name](spectral_normalization=args.tsn, mod=args.tmod, mnist=True).to(device)
+        pretrained_net = torch.nn.DataParallel(pretrained_net, device_ids=range(torch.cuda.device_count()))
+        cudnn.benchmark = True
+        pretrained_net.load_state_dict(torch.load(args.saved_model_path + args.saved_model_name))
+
     # Creating the datasets
     num_classes = 10
-    train_dataset, test_dataset = create_MNIST_dataset(device)  #60000, 10000
+    train_dataset, test_dataset = create_MNIST_dataset()
+    if args.ambiguous:
+        indices = np.random.choice(len(train_dataset), args.subsample)
+        mnist_train_dataset = data.Subset(train_dataset, indices)
+        train_dataset = data.ConcatDataset([
+            mnist_train_dataset,
+            AmbiguousMNIST(root=args.dataset_root, train=True, device=device),
+        ])
 
     # Creating a validation split
     idxs = list(range(len(train_dataset)))
@@ -66,8 +107,8 @@ if __name__ == "__main__":
     np.random.shuffle(idxs)
 
     train_idx, val_idx = idxs[split:], idxs[:split]
-    val_dataset = torch.utils.data.Subset(train_dataset, val_idx)  #6000
-    train_dataset = torch.utils.data.Subset(train_dataset, train_idx)  #54000
+    val_dataset = data.Subset(train_dataset, val_idx)
+    train_dataset = data.Subset(train_dataset, train_idx)
 
     initial_sample_indices = active_learning.get_balanced_sample_indices(
         train_dataset,
@@ -75,19 +116,24 @@ if __name__ == "__main__":
         n_per_digit=args.num_initial_samples / num_classes,
     )
 
-    kwargs = {"num_workers": 0, "pin_memory": False}
+    kwargs = {"num_workers": 0, "pin_memory": False} if cuda else {}
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.test_batch_size, shuffle=False, **kwargs)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.test_batch_size, shuffle=False, **kwargs)
 
     # Run experiment
     num_run = 5
     test_accs = {}
+    ambiguous_dict = {}
+    ambiguous_entropies_dict = {}
 
     for i in range(num_run):
         test_accs[i] = []
+        ambiguous_dict[i] = []
+        ambiguous_entropies_dict[i] = {}
 
     for run in range(num_run):
         print("Experiment run: " + str(run) + " =====================================================================>")
+
         torch.manual_seed(args.seed + run)
 
         # Setup data for the experiment
@@ -171,8 +217,8 @@ if __name__ == "__main__":
                     small_train_loader,
                     num_dim=512,
                     dtype=torch.double,
-                    device=device,
-                    storage_device=device,
+                    device="cuda",
+                    storage_device="cuda",
                 )
                 gaussians_model, jitter_eps = gmm_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
             print("Training ended")
@@ -204,6 +250,7 @@ if __name__ == "__main__":
 
             print("Test set: Accuracy: ({:.2f}%)".format(percentage_correct))
 
+            # Breaking clause
             if len(active_learning_data.training_dataset) >= args.max_training_samples:
                 break
 
@@ -247,7 +294,7 @@ if __name__ == "__main__":
                         args.acquisition_batch_size,
                         uncertainty=False,
                     )
-                elif args.al_type == "entropy":
+                else:
                     logits = []
                     with torch.no_grad():
                         for data, _ in pool_loader:
@@ -261,14 +308,29 @@ if __name__ == "__main__":
 
             # Performing acquisition
             active_learning_data.acquire(candidate_indices)
-
+            if args.ambiguous:
+                entropies, amb_percent = ambiguous_acquired(small_train_loader, args.threshold, pretrained_net)
+                ambiguous_dict[run].append(amb_percent)
+                ambiguous_entropies_dict[run][active_learning_iteration] = entropies
             active_learning_iteration += 1
 
     # Save the dictionaries
     save_name = model_save_name(args.model_name, args.sn, args.mod, args.coeff, args.seed)
     save_ensemble_mi = "_mi" if (args.al_type == "ensemble" and args.mi) else ""
-
-    accuracy_file_name = "test_accs_" + save_name + '_' + args.al_type + save_ensemble_mi + "_mnist.json"
+    if args.ambiguous:
+        accuracy_file_name = ("logs/test_accs_" + save_name + '_' + args.al_type + save_ensemble_mi + "_dirty_mnist_" + str(args.subsample) + ".json")
+        ambiguous_file_name = ("logs/ambiguous_" + save_name + '_' + args.al_type + save_ensemble_mi + "_dirty_mnist_" + str(args.subsample) +
+                               ".json")
+        ambiguous_entropies_file_name = ("logs/ambiguous_entropies_" + save_name + '_' + args.al_type + save_ensemble_mi + "_dirty_mnist_" +
+                                         str(args.subsample) + ".json")
+    else:
+        accuracy_file_name = "test_accs_" + save_name + '_' + args.al_type + save_ensemble_mi + "_mnist.json"
 
     with open(accuracy_file_name, "w") as acc_file:
         json.dump(test_accs, acc_file)
+
+    if args.ambiguous:
+        with open(ambiguous_file_name, "w") as ambiguous_file:
+            json.dump(ambiguous_dict, ambiguous_file)
+        with open(ambiguous_entropies_file_name, "w") as ambiguous_entropies_file:
+            json.dump(ambiguous_entropies_dict, ambiguous_entropies_file)

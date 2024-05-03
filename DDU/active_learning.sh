@@ -2,6 +2,7 @@
 
 python active_learning_script.py \
        --seed 1 \
-       --model resnet18 \
+       --gpu 0 \
+       --model vgg16 \
        -sn -mod \
-       --al-type gmm
+       --al-type ensemble

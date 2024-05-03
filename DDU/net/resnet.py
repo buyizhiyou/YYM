@@ -191,7 +191,7 @@ class ResNet(nn.Module):
             
         self.fc_add = nn.Linear(512 * block.expansion, 512 * block.expansion)  #添加一层线性层，为了dropout
         self.drop = nn.Dropout()
-        self.fc = nn.Linear(512 * block.expansion, num_classes, bias=False)  #remove bias for last fc
+        self.fc = nn.Linear(512 * block.expansion, num_classes, bias=True)  #remove bias for last fc
 
         self.activation = F.leaky_relu if self.mod else F.relu
         self.feature = None  # 这里抽出来倒数第二层feature，作为密度估计的高维特征

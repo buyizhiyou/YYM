@@ -335,8 +335,8 @@ def al_args():
     num_ensemble = 5
 
     num_initial_samples = 20
-    max_training_samples = 300
-    acquisition_batch_size = 5
+    max_training_samples = 300 #20--(+5)-->300
+    acquisition_batch_size = 5 #每次增加5个样本
     epochs = 20
 
     train_batch_size = 64
@@ -345,6 +345,7 @@ def al_args():
 
     parser = argparse.ArgumentParser(description="Active Learning Experiments")
     parser.add_argument("--seed", type=int, dest="seed", required=True, help="Seed to use")
+    parser.add_argument("--gpu", default=1, help="Use GPU")
     parser.add_argument(
         "--model",
         type=str,

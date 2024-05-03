@@ -27,7 +27,7 @@ def fgsm_attack(image, epsilon, data_grad):
     return perturbed_image
 
 
-def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastive, adv=0, label_smooth=False, loss_mean=False):
+def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastive=0, adv=0, label_smooth=False, loss_mean=False):
     """
     Util method for training a model for a single epoch.
     """

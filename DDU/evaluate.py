@@ -270,7 +270,7 @@ if __name__ == "__main__":
                 print("Runtime Error caught: " + str(e))
                 continue
 
-        accuracies.append(accuracy)
+        accuracies.append(round(accuracy))
         eces.append(round(ece, 4))
         t_eces.append(round(t_ece, 4))
         # m1_fpr95s.append(round(m1_fpr95, 4))

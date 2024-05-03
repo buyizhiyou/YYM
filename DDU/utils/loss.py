@@ -165,8 +165,9 @@ class CenterlossFunc(Function):
         #类间最大
         centers2 = centers.reshape(centers.shape[0], 1, centers.shape[1])
         dist2 = (centers - centers2).pow(2).sum() / 2.0 / batch_size
+        loss = dist1 / (dist2 + 1e-17)
 
-        return dist1 / dist2
+        return loss
 
     @staticmethod
     def backward(ctx, grad_output):

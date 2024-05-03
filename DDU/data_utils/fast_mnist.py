@@ -4,11 +4,8 @@ FastMNIST taken from: https://gist.github.com/y0ast/f69966e308e549f013a92dc66deb
 import torch
 from torchvision.datasets import MNIST
 
-device = torch.device("cuda" if torch.cuda.is_available else "cpu")
-
-
 class FastMNIST(MNIST):
-    def __init__(self, *args, **kwargs):
+    def __init__(self,device, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         # Scale data to [0,1]
@@ -33,9 +30,9 @@ class FastMNIST(MNIST):
         return img, target
 
 
-def create_MNIST_dataset():
+def create_MNIST_dataset(device):
 
-    train_dataset = FastMNIST("data", train=True, download=True)
-    test_dataset = FastMNIST("data", train=False, download=True)
+    train_dataset = FastMNIST(device,"data", train=True, download=True)
+    test_dataset = FastMNIST(device,"data", train=False, download=True)
 
     return train_dataset, test_dataset
