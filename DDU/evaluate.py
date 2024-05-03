@@ -270,15 +270,15 @@ if __name__ == "__main__":
                 print("Runtime Error caught: " + str(e))
                 continue
 
-        accuracies.append(round(accuracy))
-        eces.append(round(ece, 4))
-        t_eces.append(round(t_ece, 4))
-        # m1_fpr95s.append(round(m1_fpr95, 4))
-        m1_aurocs.append(round(m1_auroc, 4))
-        m1_auprcs.append(round(m1_auprc, 4))
-        # m2_fpr95s.append(round(m1_fpr95, 4))
-        m2_aurocs.append(round(m2_auroc, 4))
-        m2_auprcs.append(round(m2_auprc, 4))
+        accuracies.append(accuracy)
+        eces.append(ece)
+        t_eces.append(t_ece)
+        # m1_fpr95s.append(m1_fpr95)
+        m1_aurocs.append(m1_auroc)
+        m1_auprcs.append(m1_auprc)
+        # m2_fpr95s.append(m1_fpr95)
+        m2_aurocs.append(m2_auroc)
+        m2_auprcs.append(m2_auprc)
 
     accuracy_tensor = torch.tensor(accuracies)
     ece_tensor = torch.tensor(eces)
@@ -312,15 +312,13 @@ if __name__ == "__main__":
 
     res_dict = {}
     res_dict["mean"] = {}
-    res_dict["mean"]["accuracy"] = mean_accuracy.item()
-    res_dict["mean"]["ece"] = mean_ece.item()
-    res_dict["mean"]["t_ece"] = mean_t_ece.item()
-    # res_dict["mean"]["m1_fpr95"] = mean_m1_fpr95.item()
-    res_dict["mean"]["m1_auroc"] = mean_m1_auroc.item()
-    res_dict["mean"]["m1_auprc"] = mean_m1_auprc.item()
-    # res_dict["mean"]["m2_fpr95"] = mean_m2_fpr95.item()
-    res_dict["mean"]["m2_auroc"] = mean_m2_auroc.item()
-    res_dict["mean"]["m2_auprc"] = mean_m2_auprc.item()
+    res_dict["mean"]["accuracy"] = round(mean_accuracy.item(),4)
+    res_dict["mean"]["ece"] = round(mean_ece.item(),4)
+    res_dict["mean"]["t_ece"] = round(mean_t_ece.item(),4)
+    res_dict["mean"]["m1_auroc"] = round(mean_m1_auroc.item(),4)
+    res_dict["mean"]["m1_auprc"] = round(mean_m1_auprc.item(),4)
+    res_dict["mean"]["m2_auroc"] = round(mean_m2_auroc.item(),4)
+    res_dict["mean"]["m2_auprc"] = round(mean_m2_auprc.item(),4)
 
     res_dict["std"] = {}
     res_dict["std"]["accuracy"] = std_accuracy.item()
