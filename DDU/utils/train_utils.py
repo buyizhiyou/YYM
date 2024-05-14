@@ -181,7 +181,7 @@ def test_single_epoch(epoch, model, test_val_loader, device):
     return acc / num_samples
 
 
-def model_save_name(model_name, sn, mod, coeff, seed, contrastive):
+def model_save_name(model_name, sn, mod, coeff, seed, contrastive=0):
     if sn:
         if mod:
             strn = "_sn_" + str(coeff) + "_mod_"

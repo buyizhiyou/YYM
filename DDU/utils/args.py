@@ -221,7 +221,6 @@ def eval_args():
     sn_coeff = 3.0
     run = 1
     ensemble = 5
-    model_type = "gmm"
 
     parser = argparse.ArgumentParser(
         description="Training for calibration.",
@@ -244,6 +243,14 @@ def eval_args():
     parser.add_argument("--mcdropout", type=bool, default=False, help="using mc dropout")
 
     parser.add_argument("--seed", type=int, dest="seed", required=True, help="Seed to use")
+
+    parser.add_argument(
+        "--evaltype",
+        type=str,
+        default="gmm",
+        choices=["softmax", "ensemble", "gmm", "kde"],
+    )
+
 
     parser.add_argument(
         "--dataset-root",
@@ -310,14 +317,6 @@ def eval_args():
     )
     parser.set_defaults(mod=False)
     parser.add_argument("--ensemble", type=int, default=ensemble, dest="ensemble", help="Number of models in ensemble")
-    parser.add_argument(
-        "--model-type",
-        type=str,
-        default=model_type,
-        choices=["softmax", "ensemble", "gmm", "kde"],
-        dest="model_type",
-        help="Type of model to load for evaluation.",
-    )
 
     return parser
 
@@ -332,11 +331,11 @@ def al_args():
     al_acquisition = "softmax"
 
     sn_coeff = 3.0
-    num_ensemble = 5
+    num_ensemble = 3
 
     num_initial_samples = 20
-    max_training_samples = 300 #20--(+5)-->300
-    acquisition_batch_size = 5 #每次增加5个样本
+    max_training_samples = 300  #20--(+5)-->300
+    acquisition_batch_size = 5  #每次增加5个样本
     epochs = 20
 
     train_batch_size = 64
@@ -354,11 +353,20 @@ def al_args():
         help="Model to train",
     )
     parser.add_argument(
+        "--dataset",
+        type=str,
+        default="mnist",
+        dest="dataset",
+        help="dataset to train on",
+    )
+    parser.add_argument(
         "-ambiguous",
         action="store_true",
         dest="ambiguous",
         help="Use Ambiguous MNIST in training",
     )
+    # add extra arguments
+    parser.add_argument("--perturbation", type=int, default=0, help="add input perturbation")
     parser.set_defaults(ambiguous=False)
     parser.add_argument(
         "--dataset-root",
@@ -454,7 +462,7 @@ def al_args():
         "--al-type",
         type=str,
         default=al_acquisition,
-        choices=["softmax", "ensemble", "gmm"],
+        choices=["softmax", "ensemble", "gmm", "entropy"],
         dest="al_type",
         help="Type of model to use for AL.",
     )

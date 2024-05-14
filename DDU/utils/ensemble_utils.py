@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 import torch.backends.cudnn as cudnn
-
+import glob 
 from net.vgg import vgg16
 from net.lenet import lenet
 from net.resnet import resnet18, resnet50
@@ -26,12 +26,10 @@ models = {
 def load_ensemble(ensemble_loc, model_name, device, num_classes=10, ensemble_len=5, num_epochs=350, seed=1, **kwargs):
     ensemble = []
     cudnn.benchmark = True
+    files = glob.glob(f"{ensemble_loc}/{model_name}*.model")
     for i in range(ensemble_len):
         net = models[model_name](num_classes=num_classes, temp=1.0, **kwargs).to(device)
-        net = torch.nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
-        net.load_state_dict(
-            torch.load(ensemble_loc + '/' + model_name + '_' + str(seed+i) + "_" + str(num_epochs) + ".model")
-        )
+        net.load_state_dict(torch.load(files[i]))
         ensemble.append(net)
     return ensemble
 

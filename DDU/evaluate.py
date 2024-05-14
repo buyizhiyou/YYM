@@ -39,6 +39,7 @@ from utils.kde_utils import kde_evaluate, kde_fit
 from utils.eval_utils import model_load_name
 from utils.train_utils import model_save_name
 from utils.args import eval_args
+from utils.ensemble_utils import load_ensemble, ensemble_forward_pass
 
 # Temperature scaling
 from utils.temperature_scaling import ModelWithTemperature
@@ -46,19 +47,20 @@ from utils.temperature_scaling import ModelWithTemperature
 # Dataset params
 dataset_num_classes = {"cifar10": 10, "cifar100": 100, "svhn": 10, "lsun": 10, "tiny_iamgenet": 200}
 
-dataset_loader = {"cifar10": cifar10, "cifar100": cifar100, "svhn": svhn, "mnist": mnist, "lsun": lsun,"gauss":gauss, "tiny_imagenet": tiny_imagenet}
-
-# Mapping model name to model function
-models = {
-    "lenet": lenet,
-    "resnet18": resnet18,
-    "resnet50": resnet50,
-    "wide_resnet": wrn,
-    "vgg16": vgg16,
-    "vit":vit
+dataset_loader = {
+    "cifar10": cifar10,
+    "cifar100": cifar100,
+    "svhn": svhn,
+    "mnist": mnist,
+    "lsun": lsun,
+    "gauss": gauss,
+    "tiny_imagenet": tiny_imagenet
 }
 
-model_to_num_dim = {"resnet18": 512, "resnet50": 2048, "resnet101": 2048, "resnet152": 2048, "wide_resnet": 640, "vgg16": 512,"vit":512}
+# Mapping model name to model function
+models = {"lenet": lenet, "resnet18": resnet18, "resnet50": resnet50, "wide_resnet": wrn, "vgg16": vgg16, "vit": vit}
+
+model_to_num_dim = {"resnet18": 512, "resnet50": 2048, "resnet101": 2048, "resnet152": 2048, "wide_resnet": 640, "vgg16": 512, "vit": 512}
 
 torch.backends.cudnn.enabled = False
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
@@ -99,235 +101,269 @@ if __name__ == "__main__":
     topt = None
     save_name = model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive)
     model_name = model_load_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive) + "_best.model"
-    model_files = glob.glob(f"{args.load_loc}/run{args.run}/{save_name}/*/{model_name}")
+
+    if args.evaltype == "ensemble":
+        model_files = glob.glob(f"{args.load_loc}/run{args.run}/ensemble/{save_name}/*")
+    else:
+        model_files = glob.glob(f"{args.load_loc}/run{args.run}/{save_name}/*/{model_name}")
 
     for i, saved_model_name in enumerate(model_files):
-        # saved_model_name = "./saved_models/resnet50_sn_3.0_mod_seed_1_best.model"
         print(f"Run {args.run}, Evaluating for {i}: {saved_model_name}")
-        #load dataset
-        train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(
-            root=args.dataset_root,
-            batch_size=args.batch_size,
-            augment=args.data_aug,
-            val_seed=(args.seed),
-            val_size=0.1,
-            pin_memory=args.gpu,
-        )
-
-        #load model
-        print(f"load {saved_model_name}")
-        net = models[args.model](
-            spectral_normalization=args.sn,
-            mod=args.mod,
-            num_classes=num_classes,
-            temp=1.0,
-        )
-        if args.gpu:
-            net.to(device)
-            cudnn.benchmark = True
-        net.load_state_dict(torch.load(str(saved_model_name)), strict=False)
-        net.eval()
-        (
-            conf_matrix,
-            accuracy,
-            labels_list,
-            predictions,
-            confidences,
-        ) = test_classification_net(net, test_loader, device)
-        ece = expected_calibration_error(confidences, predictions, labels_list, num_bins=15)
-
-        #校准
-        temp_net = ModelWithTemperature(net, device)
-        temp_net.set_temperature(val_loader)
-        net.temp = temp_net.temperature
-
-        (
-            t_conf_matrix,
-            t_accuracy,
-            t_labels_list,
-            t_predictions,
-            t_confidences,
-        ) = test_classification_net(temp_net, test_loader, device)
-        t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
-
-        if (args.model_type == "gmm"):
-            if args.mcdropout:
-                print("打开 dropout")
-                for module in net.children():
-                    if isinstance(module, torch.nn.Dropout):
-                        module.train(True)
-
-            # Evaluate a GMM model
-            print("GMM Model")
-            embeddings, labels = get_embeddings(
-                net,
-                train_loader,
-                num_dim=model_to_num_dim[args.model],
-                dtype=torch.double,
-                device=device,
-                storage_device=device,
+        if args.evaltype == "ensemble":
+            val_loaders = []
+            for j in range(args.ensemble):
+                train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(
+                    root=args.dataset_root,
+                    batch_size=args.batch_size,
+                    augment=args.data_aug,
+                    val_seed=(args.seed + (5 * i) + j),
+                    val_size=0.1,
+                    pin_memory=args.gpu,
+                )
+                val_loaders.append(val_loader)
+            # Evaluate an ensemble
+            ensemble_loc = saved_model_name
+            net_ensemble = load_ensemble(ensemble_loc=ensemble_loc,
+                                         model_name=args.model,
+                                         device=device,
+                                         num_classes=num_classes,
+                                         spectral_normalization=args.sn,
+                                         mod=args.mod,
+                                         coeff=args.coeff,
+                                         seed=(5 * i + 1))
+        else:
+            #load dataset
+            train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(
+                root=args.dataset_root,
+                batch_size=args.batch_size,
+                augment=args.data_aug,
+                val_seed=(args.seed),
+                val_size=0.1,
+                pin_memory=args.gpu,
             )
 
-            try:
-                gaussians_model, jitter_eps = gmm_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
-
-                logits, labels = gmm_evaluate(
-                    net,
-                    gaussians_model,
-                    test_loader,
-                    device=device,
-                    num_classes=num_classes,
-                    storage_device=device,
-                )
-
-                ood_logits, ood_labels = gmm_evaluate(
-                    net,
-                    gaussians_model,
-                    ood_test_loader,
-                    device=device,
-                    num_classes=num_classes,
-                    storage_device=device,
-                )
-
-                logits2, labels2 = gmm_evaluate_with_perturbation(
-                    net,
-                    gaussians_model,
-                    test_loader,
-                    device=device,
-                    num_classes=num_classes,
-                    storage_device=device,
-                )
-                ood_logits2, ood_labels2 = gmm_evaluate_with_perturbation(
-                    net,
-                    gaussians_model,
-                    ood_test_loader,
-                    device=device,
-                    num_classes=num_classes,
-                    storage_device=device,
-                )
-
-                # logits3, labels3 = maxp_evaluate_with_perturbation(
-                #     net,
-                #     test_loader,
-                #     device=device,
-                #     num_classes=num_classes,
-                #     storage_device=device,
-                # )
-
-                # ood_logits3, ood_labels3 = maxp_evaluate_with_perturbation(
-                #     net,
-                #     ood_test_loader,
-                #     device=device,
-                #     num_classes=num_classes,
-                #     storage_device=device,
-                # )
-
-                m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, conf=True)
-                m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device, conf=True)
-                # m3_fpr95, m3_auroc, m3_auprc = get_roc_auc_logits(logits3, ood_logits3, confidence, device, conf=True)
-                print(
-                    f"accu:{accuracy:.4f},ece:{ece:.6f},t_ece:{t_ece:.6f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"
-                )
-            except RuntimeError as e:
-                print("Runtime Error caught: " + str(e))
-                continue
-        elif (args.model_type == "kde"):
-            # Evaluate a kde model
-            print("kde Model")
-            embeddings, labels = get_embeddings(
-                net,
-                train_loader,
-                num_dim=model_to_num_dim[args.model],
-                dtype=torch.double,
-                device=device,
-                storage_device=device,
+            #load model
+            print(f"load {saved_model_name}")
+            net = models[args.model](
+                spectral_normalization=args.sn,
+                mod=args.mod,
+                num_classes=num_classes,
+                temp=1.0,
             )
+            if args.gpu:
+                net.to(device)
+                cudnn.benchmark = True
+            net.load_state_dict(torch.load(str(saved_model_name)), strict=False)
+            net.eval()
 
-            try:
-                kde_model = kde_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
-                logits, labels = kde_evaluate(
+        if args.evaltype == "ensemble":
+            (
+                conf_matrix,
+                accuracy,
+                labels_list,
+                predictions,
+                confidences,
+            ) = test_classification_net_ensemble(net_ensemble, test_loader, device)
+            ece = expected_calibration_error(confidences, predictions, labels_list, num_bins=15)
+
+            (_, _, _), (_, _, _), m1_auroc, m1_auprc = get_roc_auc_ensemble(net_ensemble, test_loader, ood_test_loader, "mutual_information", device)
+            (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc_ensemble(net_ensemble, test_loader, ood_test_loader, "entropy", device)
+
+            # Temperature scale the ensemble
+            # t_ensemble = []
+            # for model, val_loader in zip(net_ensemble, val_loaders):
+            #     t_model = ModelWithTemperature(model)
+            #     t_model.set_temperature(val_loader)
+            #     t_ensemble.append(t_model)
+
+            # (
+            #     t_conf_matrix,
+            #     t_accuracy,
+            #     t_labels_list,
+            #     t_predictions,
+            #     t_confidences,
+            # ) = test_classification_net_ensemble(t_ensemble, test_loader, device)
+            # t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
+
+            # (_, _, _), (_, _, _), t_m1_auroc, t_m1_auprc = get_roc_auc_ensemble(t_ensemble, test_loader, ood_test_loader, "mutual_information",
+            #                                                                     device)
+            # (_, _, _), (_, _, _), t_m2_auroc, t_m2_auprc = get_roc_auc_ensemble(t_ensemble, test_loader, ood_test_loader, "entropy", device)
+
+        else:
+            (
+                conf_matrix,
+                accuracy,
+                labels_list,
+                predictions,
+                confidences,
+            ) = test_classification_net(net, test_loader, device)
+            ece = expected_calibration_error(confidences, predictions, labels_list, num_bins=15)
+
+            #校准
+            temp_net = ModelWithTemperature(net, device)
+            temp_net.set_temperature(val_loader)
+            net.temp = temp_net.temperature
+
+            (
+                t_conf_matrix,
+                t_accuracy,
+                t_labels_list,
+                t_predictions,
+                t_confidences,
+            ) = test_classification_net(temp_net, test_loader, device)
+            t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
+
+            if (args.evaltype == "gmm"):
+                if args.mcdropout:
+                    print("打开 dropout")
+                    for module in net.children():
+                        if isinstance(module, torch.nn.Dropout):
+                            module.train(True)
+
+                # Evaluate a GMM model
+                print("GMM Model")
+                embeddings, labels = get_embeddings(
                     net,
-                    kde_model,
-                    test_loader,
+                    train_loader,
+                    num_dim=model_to_num_dim[args.model],
+                    dtype=torch.double,
                     device=device,
-                    num_classes=num_classes,
                     storage_device=device,
                 )
 
-                ood_logits, ood_labels = kde_evaluate(
+                try:
+                    gaussians_model, jitter_eps = gmm_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
+
+                    logits, labels = gmm_evaluate(
+                        net,
+                        gaussians_model,
+                        test_loader,
+                        device=device,
+                        num_classes=num_classes,
+                        storage_device=device,
+                    )
+
+                    ood_logits, ood_labels = gmm_evaluate(
+                        net,
+                        gaussians_model,
+                        ood_test_loader,
+                        device=device,
+                        num_classes=num_classes,
+                        storage_device=device,
+                    )
+
+                    logits2, labels2 = gmm_evaluate_with_perturbation(
+                        net,
+                        gaussians_model,
+                        test_loader,
+                        device=device,
+                        num_classes=num_classes,
+                        storage_device=device,
+                    )
+                    ood_logits2, ood_labels2 = gmm_evaluate_with_perturbation(
+                        net,
+                        gaussians_model,
+                        ood_test_loader,
+                        device=device,
+                        num_classes=num_classes,
+                        storage_device=device,
+                    )
+
+                    m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, conf=True)
+                    m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device, conf=True)
+                    print(
+                        f"accu:{accuracy:.4f},ece:{ece:.6f},t_ece:{t_ece:.6f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"
+                    )
+                except RuntimeError as e:
+                    print("Runtime Error caught: " + str(e))
+                    continue
+            elif (args.evaltype == "kde"):
+                # Evaluate a kde model
+                print("kde Model")
+                embeddings, labels = get_embeddings(
                     net,
-                    kde_model,
-                    ood_test_loader,
+                    train_loader,
+                    num_dim=model_to_num_dim[args.model],
+                    dtype=torch.double,
                     device=device,
-                    num_classes=num_classes,
                     storage_device=device,
                 )
 
-                (_, _, _), (_, _, _), m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, confidence=True)
-                (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc_logits(logits, ood_logits, entropy, device, conf=True)
+                try:
+                    kde_model = kde_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
+                    logits, labels = kde_evaluate(
+                        net,
+                        kde_model,
+                        test_loader,
+                        device=device,
+                        num_classes=num_classes,
+                        storage_device=device,
+                    )
 
-            except RuntimeError as e:
-                print("Runtime Error caught: " + str(e))
-                continue
+                    ood_logits, ood_labels = kde_evaluate(
+                        net,
+                        kde_model,
+                        ood_test_loader,
+                        device=device,
+                        num_classes=num_classes,
+                        storage_device=device,
+                    )
+
+                    (_, _, _), (_, _, _), m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, confidence=True)
+                    (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc_logits(logits, ood_logits, entropy, device, conf=True)
+
+                except RuntimeError as e:
+                    print("Runtime Error caught: " + str(e))
+                    continue
 
         accuracies.append(accuracy)
         eces.append(ece)
         t_eces.append(t_ece)
-        # m1_fpr95s.append(m1_fpr95)
         m1_aurocs.append(m1_auroc)
         m1_auprcs.append(m1_auprc)
-        # m2_fpr95s.append(m1_fpr95)
         m2_aurocs.append(m2_auroc)
         m2_auprcs.append(m2_auprc)
 
     accuracy_tensor = torch.tensor(accuracies)
     ece_tensor = torch.tensor(eces)
     t_ece_tensor = torch.tensor(t_eces)
-    # m1_fpr95_tensor = torch.tensor(m1_fpr95s)
     m1_auroc_tensor = torch.tensor(m1_aurocs)
     m1_auprc_tensor = torch.tensor(m1_auprcs)
-    # m2_fpr95_tensor = torch.tensor(m2_fpr95s)
     m2_auroc_tensor = torch.tensor(m2_aurocs)
     m2_auprc_tensor = torch.tensor(m2_auprcs)
 
     mean_accuracy = torch.mean(accuracy_tensor)
     mean_ece = torch.mean(ece_tensor)
     mean_t_ece = torch.mean(t_ece_tensor)
-    # mean_m1_fpr95 = torch.mean(m1_fpr95_tensor)
     mean_m1_auroc = torch.mean(m1_auroc_tensor)
     mean_m1_auprc = torch.mean(m1_auprc_tensor)
-    # mean_m2_fpr95 = torch.mean(m2_auprc_tensor)
     mean_m2_auroc = torch.mean(m2_auroc_tensor)
     mean_m2_auprc = torch.mean(m2_auprc_tensor)
 
     std_accuracy = torch.std(accuracy_tensor) / math.sqrt(accuracy_tensor.shape[0])
     std_ece = torch.std(ece_tensor) / math.sqrt(ece_tensor.shape[0])
     std_t_ece = torch.std(t_ece_tensor) / math.sqrt(t_ece_tensor.shape[0])
-    # std_m1_fpr95 = torch.std(m1_fpr95_tensor) / math.sqrt(m1_fpr95_tensor.shape[0])
     std_m1_auroc = torch.std(m1_auroc_tensor) / math.sqrt(m1_auroc_tensor.shape[0])
     std_m1_auprc = torch.std(m1_auprc_tensor) / math.sqrt(m1_auprc_tensor.shape[0])
-    # std_m2_fpr95 = torch.std(m2_fpr95_tensor) / math.sqrt(m2_fpr95_tensor.shape[0])
     std_m2_auroc = torch.std(m2_auroc_tensor) / math.sqrt(m2_auroc_tensor.shape[0])
     std_m2_auprc = torch.std(m2_auprc_tensor) / math.sqrt(m2_auprc_tensor.shape[0])
 
     res_dict = {}
     res_dict["mean"] = {}
-    res_dict["mean"]["accuracy"] = round(mean_accuracy.item(),4)
-    res_dict["mean"]["ece"] = round(mean_ece.item(),4)
-    res_dict["mean"]["t_ece"] = round(mean_t_ece.item(),4)
-    res_dict["mean"]["m1_auroc"] = round(mean_m1_auroc.item(),4)
-    res_dict["mean"]["m1_auprc"] = round(mean_m1_auprc.item(),4)
-    res_dict["mean"]["m2_auroc"] = round(mean_m2_auroc.item(),4)
-    res_dict["mean"]["m2_auprc"] = round(mean_m2_auprc.item(),4)
+    res_dict["mean"]["accuracy"] = round(mean_accuracy.item(), 4)
+    res_dict["mean"]["ece"] = round(mean_ece.item(), 4)
+    res_dict["mean"]["t_ece"] = round(mean_t_ece.item(), 4)
+    res_dict["mean"]["m1_auroc"] = round(mean_m1_auroc.item(), 4)
+    res_dict["mean"]["m1_auprc"] = round(mean_m1_auprc.item(), 4)
+    res_dict["mean"]["m2_auroc"] = round(mean_m2_auroc.item(), 4)
+    res_dict["mean"]["m2_auprc"] = round(mean_m2_auprc.item(), 4)
 
     res_dict["std"] = {}
     res_dict["std"]["accuracy"] = std_accuracy.item()
     res_dict["std"]["ece"] = std_ece.item()
     res_dict["std"]["t_ece"] = std_t_ece.item()
-    # res_dict["std"]["m1_fpr95"] = std_m1_fpr95.item()
     res_dict["std"]["m1_auroc"] = std_m1_auroc.item()
     res_dict["std"]["m1_auprc"] = std_m1_auprc.item()
-    # res_dict["std"]["m2_fpr95"] = std_m2_fpr95.item()
     res_dict["std"]["m2_auroc"] = std_m2_auroc.item()
     res_dict["std"]["m2_auprc"] = std_m2_auprc.item()
 
@@ -335,10 +371,8 @@ if __name__ == "__main__":
     res_dict["values"]["accuracy"] = accuracies
     res_dict["values"]["ece"] = eces
     res_dict["values"]["t_ece"] = t_eces
-    # res_dict["values"]["m1_fpr95"] = m1_fpr95s
     res_dict["values"]["m1_auroc"] = m1_aurocs
     res_dict["values"]["m1_auprc"] = m1_auprcs
-    # res_dict["values"]["m2_fpr95"] = m2_fpr95s
     res_dict["values"]["m2_auroc"] = m2_aurocs
     res_dict["values"]["m2_auprc"] = m2_auprcs
 
@@ -347,16 +381,13 @@ if __name__ == "__main__":
 
     if args.mcdropout:
         saved_name = "res_" + model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed,args.contrastive) + "_mcdropout_" \
-                            +args.model_type + "_" + args.dataset + "_" + args.ood_dataset +".json"
+                            +args.evaltype + "_" + args.dataset + "_" + args.ood_dataset +".json"
     else:
         saved_name = "res_" + model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed,args.contrastive) + "_" \
-                            +args.model_type + "_" + args.dataset + "_" + args.ood_dataset +".json"
+                            +args.evaltype + "_" + args.dataset + "_" + args.ood_dataset +".json"
     saved_dir = f"./results/run{args.run}/"
     if (not os.path.exists(saved_dir)):
         os.makedirs(saved_dir)
-    with open(
-            os.path.join(saved_dir, saved_name),
-            "w",
-    ) as f:
+    with open(os.path.join(saved_dir, saved_name), "w",) as f:
         json.dump(res_dict, f)
         print(f"save to {os.path.join(saved_dir,saved_name)}")

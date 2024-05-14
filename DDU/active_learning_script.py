@@ -1,11 +1,22 @@
+import datetime
 import json
 import torch
 import numpy as np
+import os
 import torch.backends.cudnn as cudnn
+from torchvision import datasets
+from torchvision import transforms
 
 # Import data utilities
 import data_utils.active_learning.active_learning as active_learning
 from data_utils.fast_mnist import create_MNIST_dataset
+import data_utils.ood_detection.cifar10 as cifar10
+import data_utils.ood_detection.cifar100 as cifar100
+import data_utils.ood_detection.lsun as lsun
+import data_utils.ood_detection.svhn as svhn
+import data_utils.ood_detection.mnist as mnist
+import data_utils.ood_detection.gauss as gauss
+import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
 
 # Import network architectures
 from net.resnet import resnet18
@@ -23,14 +34,15 @@ from metrics.classification_metrics import test_classification_net_ensemble
 from utils.args import al_args
 
 # Importing GMM utilities
-from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit
+from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, gmm_evaluate_with_perturbation
 from utils.ensemble_utils import ensemble_forward_pass
 
 # Mapping model name to model function
 models = {"resnet18": resnet18, "vgg16": vgg16}
 
 
-def class_probs(data_loader):
+def class_ratio(data_loader):
+    #统计每一类别的比率
     num_classes = 10
     class_n = len(data_loader.dataset)
     class_count = torch.zeros(num_classes)
@@ -41,8 +53,8 @@ def class_probs(data_loader):
     return class_prob
 
 
-def compute_density(logits, class_probs):
-    return torch.sum((torch.exp(logits) * class_probs), dim=1)
+def compute_density(logits, class_ratio):
+    return torch.sum((torch.exp(logits) * class_ratio), dim=1)
 
 
 if __name__ == "__main__":
@@ -57,7 +69,34 @@ if __name__ == "__main__":
 
     # Creating the datasets
     num_classes = 10
-    train_dataset, test_dataset = create_MNIST_dataset(device)  #60000, 10000
+    if args.dataset == "mnist":
+        mean = [0.1307]
+        std = [0.3081]
+        train_dataset, test_dataset = create_MNIST_dataset(device)  #60000, 10000
+    elif args.dataset == "cifar10":
+        mean = [0.4914, 0.4822, 0.4465]
+        std = [0.2023, 0.1994, 0.2010]
+        normalize = transforms.Normalize(
+            mean=mean,
+            std=std,
+        )
+        # define transform
+        train_transform = transforms.Compose([
+            transforms.ToTensor(),
+            normalize,
+        ])
+        train_dataset = datasets.CIFAR10(
+            root="./data",
+            train=True,
+            download=False,
+            transform=train_transform,
+        )
+        test_dataset = datasets.CIFAR10(
+            root="./data",
+            train=False,
+            download=False,
+            transform=train_transform,
+        )
 
     # Creating a validation split
     idxs = list(range(len(train_dataset)))
@@ -130,14 +169,15 @@ if __name__ == "__main__":
             weight_decay = 5e-4
             if args.al_type == "ensemble":
                 model_ensemble = [
-                    model_fn(spectral_normalization=args.sn, mod=args.mod, mnist=True).to(device=device) for _ in range(args.num_ensemble)
+                    model_fn(spectral_normalization=args.sn, mod=args.mod, mnist=(args.dataset == "mnist")).to(device=device)
+                    for _ in range(args.num_ensemble)
                 ]
                 optimizers = []
                 for model in model_ensemble:
                     optimizers.append(torch.optim.Adam(model.parameters(), weight_decay=weight_decay))
                     model.train()
             else:
-                model = model_fn(spectral_normalization=args.sn, mod=args.mod, mnist=True).to(device=device)
+                model = model_fn(spectral_normalization=args.sn, mod=args.mod, mnist=(args.dataset == "mnist")).to(device=device)
                 optimizer = torch.optim.Adam(model.parameters(), weight_decay=weight_decay)
                 model.train()
 
@@ -227,48 +267,56 @@ if __name__ == "__main__":
                         candidate_scores,
                         candidate_indices,
                     ) = active_learning.get_top_k_scorers(ensemble_uncs, args.acquisition_batch_size)
-            else:
+            elif args.al_type == "gmm":
                 model.eval()
-                if args.al_type == "gmm":
-                    class_prob = class_probs(train_loader)
-                    logits, labels = gmm_evaluate(
-                        model,
-                        gaussians_model,
-                        pool_loader,
-                        device=device,
-                        num_classes=num_classes,
-                        storage_device="cpu",
-                    )
-                    (
-                        candidate_scores,
-                        candidate_indices,
-                    ) = active_learning.get_top_k_scorers(
-                        compute_density(logits, class_prob),
-                        args.acquisition_batch_size,
-                        uncertainty=False,
-                    )
-                elif args.al_type == "entropy":
-                    logits = []
-                    with torch.no_grad():
-                        for data, _ in pool_loader:
-                            data = data.to(device)
-                            logits.append(model(data))
-                        logits = torch.cat(logits, dim=0)
-                    (
-                        candidate_scores,
-                        candidate_indices,
-                    ) = active_learning.find_acquisition_batch(logits, args.acquisition_batch_size, entropy)
+                class_prob = class_ratio(train_loader)  #统计每一类别的比率
+                if args.perturbation == 0:
+                    logits, labels = gmm_evaluate(model, gaussians_model, pool_loader, device, num_classes, storage_device=device)
+                elif args.perturbation == 1:
+                    logits, labels = gmm_evaluate_with_perturbation(model,
+                                                                    gaussians_model,
+                                                                    pool_loader,
+                                                                    device=device,
+                                                                    num_classes=num_classes,
+                                                                    storage_device=device,
+                                                                    epsilon=0.001,
+                                                                    mean=mean,
+                                                                    std=std)
+                (
+                    candidate_scores,
+                    candidate_indices,
+                ) = active_learning.get_top_k_scorers(
+                    compute_density(logits, class_prob.to(device)),
+                    args.acquisition_batch_size,
+                    uncertainty=False,
+                )
+            elif args.al_type == "entropy":
+                model.eval()
+                logits = []
+                with torch.no_grad():
+                    for data, _ in pool_loader:
+                        data = data.to(device)
+                        logits.append(model(data))
+                    logits = torch.cat(logits, dim=0)
+                (
+                    candidate_scores,
+                    candidate_indices,
+                ) = active_learning.find_acquisition_batch(logits, args.acquisition_batch_size, entropy)
 
             # Performing acquisition
             active_learning_data.acquire(candidate_indices)
-
             active_learning_iteration += 1
 
     # Save the dictionaries
     save_name = model_save_name(args.model_name, args.sn, args.mod, args.coeff, args.seed)
     save_ensemble_mi = "_mi" if (args.al_type == "ensemble" and args.mi) else ""
-
-    accuracy_file_name = "test_accs_" + save_name + '_' + args.al_type + save_ensemble_mi + "_mnist.json"
-
-    with open(accuracy_file_name, "w") as acc_file:
+    input_perturbation = "_input_perturbation" if (args.perturbation) else ""
+    accuracy_file_name = "test_accs_" + save_name + '_' + args.al_type + save_ensemble_mi + input_perturbation + "_mnist.json"
+    curr_time = datetime.datetime.now()
+    time_str = datetime.datetime.strftime(curr_time, "%Y_%m_%d_%H_%M_%S")
+    log_dir = f"results/active_learning/{time_str}"
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    with open(os.path.join(log_dir, accuracy_file_name), "w") as acc_file:
         json.dump(test_accs, acc_file)
+        print(f"save results to {os.path.join(log_dir, accuracy_file_name)}")

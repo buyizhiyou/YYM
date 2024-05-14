@@ -126,7 +126,6 @@ def gmm_evaluate_with_perturbation(
         label = label % 10
         data = data.to(device)
         data.requires_grad = True  #data.required_grad区分,用required_grad梯度为None
-
         out = net(data)
         # embedding = net.feature
         # log_probs = gaussians_model.log_prob(embedding[:, None, :])

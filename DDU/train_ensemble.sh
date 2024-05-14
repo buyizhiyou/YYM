@@ -1,7 +1,8 @@
 #! /bin/bash
-echo "Usage ./evaluate.sh --gpu  0 --run 6 --batchsize 64 --evaltype gmm --ooddataset svhn --model  resnet50 --contrastive 0"
+
+echo "Usage: ./train_ensemble.sh --gpu  0 --run 8 --batchsize 64 --epochs 300 --model  vgg16 --contrastive 0 --adv 0"
 # 解析命令行参数
-options=$(getopt -o g:r:b:t:d:m:c --long gpu:,run:,batchsize:,evaltype:,ooddataset:,model:,contrastive:, -- "$@")
+options=$(getopt -o g:r:b:e:m:c:a --long gpu:,run:,batchsize:,epochs:,model:,contrastive:,adv:, -- "$@")
 eval set -- "$options"
 
 # 提取选项和参数
@@ -22,14 +23,9 @@ while true; do
               batchsize=$1
               shift
               ;;
-       -t | --evaltype)
+       -e | --epochs)
               shift
-              evaltype=$1
-              shift
-              ;;
-       -d | --ooddataset)
-              shift
-              ooddataset=$1
+              epochs=$1
               shift
               ;;
        -m | --model)
@@ -40,6 +36,11 @@ while true; do
        -c | --contrastive)
               shift
               contrastive=$1
+              shift
+              ;;
+       -a | --adv)
+              shift
+              adv=$1
               shift
               ;;
        --)
@@ -56,16 +57,21 @@ if [ -z "$gpu" ]; then
        exit 1
 fi
 
-python evaluate.py \
-       --seed 1 \
-       -b $batchsize \
-       --gpu $gpu \
-       --run $run \
-       --dataset cifar10 \
-       --ood_dataset $ooddataset \
-       --load-path ./saved_models \
-       --model $model \
-       --evaltype $evaltype \
-       --contrastive $contrastive \
-       -mod \
-       -sn
+
+for i in {1..10}; do
+       echo "训练第$i次"
+       python train_ensemble.py \
+              --seed 1 \
+              --gpu $gpu \
+              --run $run \
+              --data-aug \
+              --lr 0.1 \
+              -b $batchsize \
+              --epochs $epochs --dataset cifar10 \
+              --model $model \
+              --contrastive $contrastive \
+              --adv $adv \
+              -mod \
+              -sn
+       sleep 5
+done

@@ -2,6 +2,8 @@
 Script for training deep ensemble models.
 """
 
+import os
+import datetime
 import torch
 import argparse
 from torch import optim
@@ -19,7 +21,7 @@ from net.vgg import vgg16
 
 # Import train and validation utilities
 from utils.args import training_args
-from utils.train_utils import train_single_epoch, test_single_epoch
+from utils.train_utils import train_single_epoch, test_single_epoch, save_config_file
 from utils.train_utils import model_save_name
 from utils.eval_utils import get_eval_stats_ensemble
 
@@ -48,15 +50,13 @@ def parseArgs():
 
 
 if __name__ == "__main__":
-
     args = parseArgs()
 
     print("Parsed args", args)
     print("Seed: ", args.seed)
     torch.manual_seed(args.seed)
-
     cuda = torch.cuda.is_available() and args.gpu
-    device = torch.device("cuda" if cuda else "cpu")
+    device = torch.device(f"cuda:{args.gpu}" if cuda else "cpu")
     print("CUDA set: " + str(cuda))
 
     num_classes = dataset_num_classes[args.dataset]
@@ -74,6 +74,7 @@ if __name__ == "__main__":
     optimizers = []
     schedulers = []
     train_loaders = []
+    val_loaders = []
 
     for i, model in enumerate(net_ensemble):
         opt_params = model.parameters()
@@ -92,24 +93,38 @@ if __name__ == "__main__":
             milestones=[args.first_milestone, args.second_milestone],
             gamma=0.1,
         )
-        train_loader, _ = dataset_loader[args.dataset].get_train_valid_loader(
-            batch_size=args.train_batch_size,
-            augment=args.data_aug,
-            val_size=0.1,
-            val_seed=args.seed + i,
-            pin_memory=args.gpu,
-        )
+        train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(root=args.dataset_root,
+                                                                                       batch_size=args.train_batch_size,
+                                                                                       augment=args.data_aug,
+                                                                                       val_size=0.1,
+                                                                                       val_seed=args.seed,
+                                                                                       pin_memory=args.gpu,
+                                                                                       contrastive=args.contrastive)
+
         optimizers.append(optimizer)
         schedulers.append(scheduler)
         train_loaders.append(train_loader)
+        val_loaders.append(val_loader)
 
-    # Creating summary writer in tensorboard
-    writer = SummaryWriter(args.save_loc + "stats_logging/")
+    curr_time = datetime.datetime.now()
+    time_str = datetime.datetime.strftime(curr_time, "%Y_%m_%d_%H_%M_%S")
+    save_name = model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive)
+    print("Model save name", save_name)
+    if args.ls:
+        save_loc = f"{args.save_loc}/run{args.run}/ensemble/{save_name}/{time_str}_labelsmooth/"
+    else:
+        save_loc = f"{args.save_loc}/run{args.run}/ensemble/{save_name}/{time_str}/"  # 保存模型路径
+    if not os.path.exists(save_loc):
+        os.makedirs(save_loc)
+    log_loc = f"{args.log_loc}/run{args.run}/{save_name}/{time_str}"
+    writer = SummaryWriter(log_loc)
+    save_config_file(save_loc, args)
 
+    best_acc = [0] * (args.ensemble)
     for epoch in range(0, args.epoch):
         for i, model in enumerate(net_ensemble):
             print("Ensemble Model: " + str(i))
-            train_loss = train_single_epoch(
+            train_loss, train_acc = train_single_epoch(
                 epoch,
                 model,
                 train_loaders[i],
@@ -119,10 +134,15 @@ if __name__ == "__main__":
             )
             schedulers[i].step()
 
+            if (epoch % 3 == 0):
+                val_acc = test_single_epoch(epoch, model, val_loaders[i], device)
+
+            if val_acc > best_acc[i]:
+                best_acc[i] = val_acc
+                save_path = save_loc + save_name + f"_{i}" + "_best" + ".model"
+                torch.save(model.state_dict(), save_path)
+                print("Model saved to ", save_path)
+
         writer.add_scalar(args.model + "_ensemble_" + "train_loss", train_loss, (epoch + 1))
-        save_name = model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed)
-        if (epoch + 1) % args.save_interval == 0:
-            for i, model in enumerate(net_ensemble):
-                save_name = args.save_loc + save_name + str(args.seed + i) + "_" + str(epoch + 1) + ".model"
-                torch.save(model.state_dict(), save_name)
+
     writer.close()
