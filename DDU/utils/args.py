@@ -335,7 +335,7 @@ def al_args():
 
     num_initial_samples = 20
     max_training_samples = 300  #20--(+5)-->300
-    acquisition_batch_size = 5  #每次增加5个样本
+    acquisition_batch_size = 10  #每次增加5个样本
     epochs = 20
 
     train_batch_size = 64

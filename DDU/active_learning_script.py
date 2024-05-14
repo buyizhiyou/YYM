@@ -137,7 +137,7 @@ if __name__ == "__main__":
         active_learning_data.acquire(initial_sample_indices)
 
         # Train loader for the current acquired training set
-        sampler = active_learning.RandomFixedLengthSampler(dataset=active_learning_data.training_dataset, target_length=5056)
+        sampler = active_learning.RandomFixedLengthSampler(dataset=active_learning_data.training_dataset, target_length=1920)#5056????
         train_loader = torch.utils.data.DataLoader(
             active_learning_data.training_dataset,
             sampler=sampler,
@@ -268,6 +268,7 @@ if __name__ == "__main__":
                         candidate_indices,
                     ) = active_learning.get_top_k_scorers(ensemble_uncs, args.acquisition_batch_size)
             elif args.al_type == "gmm":
+                import pdb;pdb.set_trace()
                 model.eval()
                 class_prob = class_ratio(train_loader)  #统计每一类别的比率
                 if args.perturbation == 0:
