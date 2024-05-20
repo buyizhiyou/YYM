@@ -58,19 +58,19 @@ class BasicBlock(nn.Module):
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion * planes:
-            # if mod:
-            #     self.shortcut = nn.Sequential(AvgPoolShortCut(stride, self.expansion * planes, in_planes))
-            # else:
-            self.shortcut = nn.Sequential(
-                wrapped_conv(
-                    input_size,
-                    in_planes,
-                    self.expansion * planes,
-                    kernel_size=1,
-                    stride=stride,
-                ),
-                nn.BatchNorm2d(planes),
-            )
+            if mod:
+                self.shortcut = nn.Sequential(AvgPoolShortCut(stride, self.expansion * planes, in_planes))
+            else:
+                self.shortcut = nn.Sequential(
+                    wrapped_conv(
+                        input_size,
+                        in_planes,
+                        self.expansion * planes,
+                        kernel_size=1,
+                        stride=stride,
+                    ),
+                    nn.BatchNorm2d(planes),
+                )
 
     def forward(self, x):
         out = self.activation(self.bn1(self.conv1(x)))
@@ -102,19 +102,19 @@ class Bottleneck(nn.Module):
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion * planes:
-            # if mod:
-            #     self.shortcut = nn.Sequential(AvgPoolShortCut(stride, self.expansion * planes, in_planes))
-            # else:
-            self.shortcut = nn.Sequential(
-                wrapped_conv(
-                    input_size,
-                    in_planes,
-                    self.expansion * planes,
-                    kernel_size=1,
-                    stride=stride,
-                ),
-                nn.BatchNorm2d(self.expansion * planes) if not bnsn else spectral_norm(nn.BatchNorm2d(self.expansion * planes)),
-            )
+            if mod:
+                self.shortcut = nn.Sequential(AvgPoolShortCut(stride, self.expansion * planes, in_planes))
+            else:
+                self.shortcut = nn.Sequential(
+                    wrapped_conv(
+                        input_size,
+                        in_planes,
+                        self.expansion * planes,
+                        kernel_size=1,
+                        stride=stride,
+                    ),
+                    nn.BatchNorm2d(self.expansion * planes) if not bnsn else spectral_norm(nn.BatchNorm2d(self.expansion * planes)),
+                )
 
     def forward(self, x):
         out = self.activation(self.bn1(self.conv1(x)))
@@ -188,7 +188,7 @@ class ResNet(nn.Module):
             self.layer2 = self._make_layer(block, 32, 128, num_blocks[1], stride=2)
             self.layer3 = self._make_layer(block, 16, 256, num_blocks[2], stride=2)
             self.layer4 = self._make_layer(block, 8, 512, num_blocks[3], stride=2)
-            
+
         self.fc_add = nn.Linear(512 * block.expansion, 512 * block.expansion)  #添加一层线性层，为了dropout
         self.drop = nn.Dropout()
         self.fc = nn.Linear(512 * block.expansion, num_classes, bias=True)  #remove bias for last fc

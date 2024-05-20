@@ -170,25 +170,20 @@ if __name__ == "__main__":
             (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc_ensemble(net_ensemble, test_loader, ood_test_loader, "entropy", device)
 
             # Temperature scale the ensemble
-            # t_ensemble = []
-            # for model, val_loader in zip(net_ensemble, val_loaders):
-            #     t_model = ModelWithTemperature(model)
-            #     t_model.set_temperature(val_loader)
-            #     t_ensemble.append(t_model)
+            t_ensemble = []
+            for model, val_loader in zip(net_ensemble, val_loaders):
+                t_model = ModelWithTemperature(model,device)
+                t_model.set_temperature(val_loader)
+                t_ensemble.append(t_model)
 
-            # (
-            #     t_conf_matrix,
-            #     t_accuracy,
-            #     t_labels_list,
-            #     t_predictions,
-            #     t_confidences,
-            # ) = test_classification_net_ensemble(t_ensemble, test_loader, device)
-            # t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
-
-            # (_, _, _), (_, _, _), t_m1_auroc, t_m1_auprc = get_roc_auc_ensemble(t_ensemble, test_loader, ood_test_loader, "mutual_information",
-            #                                                                     device)
-            # (_, _, _), (_, _, _), t_m2_auroc, t_m2_auprc = get_roc_auc_ensemble(t_ensemble, test_loader, ood_test_loader, "entropy", device)
-
+            (
+                t_conf_matrix,
+                t_accuracy,
+                t_labels_list,
+                t_predictions,
+                t_confidences,
+            ) = test_classification_net_ensemble(t_ensemble, test_loader, device)
+            t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
         else:
             (
                 conf_matrix,

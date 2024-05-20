@@ -268,7 +268,6 @@ if __name__ == "__main__":
                         candidate_indices,
                     ) = active_learning.get_top_k_scorers(ensemble_uncs, args.acquisition_batch_size)
             elif args.al_type == "gmm":
-                import pdb;pdb.set_trace()
                 model.eval()
                 class_prob = class_ratio(train_loader)  #统计每一类别的比率
                 if args.perturbation == 0:
