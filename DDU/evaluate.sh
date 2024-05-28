@@ -1,7 +1,7 @@
 #! /bin/bash
-echo "Usage ./evaluate.sh --gpu  0 --run 6 --batchsize 64 --evaltype gmm --ooddataset svhn --model  resnet50 --contrastive 0"
+echo "Usage ./evaluate.sh --gpu  0 --run 6 --batchsize 64 --evaltype [gmm,softmax,kde] --ooddataset svhn --model  resnet50 --perturbation fgsm"
 # 解析命令行参数
-options=$(getopt -o g:r:b:t:d:m:c --long gpu:,run:,batchsize:,evaltype:,ooddataset:,model:,contrastive:, -- "$@")
+options=$(getopt -o g:r:b:t:d:m:c --long gpu:,run:,batchsize:,evaltype:,ooddataset:,model:,perturbation:, -- "$@")
 eval set -- "$options"
 
 # 提取选项和参数
@@ -37,9 +37,9 @@ while true; do
               model=$1
               shift
               ;;
-       -c | --contrastive)
+       -c | --perturbation)
               shift
-              contrastive=$1
+              perturbation=$1
               shift
               ;;
        --)
@@ -66,6 +66,6 @@ python evaluate.py \
        --load-path ./saved_models \
        --model $model \
        --evaltype $evaltype \
-       --contrastive $contrastive \
+       --perturbation $perturbation \
        -mod \
        -sn

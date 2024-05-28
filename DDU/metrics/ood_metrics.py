@@ -139,8 +139,12 @@ def get_roc_auc(net, test_loader, ood_test_loader, uncertainty, device, conf=Fal
 
 
 def get_roc_auc_logits(logits, ood_logits, uncertainty, device, conf=False):
-    uncertainties = uncertainty(logits)#logits: torch.Size([10000, 10])-> uncertainties:torch.Size([10000]
-    ood_uncertainties = uncertainty(ood_logits)
+    if uncertainty is None:
+        uncertainties = logits
+        ood_uncertainties = ood_logits
+    else:
+        uncertainties = uncertainty(logits)#logits: torch.Size([10000, 10])-> uncertainties:torch.Size([10000]
+        ood_uncertainties = uncertainty(ood_logits)
 
     # In-distribution
     bin_labels = torch.zeros(uncertainties.shape[0]).to(device)

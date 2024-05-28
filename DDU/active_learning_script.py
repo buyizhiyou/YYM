@@ -6,6 +6,8 @@ import os
 import torch.backends.cudnn as cudnn
 from torchvision import datasets
 from torchvision import transforms
+from torch.utils.data import RandomSampler
+
 
 # Import data utilities
 import data_utils.active_learning.active_learning as active_learning

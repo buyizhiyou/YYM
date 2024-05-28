@@ -138,7 +138,7 @@ def test_adv(model: nn.Module,
         if init_pred.item() != target.item():
             continue
 
-        # TODO:攻击发生在原始图片还是归一化后的图片上呢
+        # 攻击发生在原始图片
         if method == "fgsm":
             perturbed_images = fgsm_attack(model, images, target, epsilon)
         elif method == "bim":

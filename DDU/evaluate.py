@@ -34,7 +34,7 @@ from metrics.uncertainty_confidence import entropy, logsumexp, confidence, sumex
 from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ensemble
 
 # Import GMM utils
-from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate, gmm_evaluate_with_perturbation, maxp_evaluate_with_perturbation
+from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, gradient_norm_collect, gmm_evaluate_with_perturbation, maxp_evaluate_with_perturbation
 from utils.kde_utils import kde_evaluate, kde_fit
 from utils.eval_utils import model_load_name
 from utils.train_utils import model_save_name
@@ -153,7 +153,7 @@ if __name__ == "__main__":
             if args.gpu:
                 net.to(device)
                 cudnn.benchmark = True
-            net.load_state_dict(torch.load(str(saved_model_name)), strict=False)
+            net.load_state_dict(torch.load(str(saved_model_name), map_location=device), strict=True)
             net.eval()
 
         if args.evaltype == "ensemble":
@@ -172,7 +172,7 @@ if __name__ == "__main__":
             # Temperature scale the ensemble
             t_ensemble = []
             for model, val_loader in zip(net_ensemble, val_loaders):
-                t_model = ModelWithTemperature(model,device)
+                t_model = ModelWithTemperature(model, device)
                 t_model.set_temperature(val_loader)
                 t_ensemble.append(t_model)
 
@@ -229,6 +229,9 @@ if __name__ == "__main__":
                 try:
                     gaussians_model, jitter_eps = gmm_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
 
+                    # test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=1, pin_memory=args.gpu)
+                    # ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root, batch_size=1, pin_memory=args.gpu)
+
                     logits, labels = gmm_evaluate(
                         net,
                         gaussians_model,
@@ -247,27 +250,47 @@ if __name__ == "__main__":
                         storage_device=device,
                     )
 
-                    logits2, labels2 = gmm_evaluate_with_perturbation(
+                    # logits2, labels2, acc, _ = gmm_evaluate_with_perturbation(
+                    #     net,
+                    #     gaussians_model,
+                    #     test_loader,
+                    #     device=device,
+                    #     num_classes=num_classes,
+                    #     storage_device=device,
+                    #     perturbation=args.perturbation,
+                    # )
+                    # ood_logits2, ood_labels2, _, _ = gmm_evaluate_with_perturbation(
+                    #     net,
+                    #     gaussians_model,
+                    #     ood_test_loader,
+                    #     device=device,
+                    #     num_classes=num_classes,
+                    #     storage_device=device,
+                    #     perturbation=args.perturbation,
+                    # )
+
+                    logits2 = gradient_norm_collect(
                         net,
                         gaussians_model,
                         test_loader,
                         device=device,
-                        num_classes=num_classes,
                         storage_device=device,
+                        norm=1,
                     )
-                    ood_logits2, ood_labels2 = gmm_evaluate_with_perturbation(
+                    ood_logits2 = gradient_norm_collect(
                         net,
                         gaussians_model,
                         ood_test_loader,
                         device=device,
-                        num_classes=num_classes,
                         storage_device=device,
+                        norm=1,
                     )
 
                     m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, conf=True)
-                    m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device, conf=True)
+                    m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, None, device, conf=True)
+                    acc = 0
                     print(
-                        f"accu:{accuracy:.4f},ece:{ece:.6f},t_ece:{t_ece:.6f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"
+                        f"accu:{acc:.4f},ece:{ece:.6f},t_ece:{t_ece:.6f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"
                     )
                 except RuntimeError as e:
                     print("Runtime Error caught: " + str(e))
@@ -374,15 +397,15 @@ if __name__ == "__main__":
     res_dict["info"] = vars(args)
     res_dict["files"] = model_files
 
-    if args.mcdropout:
-        saved_name = "res_" + model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed,args.contrastive) + "_mcdropout_" \
-                            +args.evaltype + "_" + args.dataset + "_" + args.ood_dataset +".json"
-    else:
-        saved_name = "res_" + model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed,args.contrastive) + "_" \
-                            +args.evaltype + "_" + args.dataset + "_" + args.ood_dataset +".json"
+
+    saved_name = "res_" + model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed,args.contrastive) + "_" \
+                            +args.evaltype + "_" + args.dataset + "_" + args.ood_dataset + "_" + args.perturbation + ".json"
     saved_dir = f"./results/run{args.run}/"
     if (not os.path.exists(saved_dir)):
         os.makedirs(saved_dir)
-    with open(os.path.join(saved_dir, saved_name), "w",) as f:
+    with open(
+            os.path.join(saved_dir, saved_name),
+            "w",
+    ) as f:
         json.dump(res_dict, f)
         print(f"save to {os.path.join(saved_dir,saved_name)}")
