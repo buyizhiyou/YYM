@@ -234,31 +234,23 @@ def eval_args():
         default=0,  #0:不需要对比学习，1:类间有监督的对比学习 2:样本间自监督的对比学习
         help="add contrastive loss")
     parser.add_argument(
-        "--adv",
-        type=int,
-        default=0,  #0:不需要对抗训练
-        help="advasarial training")
+        "--perturbation",
+        type=str,
+        default="fgsm",
+        choices=["fgsm", "bim", "deepfool", "pgd", "cw"],
+        help="add perturbation",
+    )
+    parser.add_argument("--adv", type=int, default=0, help="advasarial training")
     parser.add_argument("--ls", type=bool, default=False, help="using label smoothing")
-
     parser.add_argument("--mcdropout", type=bool, default=False, help="using mc dropout")
-
     parser.add_argument("--seed", type=int, dest="seed", required=True, help="Seed to use")
-
     parser.add_argument(
         "--evaltype",
         type=str,
         default="gmm",
         choices=["softmax", "ensemble", "gmm", "kde"],
     )
-
-
-    parser.add_argument(
-        "--dataset-root",
-        type=str,
-        default=dataset_root,
-        dest="dataset_root",
-        help="path of a dataset (useful for ambiguous mnist)",
-    )
+    parser.add_argument("--dataset-root", type=str, default=dataset_root, dest="dataset_root", help="path of a dataset (useful for ambiguous mnist)")
     parser.add_argument(
         "--dataset",
         type=str,
