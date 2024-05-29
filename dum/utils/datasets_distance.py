@@ -14,6 +14,8 @@ import sys
 
 sys.path.append("../")
 
+from matplotlib import pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
 from geomloss import SamplesLoss
@@ -41,14 +43,14 @@ dataset_loader = {
 }
 
 
-def guassian_kernel(self, source, target, kernel_mul=2.0, kernel_num=5, fix_sigma=None):
+def guassian_kernel(source, target, kernel_mul=2.0, kernel_num=5, fix_sigma=None):
     n_samples = int(source.size()[0]) + int(target.size()[0])
     total = torch.cat([source, target], dim=0)
 
     total0 = total.unsqueeze(0).expand(int(total.size(0)), int(total.size(0)), int(total.size(1)))
     total1 = total.unsqueeze(1).expand(int(total.size(0)), int(total.size(0)), int(total.size(1)))
     L2_distance = ((total0 - total1)**2).sum(2)
-    if self.fix_sigma:
+    if fix_sigma:
         bandwidth = fix_sigma
     else:
         bandwidth = torch.sum(L2_distance.data) / (n_samples**2 - n_samples)
@@ -60,7 +62,7 @@ def guassian_kernel(self, source, target, kernel_mul=2.0, kernel_num=5, fix_sigm
 
 
 def mmd_distance(source, target, kernel_mul=2.0, kernel_num=5, fix_sigma=None):
-    """Maximum mean discrepancy (MMD) is a kernel based statistical test used to determine whether given two distribution
+    """Maximum mean discrepancy (MMD)
     """
     batch_size = int(source.size()[0])
     kernels = guassian_kernel(source, target, kernel_mul=kernel_mul, kernel_num=kernel_num, fix_sigma=fix_sigma)
@@ -81,7 +83,8 @@ if __name__ == '__main__':
         break
 
     loss = SamplesLoss("sinkhorn", blur=0.5)
-
+    metric = "mmd"
+    dists = []
     for ood in ood_name:
         ood_test_loader = dataset_loader[ood].get_test_loader(root="../data", batch_size=1024, pin_memory=True)
         for ood_data, _ in ood_test_loader:
@@ -90,6 +93,27 @@ if __name__ == '__main__':
 
         assert data.shape == ood_data.shape, "shape conflicts..."
 
-        # dist = mmd_distance(data, ood_data)
-        dist = loss(data, ood_data)
+        if metric == "mmd":
+            dist = mmd_distance(data, ood_data)
+        elif metric == "em":
+            dist = loss(data, ood_data)
+        dists.append(dist)
         print(f"cifar10 vs {ood}:{dist.item():.4f}")
+
+    idxs = np.argsort(dists)
+    values = np.array(dists)[idxs]
+    names = np.array(ood_name)[idxs]
+
+    plt.plot(range(len(idxs)), values)
+    for i in range(len(idxs)):
+        y = values[i]
+        x = i
+        name = names[i]
+
+        plt.plot(x, y, marker="*", markersize=10, label=name)
+
+    plt.xlabel("dataset name")
+    plt.ylabel("mmd")
+    plt.title("cifar10 vs ood dataset distance")
+    plt.legend()
+    plt.savefig(f"dataset_distance_{metric}.jpg")

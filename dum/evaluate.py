@@ -17,6 +17,8 @@ import data_utils.ood_detection.svhn as svhn
 import data_utils.ood_detection.mnist as mnist
 import data_utils.ood_detection.gauss as gauss
 import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
+import data_utils.ood_detection.fer2013 as fer2013
+import data_utils.ood_detection.dtd as dtd
 
 # Import network models
 from net.lenet import lenet
@@ -51,11 +53,14 @@ dataset_loader = {
     "cifar10": cifar10,
     "cifar100": cifar100,
     "svhn": svhn,
+    "fer2013": fer2013,
     "mnist": mnist,
     "lsun": lsun,
+    "dtd": dtd,
     "gauss": gauss,
     "tiny_imagenet": tiny_imagenet
 }
+
 
 # Mapping model name to model function
 models = {"lenet": lenet, "resnet18": resnet18, "resnet50": resnet50, "wide_resnet": wrn, "vgg16": vgg16, "vit": vit}
