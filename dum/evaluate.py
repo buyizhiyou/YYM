@@ -61,7 +61,6 @@ dataset_loader = {
     "tiny_imagenet": tiny_imagenet
 }
 
-
 # Mapping model name to model function
 models = {"lenet": lenet, "resnet18": resnet18, "resnet50": resnet50, "wide_resnet": wrn, "vgg16": vgg16, "vit": vit}
 
@@ -332,9 +331,12 @@ if __name__ == "__main__":
                         storage_device=device,
                     )
 
-                    (_, _, _), (_, _, _), m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, confidence=True)
-                    (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc_logits(logits, ood_logits, entropy, device, conf=True)
-
+                    m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, conf=True)
+                    m1_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits, ood_logits, entropy, device, conf=True)
+                    acc = 0
+                    print(
+                        f"accu:{acc:.4f},ece:{ece:.6f},t_ece:{t_ece:.6f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"
+                    )
                 except RuntimeError as e:
                     print("Runtime Error caught: " + str(e))
                     continue

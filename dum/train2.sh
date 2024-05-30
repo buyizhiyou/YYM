@@ -1,8 +1,8 @@
 #! /bin/bash
 
-echo "###########  Evaluate with sn and mod;
+echo "###########  Evaluate without sn and mod;
 ###########  Usage:
-###########   ./train.sh --gpu  0 --run 8 --batchsize 64 --epochs 300 --model  vgg16 --contrastive 0 --adv 0"
+###########   ./train2.sh --gpu  0 --run 8 --batchsize 64 --epochs 300 --model  vgg16 --contrastive 0 --adv 0"
 # 解析命令行参数
 options=$(getopt -o g:r:b:e:m:c:a --long gpu:,run:,batchsize:,epochs:,model:,contrastive:,adv:, -- "$@")
 eval set -- "$options"
@@ -76,8 +76,6 @@ for i in {1..10}; do
               --epochs $epochs --dataset cifar10 \
               --model $model \
               --contrastive $contrastive \
-              --adv $adv \
-              -mod \
-              -sn
+              --adv $adv
        sleep 5
 done

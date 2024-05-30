@@ -138,6 +138,7 @@ def gmm_evaluate_with_perturbation(
     for images, label in tqdm(loader):
         images = images.to(device)
         label = label.to(device)
+        label = label % 10
         images.requires_grad = True  #images.required_grad区分,用required_grad梯度为None
         out = net(images)
         acc = accuracy(out, label)[0].item()
@@ -211,6 +212,7 @@ def gradient_norm_collect(net, gaussians_model, loader, device, storage_device, 
     for images, label in tqdm(loader):
         images = images.to(device)
         label = label.to(device)
+        label = label % 10
         images.requires_grad = True  #images.required_grad区分,用required_grad梯度为None
         out = net(images)
         _, pred = torch.max(out, 1)
@@ -221,14 +223,15 @@ def gradient_norm_collect(net, gaussians_model, loader, device, storage_device, 
         # max_log_probs = log_probs.max(1, keepdim=True)[0]  # get the index of the max log-probability
         # loss = max_log_probs.sum()
 
-        #2. 第二种形式loss
-        loss = -loss_func(out, pred)  #这个loss效果好一些
+        # #2. 第二种形式loss
+        loss = -loss_func(out, pred)
 
         net.zero_grad()
         loss.backward()
 
         gradient = images.grad.data
         gradient_norms = -1 * torch.norm(gradient, p=norm, dim=(1, 2, 3))
+        # gradient_norms = torch.linalg.matrix_norm(gradient,ord=norm,dim=(2,3)).sum(dim=1)
         end = start + len(images)
         logits_N_C[start:end].copy_(gradient_norms.cpu().detach(), non_blocking=True)
         start = end
