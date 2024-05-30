@@ -254,44 +254,48 @@ if __name__ == "__main__":
                         storage_device=device,
                     )
 
-                    # logits2, labels2, acc, _ = gmm_evaluate_with_perturbation(
-                    #     net,
-                    #     gaussians_model,
-                    #     test_loader,
-                    #     device=device,
-                    #     num_classes=num_classes,
-                    #     storage_device=device,
-                    #     perturbation=args.perturbation,
-                    # )
-                    # ood_logits2, ood_labels2, _, _ = gmm_evaluate_with_perturbation(
-                    #     net,
-                    #     gaussians_model,
-                    #     ood_test_loader,
-                    #     device=device,
-                    #     num_classes=num_classes,
-                    #     storage_device=device,
-                    #     perturbation=args.perturbation,
-                    # )
-
-                    logits2 = gradient_norm_collect(
-                        net,
-                        gaussians_model,
-                        test_loader,
-                        device=device,
-                        storage_device=device,
-                        norm=1,
-                    )
-                    ood_logits2 = gradient_norm_collect(
-                        net,
-                        gaussians_model,
-                        ood_test_loader,
-                        device=device,
-                        storage_device=device,
-                        norm=1,
-                    )
+                    if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
+                        logits2, labels2, acc, _ = gmm_evaluate_with_perturbation(
+                            net,
+                            gaussians_model,
+                            test_loader,
+                            device=device,
+                            num_classes=num_classes,
+                            storage_device=device,
+                            perturbation=args.perturbation,
+                        )
+                        ood_logits2, ood_labels2, _, _ = gmm_evaluate_with_perturbation(
+                            net,
+                            gaussians_model,
+                            ood_test_loader,
+                            device=device,
+                            num_classes=num_classes,
+                            storage_device=device,
+                            perturbation=args.perturbation,
+                        )
+                    else:  #使用gradient norm
+                        logits2 = gradient_norm_collect(
+                            net,
+                            gaussians_model,
+                            test_loader,
+                            device=device,
+                            storage_device=device,
+                            norm=1,
+                        )
+                        ood_logits2 = gradient_norm_collect(
+                            net,
+                            gaussians_model,
+                            ood_test_loader,
+                            device=device,
+                            storage_device=device,
+                            norm=1,
+                        )
 
                     m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, conf=True)
-                    m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, None, device, conf=True)
+                    if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
+                        m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device, conf=True)
+                    else:
+                        m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, None, device, conf=True)
                     acc = 0
                     print(
                         f"accu:{acc:.4f},ece:{ece:.6f},t_ece:{t_ece:.6f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"

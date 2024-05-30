@@ -237,7 +237,6 @@ def eval_args():
         "--perturbation",
         type=str,
         default="fgsm",
-        choices=["fgsm", "bim", "deepfool", "pgd", "cw"],
         help="add perturbation",
     )
     parser.add_argument("--adv", type=int, default=0, help="advasarial training")

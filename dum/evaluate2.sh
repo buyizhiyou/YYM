@@ -80,8 +80,6 @@ else
        echo "###########  $model is not in the models [vgg16,resnet50,wide_resnet]"
 fi
 
-
-
 if [ "$ooddataset" = "all" ]; then
        for ood in ${ooddatasets[@]}; do
               python evaluate.py \
