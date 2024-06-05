@@ -78,17 +78,27 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     data_dir = kwargs['root']
     val_path = os.path.join(data_dir, "tiny-imagenet-200", "val")
 
+    torch.manual_seed(1)
     val_transform = transforms.Compose([
-        # transforms.RandomCrop(32, padding=4),
-        transforms.Resize((32, 32)),
+        transforms.RandomCrop(32, padding=4),
+        # transforms.Resize((32, 32)),
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ])
 
-    val_dataset = datasets.ImageFolder(val_path, transform=val_transform)
+    dataset = datasets.ImageFolder(val_path, transform=val_transform)
+    num_train = len(dataset)
+    print(f"tiny-imagenet test:{num_train}")
+    if (num_train >= 10000):
+        indices = list(range(num_train))
+        split = 10000
+        np.random.seed(1)
+        np.random.shuffle(indices)
+        valid_idx = indices[:split]
+        dataset = Subset(dataset, valid_idx)
 
     val_loader = torch.utils.data.DataLoader(
-        val_dataset,
+        dataset,
         batch_size=batch_size,
         num_workers=num_workers,
         pin_memory=pin_memory,
@@ -96,3 +106,10 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     )
 
     return val_loader
+
+
+if __name__ == '__main__':
+    dataloader = get_test_loader(32, root="../../data")
+    for x in dataloader:
+        print(x[0].std())
+        break

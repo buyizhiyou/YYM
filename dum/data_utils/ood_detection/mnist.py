@@ -12,8 +12,6 @@ from torch.utils.data import Subset
 from torchvision import datasets
 from torchvision import transforms
 
-from utils.simclr_utils import ContrastiveLearningViewTransform, get_simclr_pipeline_transform
-
 
 def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_workers=4, pin_memory=False, contrastive=0, **kwargs):
     """
@@ -68,9 +66,6 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_work
             transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
             normalize,
         ])
-
-    if contrastive == 2:
-        train_transform = ContrastiveLearningViewTransform(get_simclr_pipeline_transform(32))  #transforms
 
     # load the dataset
     data_dir = kwargs['root']
@@ -139,8 +134,9 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     )
 
     # define transform
+    torch.manual_seed(1)
     transform = transforms.Compose([
-        transforms.Resize((32, 32)),
+        transforms.RandomCrop(32, padding=4),
         transforms.ToTensor(),
         transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
         normalize,
@@ -154,6 +150,16 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
         transform=transform,
     )
 
+    num_train = len(dataset)
+    print(f"mnist test:{num_train}")
+    if (num_train >= 10000):
+        indices = list(range(num_train))
+        split = 10000
+        np.random.seed(1)
+        np.random.shuffle(indices)
+        valid_idx = indices[:split]
+        dataset = Subset(dataset, valid_idx)
+
     data_loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
@@ -165,6 +171,8 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     return data_loader
 
 
-# dataloader = get_test_loader(32, root="../../data")
-# for x in dataloader:
-#     print(x[0].shape)
+if __name__ == '__main__':
+    dataloader = get_test_loader(32, root="../../data")
+    for x in dataloader:
+        print(x[0].std())
+        break

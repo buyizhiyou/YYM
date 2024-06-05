@@ -1,8 +1,24 @@
+#!/usr/bin/env python
+# -*- encoding: utf-8 -*-
+'''
+@File    :   fer2013.py
+@Time    :   2024/05/28 10:59:04
+@Author  :   shiqing
+@Version :   Cinnamoroll V1
+'''
 """
-Create train, valid, test iterators for CIFAR-100.
-Train set size: 45000
-Val set size: 5000
-Test set size: 10000
+The data consists of 48x48 pixel grayscale images of faces. The faces have been automatically registered
+so that the face is more or less centered and occupies about the same amount of space in each image. 
+The task is to categorize each face based on the emotion shown in the facial expression in to one of seven categories (0=Angry, 
+1=Disgust, 2=Fear, 3=Happy, 4=Sad, 5=Surprise, 6=Neutral).
+
+train.csv contains two columns, "emotion" and "pixels". The "emotion" column contains a numeric code ranging from 0 to 6, inclusive,
+for the emotion that is present in the image. The "pixels" column contains a string surrounded in quotes for each image.
+The contents of this string a space-separated pixel values in row major order. test.csv contains only the "pixels" column and
+your task is to predict the emotion column.
+
+The training set consists of 28,709 examples. The public test set used for the leaderboard consists of 3,589 examples. 
+The final test set, which was used to determine the winner of the competition, consists of another 3,589 examples.
 """
 
 import torch
@@ -13,10 +29,10 @@ from torchvision import datasets
 from torchvision import transforms
 
 
-def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_workers=4, pin_memory=False, **kwargs):
+def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_workers=4, pin_memory=False, contrastive=0, **kwargs):
     """
     Utility function for loading and returning train and valid
-    multi-process iterators over the CIFAR-100 dataset. 
+    multi-process iterators over the CIFAR-10 dataset. 
     Params:
     ------
     - batch_size: how many samples per batch to load.
@@ -44,36 +60,40 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_work
 
     # define transforms
     valid_transform = transforms.Compose([
+        transforms.Resize((32, 32)),
         transforms.ToTensor(),
+        transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
         normalize,
     ])
 
     if augment:
         train_transform = transforms.Compose([
+            transforms.Resize((32, 32)),
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
+            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
             normalize,
         ])
     else:
         train_transform = transforms.Compose([
+            transforms.Resize((32, 32)),
             transforms.ToTensor(),
+            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
             normalize,
         ])
 
     # load the dataset
     data_dir = kwargs['root']
-    train_dataset = datasets.CIFAR100(
+    train_dataset = datasets.Places365(
         root=data_dir,
-        train=True,
-        download=True,
+        split="train",
         transform=train_transform,
     )
 
-    valid_dataset = datasets.CIFAR100(
+    valid_dataset = datasets.Places365(
         root=data_dir,
-        train=True,
-        download=False,
+        split="train",
         transform=valid_transform,
     )
 
@@ -94,7 +114,7 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_work
         batch_size=batch_size,
         num_workers=num_workers,
         pin_memory=pin_memory,
-        shuffle=True,
+        shuffle=False,
     )
     valid_loader = torch.utils.data.DataLoader(
         valid_subset,
@@ -110,7 +130,7 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_work
 def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     """
     Utility function for loading and returning a multi-process
-    test iterator over the CIFAR-100 dataset.
+    test iterator over the CIFAR-10 dataset.
     If using CUDA, num_workers should be set to 1 and pin_memory to True.
     Params
     ------
@@ -127,23 +147,26 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
         std=[0.2023, 0.1994, 0.2010],
     )
 
+    # define transform
     torch.manual_seed(1)
     transform = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
+        transforms.RandomCrop(32, padding=6),
+        # transforms.Resize((32, 32)),
         transforms.ToTensor(),
         normalize,
     ])
 
     data_dir = kwargs['root']
-    dataset = datasets.CIFAR100(
+    dataset = datasets.Places365(
         root=data_dir,
-        train=False,
-        download=True,
+        split="val",  #TODO: split="test"时,label=None，会报错
         transform=transform,
+        # target_transform=transforms.ToTensor(),
+        download=True
     )
 
     num_train = len(dataset)
-    print(f"cifar100 test:{num_train}")
+    print(f"stl10 test:{num_train}")
     if (num_train >= 10000):
         indices = list(range(num_train))
         split = 10000
@@ -164,4 +187,7 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
 
 
 if __name__ == '__main__':
-    dataloader = get_test_loader(32, root="../../data/")
+    dataloader = get_test_loader(32, root="../../data")
+    for x in dataloader:
+        print(x[0].std())
+        break

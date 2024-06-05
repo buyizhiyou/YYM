@@ -212,7 +212,7 @@ if __name__ == "__main__":
             if args.al_type == "gmm":
                 # Fit the GMM on the trained model
                 model.eval()
-                embeddings, labels = get_embeddings(
+                embeddings, labels ,norm= get_embeddings(
                     model,
                     small_train_loader,
                     num_dim=512,

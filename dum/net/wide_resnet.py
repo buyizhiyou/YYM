@@ -13,8 +13,17 @@ from net.spectral_normalization.spectral_norm_fc import spectral_norm_fc
 
 
 class WideBasic(nn.Module):
+
     def __init__(
-        self, wrapped_conv, input_size, in_c, out_c, stride, dropout_rate, mod=True, batchnorm_momentum=0.01,
+        self,
+        wrapped_conv,
+        input_size,
+        in_c,
+        out_c,
+        stride,
+        dropout_rate,
+        mod=True,
+        batchnorm_momentum=0.01,
     ):
         super().__init__()
 
@@ -31,18 +40,17 @@ class WideBasic(nn.Module):
             self.dropout = nn.Dropout(dropout_rate)
 
         if stride != 1 or in_c != out_c:
-            if mod:
+            # if mod:
+            #     def shortcut(x):
+            #         x = F.avg_pool2d(x, stride, stride)
+            #         pad = torch.zeros(x.shape[0], out_c - in_c, x.shape[2], x.shape[3], device=x.device,)
+            #         x = torch.cat((x, pad), dim=1)
+            #         return x
 
-                def shortcut(x):
-                    x = F.avg_pool2d(x, stride, stride)
-                    pad = torch.zeros(x.shape[0], out_c - in_c, x.shape[2], x.shape[3], device=x.device,)
-                    x = torch.cat((x, pad), dim=1)
-                    return x
-
-                self.shortcut = shortcut
-            else:
-                # Just use a strided conv
-                self.shortcut = wrapped_conv(input_size, in_c, out_c, 1, stride)
+            #     self.shortcut = shortcut
+            # else:
+            # Just use a strided conv
+            self.shortcut = wrapped_conv(input_size, in_c, out_c, 1, stride)
         else:
             self.shortcut = nn.Identity()
 
@@ -59,6 +67,7 @@ class WideBasic(nn.Module):
 
         return out
 
+
 class ProjectionHead(nn.Module):
 
     def __init__(self, emb_size, head_size=512):
@@ -71,22 +80,22 @@ class ProjectionHead(nn.Module):
         h = F.relu(h)
         h = self.out(h)
         return h
-    
+
+
 class WideResNet(nn.Module):
-    def __init__(
-        self,
-        spectral_normalization=True,
-        mod=True,
-        depth=28,
-        widen_factor=10,
-        num_classes=None,
-        dropout_rate=0.3,
-        coeff=3,
-        n_power_iterations=1,
-        batchnorm_momentum=0.01,
-        temp=1.0,
-        **kwargs
-    ):
+
+    def __init__(self,
+                 spectral_normalization=True,
+                 mod=True,
+                 depth=28,
+                 widen_factor=10,
+                 num_classes=None,
+                 dropout_rate=0.3,
+                 coeff=3,
+                 n_power_iterations=1,
+                 batchnorm_momentum=0.01,
+                 temp=1.0,
+                 **kwargs):
         """
         If the "mod" parameter is set to True, the architecture uses 2 modifications:
         1. LeakyReLU instead of normal ReLU
@@ -165,7 +174,15 @@ class WideResNet(nn.Module):
         in_c, out_c = channels
 
         for stride in strides:
-            layers.append(WideBasic(self.wrapped_conv, input_size, in_c, out_c, stride, self.dropout_rate, self.mod,))
+            layers.append(WideBasic(
+                self.wrapped_conv,
+                input_size,
+                in_c,
+                out_c,
+                stride,
+                self.dropout_rate,
+                self.mod,
+            ))
             in_c = out_c
             input_size = math.ceil(input_size / stride)
 

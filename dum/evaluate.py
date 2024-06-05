@@ -19,6 +19,9 @@ import data_utils.ood_detection.gauss as gauss
 import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
 import data_utils.ood_detection.fer2013 as fer2013
 import data_utils.ood_detection.dtd as dtd
+import data_utils.ood_detection.stl as stl
+import data_utils.ood_detection.caltech256 as caltech256
+import data_utils.ood_detection.place365 as place365
 
 # Import network models
 from net.lenet import lenet
@@ -36,7 +39,7 @@ from metrics.uncertainty_confidence import entropy, logsumexp, confidence, sumex
 from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ensemble
 
 # Import GMM utils
-from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, gradient_norm_collect, gmm_evaluate_with_perturbation, maxp_evaluate_with_perturbation
+from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate, gradient_norm_collect, gmm_evaluate_with_perturbation, maxp_evaluate_with_perturbation
 from utils.kde_utils import kde_evaluate, kde_fit
 from utils.eval_utils import model_load_name
 from utils.train_utils import model_save_name
@@ -57,7 +60,9 @@ dataset_loader = {
     "mnist": mnist,
     "lsun": lsun,
     "dtd": dtd,
-    "gauss": gauss,
+    "stl": stl,
+    "place365": place365,
+    "caltech256": caltech256,
     "tiny_imagenet": tiny_imagenet
 }
 
@@ -112,6 +117,7 @@ if __name__ == "__main__":
         model_files = glob.glob(f"{args.load_loc}/run{args.run}/{save_name}/*/{model_name}")
 
     for i, saved_model_name in enumerate(model_files):
+        # saved_model_name = "/home/sq/YYM/dum/saved_models/run1/2024_03_07_21_49_57/vgg16_seed_1_best.model"
         print(f"Run {args.run}, Evaluating for {i}: {saved_model_name}")
         if args.evaltype == "ensemble":
             val_loaders = []
@@ -221,7 +227,7 @@ if __name__ == "__main__":
 
                 # Evaluate a GMM model
                 print("GMM Model")
-                embeddings, labels = get_embeddings(
+                embeddings, labels, norm_threshold = get_embeddings(
                     net,
                     train_loader,
                     num_dim=model_to_num_dim[args.model],
@@ -235,7 +241,8 @@ if __name__ == "__main__":
 
                     # test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=1, pin_memory=args.gpu)
                     # ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root, batch_size=1, pin_memory=args.gpu)
-
+                    
+                    
                     logits, labels = gmm_evaluate(
                         net,
                         gaussians_model,
@@ -253,49 +260,121 @@ if __name__ == "__main__":
                         num_classes=num_classes,
                         storage_device=device,
                     )
-
-                    if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
-                        logits2, labels2, acc, _ = gmm_evaluate_with_perturbation(
-                            net,
-                            gaussians_model,
-                            test_loader,
-                            device=device,
-                            num_classes=num_classes,
-                            storage_device=device,
-                            perturbation=args.perturbation,
-                        )
-                        ood_logits2, ood_labels2, _, _ = gmm_evaluate_with_perturbation(
-                            net,
-                            gaussians_model,
-                            ood_test_loader,
-                            device=device,
-                            num_classes=num_classes,
-                            storage_device=device,
-                            perturbation=args.perturbation,
-                        )
-                    else:  #使用gradient norm
-                        logits2 = gradient_norm_collect(
-                            net,
-                            gaussians_model,
-                            test_loader,
-                            device=device,
-                            storage_device=device,
-                            norm=1,
-                        )
-                        ood_logits2 = gradient_norm_collect(
-                            net,
-                            gaussians_model,
-                            ood_test_loader,
-                            device=device,
-                            storage_device=device,
-                            norm=1,
-                        )
-
                     m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, conf=True)
-                    if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
-                        m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device, conf=True)
-                    else:
-                        m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, None, device, conf=True)
+                    # print(f"m1_auroc:{m1_auroc:.4f},m1_aupr:{m1_auprc:.4f}")
+
+                    for epsilon in [0.01]:
+                        for temp in [1]:
+                            if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
+                                print(f"{args.perturbation}")
+                                logits2, labels2, acc, _ = gmm_evaluate_with_perturbation(
+                                    net,
+                                    gaussians_model,
+                                    test_loader,
+                                    device=device,
+                                    num_classes=num_classes,
+                                    storage_device=device,
+                                    norm_threshold=norm_threshold,
+                                    perturbation=args.perturbation,
+                                    epsilon=epsilon,
+                                    temperature=temp,
+                                )
+                                ood_logits2, ood_labels2, _, _ = gmm_evaluate_with_perturbation(
+                                    net,
+                                    gaussians_model,
+                                    ood_test_loader,
+                                    device=device,
+                                    num_classes=num_classes,
+                                    storage_device=device,
+                                    norm_threshold=norm_threshold,
+                                    perturbation=args.perturbation,
+                                    epsilon=epsilon,
+                                    temperature=temp,
+                                )
+                            else:  #使用gradient norm
+                                print("gradient norm")
+                                logits2 = gradient_norm_collect(
+                                    net,
+                                    gaussians_model,
+                                    test_loader,
+                                    device=device,
+                                    storage_device=device,
+                                    norm=1,
+                                )
+                                ood_logits2 = gradient_norm_collect(
+                                    net,
+                                    gaussians_model,
+                                    ood_test_loader,
+                                    device=device,
+                                    storage_device=device,
+                                    norm=1,
+                                )
+
+                            if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
+                                m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device, conf=True)
+                            else:
+                                m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, None, device, conf=True)
+
+                            # print(f"epsilon:{epsilon},temp:{temp},m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}")
+
+                    # logits2, _ = maxp_evaluate(
+                    #     net,
+                    #     test_loader,
+                    #     device=device,
+                    #     num_classes=num_classes,
+                    #     storage_device=device,
+                    # )
+                    # ood_logits2, _ = maxp_evaluate(
+                    #     net,
+                    #     ood_test_loader,
+                    #     device=device,
+                    #     num_classes=num_classes,
+                    #     storage_device=device,
+                    # )
+                    # m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, confidence, device, conf=True)
+                    # print(f"m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}")
+
+                    # if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
+                    #     logits2, labels2, acc, _ = gmm_evaluate_with_perturbation(
+                    #         net,
+                    #         gaussians_model,
+                    #         test_loader,
+                    #         device=device,
+                    #         num_classes=num_classes,
+                    #         storage_device=device,
+                    #         perturbation=args.perturbation,
+                    #     )
+                    #     ood_logits2, ood_labels2, _, _ = gmm_evaluate_with_perturbation(
+                    #         net,
+                    #         gaussians_model,
+                    #         ood_test_loader,
+                    #         device=device,
+                    #         num_classes=num_classes,
+                    #         storage_device=device,
+                    #         perturbation=args.perturbation,
+                    #     )
+                    # else:  #使用gradient norm
+                    #     logits2 = gradient_norm_collect(
+                    #         net,
+                    #         gaussians_model,
+                    #         test_loader,
+                    #         device=device,
+                    #         storage_device=device,
+                    #         norm=1,
+                    #     )
+                    #     ood_logits2 = gradient_norm_collect(
+                    #         net,
+                    #         gaussians_model,
+                    #         ood_test_loader,
+                    #         device=device,
+                    #         storage_device=device,
+                    #         norm=1,
+                    #     )
+                    # if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
+                    #     m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device, conf=True)
+                    # else:
+                    #     m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, None, device, conf=True)
+
                     acc = 0
                     print(
                         f"accu:{acc:.4f},ece:{ece:.6f},t_ece:{t_ece:.6f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"

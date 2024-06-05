@@ -189,6 +189,8 @@ class VGG(nn.Module):
 
         self.embedding = self.projection_head(out)  # 对比loss的embedding
         self.feature = out
+
+        # out = torch.clip(out, max=0.9)  #TODO:利用torch.quantile(x,0.95)计算出来c=1,略有提升
         out = self.fc(out) / self.temp
 
         return out

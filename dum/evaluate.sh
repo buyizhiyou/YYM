@@ -1,7 +1,7 @@
 #! /bin/bash
 echo "###########  Evaluate with sn and mod;
 ###########  Usage:
-###########   ./evaluate.sh --gpu  0 --run 6 --batchsize 64 --evaltype gmm --ooddataset svhn --model vgg16  --perturbation cw"
+###########   ./evaluate.sh --gpu  0 --run 13 --batchsize 256 --evaltype gmm --ooddataset svhn --model vgg16  --perturbation fgsm"
 
 # 解析命令行参数
 options=$(getopt -o g:r:b:t:d:m:c --long gpu:,run:,batchsize:,evaltype:,ooddataset:,model:,perturbation:, -- "$@")
@@ -65,12 +65,7 @@ else
        echo "###########  $evaltype is not in the evaltypes [gmm,kde,ensemble]"
 fi
 #check ooddataset
-ooddatasets=("cifar100" "lsun" "svhn" "tiny_imagenet" "mnist" "dtd" "fer2013" "gauss" "all")
-if [[ " ${ooddatasets[@]}" =~ "$ooddataset" ]]; then
-       echo "###########  evaluate ooddataset $ooddataset"
-else
-       echo "###########  $ooddataset is not in the ooddatasets [cifar100,lsun,svhn,tiny_imagenet,mnist,dtd,fer2013,gauss,all]"
-fi
+ooddatasets=("cifar100" "lsun" "svhn" "tiny_imagenet"  "dtd" "fer2013" )
 #check model
 models=("vgg16" "resnet50" "wide_resnet")
 if [[ " ${models[@]}" =~ "$model" ]]; then

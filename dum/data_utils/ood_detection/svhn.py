@@ -31,16 +31,32 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_work
     error_msg = "[!] val_size should be in the range [0, 1]."
     assert (val_size >= 0) and (val_size <= 1), error_msg
 
-    normalize = transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010],)
+    normalize = transforms.Normalize(
+        mean=[0.4914, 0.4822, 0.4465],
+        std=[0.2023, 0.1994, 0.2010],
+    )
 
     # define transforms
-    valid_transform = transforms.Compose([transforms.ToTensor(), normalize,])
+    valid_transform = transforms.Compose([
+        transforms.ToTensor(),
+        normalize,
+    ])
 
     # load the dataset
     data_dir = kwargs['root']
-    train_dataset = datasets.SVHN(root=data_dir, split="train", download=True, transform=valid_transform,)
+    train_dataset = datasets.SVHN(
+        root=data_dir,
+        split="train",
+        download=True,
+        transform=valid_transform,
+    )
 
-    valid_dataset = datasets.SVHN(root=data_dir, split="train", download=True, transform=valid_transform,)
+    valid_dataset = datasets.SVHN(
+        root=data_dir,
+        split="train",
+        download=True,
+        transform=valid_transform,
+    )
 
     num_train = len(train_dataset)
     indices = list(range(num_train))
@@ -54,10 +70,18 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_work
     valid_subset = Subset(valid_dataset, valid_idx)
 
     train_loader = torch.utils.data.DataLoader(
-        train_subset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, shuffle=True,
+        train_subset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        shuffle=True,
     )
     valid_loader = torch.utils.data.DataLoader(
-        valid_subset, batch_size=batch_size, num_workers=num_workers, pin_memory=pin_memory, shuffle=False,
+        valid_subset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        shuffle=False,
     )
 
     return (train_loader, valid_loader)
@@ -78,16 +102,47 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     -------
     - data_loader: test set iterator.
     """
-    normalize = transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010],)
+    normalize = transforms.Normalize(
+        mean=[0.4914, 0.4822, 0.4465],
+        std=[0.2023, 0.1994, 0.2010],
+    )
 
     # define transform
-    transform = transforms.Compose([transforms.ToTensor(), normalize,])
+    torch.manual_seed(1)
+    transform = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.ToTensor(),
+        normalize,
+    ])
 
     data_dir = kwargs['root']
-    dataset = datasets.SVHN(root=os.path.join(data_dir,"svhn"), split="test", download=True, transform=transform,)
+    dataset = datasets.SVHN(
+        root=os.path.join(data_dir, "svhn"),
+        split="test",
+        download=True,
+        transform=transform,
+    )
+
+    num_train = len(dataset)
+    print(f"svhn test:{num_train}")
+    if (num_train >= 10000):
+        indices = list(range(num_train))
+        split = 10000
+        np.random.seed(1)
+        np.random.shuffle(indices)
+        valid_idx = indices[:split]
+        dataset = Subset(dataset, valid_idx)
 
     data_loader = torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=pin_memory,
+        dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
     )
 
     return data_loader
+
+
+if __name__ == '__main__':
+    dataloader = get_test_loader(32, root="../../data/")

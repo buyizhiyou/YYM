@@ -107,6 +107,7 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     )
 
     # define transform
+    torch.manual_seed(1)
     transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         # transforms.Resize((32, 32)),
@@ -116,10 +117,20 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
 
     data_dir = kwargs['root']
     dataset = datasets.LSUN(
-        root=os.path.join(data_dir,"lsun"),
+        root=os.path.join(data_dir, "lsun"),
         classes="test",
         transform=transform,
     )
+
+    num_train = len(dataset)
+    print(f"lsun test:{num_train}")
+    if (num_train >= 10000):
+        indices = list(range(num_train))
+        split = 10000
+        np.random.seed(1)
+        np.random.shuffle(indices)
+        valid_idx = indices[:split]
+        dataset = Subset(dataset, valid_idx)
 
     data_loader = torch.utils.data.DataLoader(
         dataset,
@@ -132,6 +143,8 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     return data_loader
 
 
-
 if __name__ == '__main__':
-    dataloader = get_test_loader(32,root="../../data/lsun")
+    dataloader = get_test_loader(32, root="../../data")
+    for x in dataloader:
+        print(x[0].std())
+        break
