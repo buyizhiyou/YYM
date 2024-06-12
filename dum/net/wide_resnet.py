@@ -40,17 +40,15 @@ class WideBasic(nn.Module):
             self.dropout = nn.Dropout(dropout_rate)
 
         if stride != 1 or in_c != out_c:
-            # if mod:
-            #     def shortcut(x):
-            #         x = F.avg_pool2d(x, stride, stride)
-            #         pad = torch.zeros(x.shape[0], out_c - in_c, x.shape[2], x.shape[3], device=x.device,)
-            #         x = torch.cat((x, pad), dim=1)
-            #         return x
-
-            #     self.shortcut = shortcut
-            # else:
-            # Just use a strided conv
-            self.shortcut = wrapped_conv(input_size, in_c, out_c, 1, stride)
+            if mod:
+                def shortcut(x):
+                    x = F.avg_pool2d(x, stride, stride)
+                    pad = torch.zeros(x.shape[0], out_c - in_c, x.shape[2], x.shape[3], device=x.device,)
+                    x = torch.cat((x, pad), dim=1)
+                    return x
+                self.shortcut = shortcut
+            else:
+                self.shortcut = wrapped_conv(input_size, in_c, out_c, 1, stride)
         else:
             self.shortcut = nn.Identity()
 

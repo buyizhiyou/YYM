@@ -1,10 +1,10 @@
 #! /bin/bash
 echo "###########  Evaluate with sn and mod;
 ###########  Usage:
-###########   ./evaluate.sh --gpu  0 --run 13 --batchsize 256 --evaltype gmm --ooddataset svhn --model vgg16  --perturbation fgsm"
+###########   ./evaluate.sh --gpu  0 --run 17 --batchsize 256 --evaltype gmm --ooddataset svhn --model vgg16  --perturbation fgsm --contrastive 0 --adv 0"
 
 # 解析命令行参数
-options=$(getopt -o g:r:b:t:d:m:c --long gpu:,run:,batchsize:,evaltype:,ooddataset:,model:,perturbation:, -- "$@")
+options=$(getopt -o g:r:b:t:d:m:c:a --long gpu:,run:,batchsize:,evaltype:,ooddataset:,model:,perturbation:,contrastive:,adv:, -- "$@")
 eval set -- "$options"
 while true; do
        case $1 in
@@ -38,9 +38,19 @@ while true; do
               model=$1
               shift
               ;;
-       -c | --perturbation)
+       -p | --perturbation)
               shift
               perturbation=$1
+              shift
+              ;;
+       -c | --contrastive)
+              shift
+              contrastive=$1
+              shift
+              ;;
+       -a | --adv)
+              shift
+              adv=$1
               shift
               ;;
        --)
@@ -65,7 +75,7 @@ else
        echo "###########  $evaltype is not in the evaltypes [gmm,kde,ensemble]"
 fi
 #check ooddataset
-ooddatasets=("cifar100" "lsun" "svhn" "tiny_imagenet"  "dtd" "fer2013" )
+ooddatasets=("cifar100" "lsun" "svhn" "tiny_imagenet" "mnist")
 #check model
 models=("vgg16" "resnet50" "wide_resnet")
 if [[ " ${models[@]}" =~ "$model" ]]; then
@@ -87,6 +97,8 @@ if [[ "$ooddataset" = "all" ]]; then
                      --model $model \
                      --evaltype $evaltype \
                      --perturbation $perturbation \
+                     --contrastive $contrastive \
+                     --adv $adv \
                      -mod \
                      -sn
        done
@@ -102,6 +114,8 @@ else
               --model $model \
               --evaltype $evaltype \
               --perturbation $perturbation \
+              --contrastive $contrastive \
+              --adv $adv \
               -mod \
               -sn
 fi

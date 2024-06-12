@@ -28,7 +28,6 @@ from net.lenet import lenet
 from net.resnet import resnet18, resnet50
 # from net.resnet2 import resnet18, resnet50
 from net.wide_resnet import wrn
-# from net.vgg import vgg16
 from net.vgg import vgg16
 from net.vit import vit
 
@@ -39,7 +38,7 @@ from metrics.uncertainty_confidence import entropy, logsumexp, confidence, sumex
 from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ensemble
 
 # Import GMM utils
-from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate, gradient_norm_collect, gmm_evaluate_with_perturbation, maxp_evaluate_with_perturbation
+from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate, gradient_norm_collect, gmm_evaluate_for_adv, gmm_evaluate_with_perturbation_for_adv, gmm_evaluate_with_perturbation, maxp_evaluate_with_perturbation
 from utils.kde_utils import kde_evaluate, kde_fit
 from utils.eval_utils import model_load_name
 from utils.train_utils import model_save_name
@@ -77,7 +76,6 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 if __name__ == "__main__":
 
     args = eval_args().parse_args()
-
     # Checking if GPU is available
     cuda = torch.cuda.is_available()
 
@@ -96,8 +94,6 @@ if __name__ == "__main__":
     accuracies = []
 
     # Pre temperature scaling
-    # m1 - Uncertainty/Confidence Metric 1 for deterministic model: logsumexp of probability density
-    # m2 - Uncertainty/Confidence Metric 2 for deterministic model: max p
     eces = []
     t_eces = []
     # m1_fpr95s = []
@@ -116,9 +112,11 @@ if __name__ == "__main__":
     else:
         model_files = glob.glob(f"{args.load_loc}/run{args.run}/{save_name}/*/{model_name}")
 
+    if len(model_files) == 0:
+        exit()
     for i, saved_model_name in enumerate(model_files):
         # saved_model_name = "/home/sq/YYM/dum/saved_models/run1/2024_03_07_21_49_57/vgg16_seed_1_best.model"
-        print(f"Run {args.run}, Evaluating for {i}: {saved_model_name}")
+        print(f"Run {args.run}, Evaluating for {i}/{len(model_files)}: {saved_model_name}")
         if args.evaltype == "ensemble":
             val_loaders = []
             for j in range(args.ensemble):
@@ -132,8 +130,7 @@ if __name__ == "__main__":
                 )
                 val_loaders.append(val_loader)
             # Evaluate an ensemble
-            ensemble_loc = saved_model_name
-            net_ensemble = load_ensemble(ensemble_loc=ensemble_loc,
+            net_ensemble = load_ensemble(ensemble_loc=saved_model_name,
                                          model_name=args.model,
                                          device=device,
                                          num_classes=num_classes,
@@ -174,26 +171,26 @@ if __name__ == "__main__":
                 predictions,
                 confidences,
             ) = test_classification_net_ensemble(net_ensemble, test_loader, device)
-            ece = expected_calibration_error(confidences, predictions, labels_list, num_bins=15)
+            # ece = expected_calibration_error(confidences, predictions, labels_list, num_bins=15)
 
             (_, _, _), (_, _, _), m1_auroc, m1_auprc = get_roc_auc_ensemble(net_ensemble, test_loader, ood_test_loader, "mutual_information", device)
             (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc_ensemble(net_ensemble, test_loader, ood_test_loader, "entropy", device)
-
+            print(f"mutual_info:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f}; entropy:m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
             # Temperature scale the ensemble
-            t_ensemble = []
-            for model, val_loader in zip(net_ensemble, val_loaders):
-                t_model = ModelWithTemperature(model, device)
-                t_model.set_temperature(val_loader)
-                t_ensemble.append(t_model)
+            # t_ensemble = []
+            # for model, val_loader in zip(net_ensemble, val_loaders):
+            #     t_model = ModelWithTemperature(model, device)
+            #     t_model.set_temperature(val_loader)
+            #     t_ensemble.append(t_model)
 
-            (
-                t_conf_matrix,
-                t_accuracy,
-                t_labels_list,
-                t_predictions,
-                t_confidences,
-            ) = test_classification_net_ensemble(t_ensemble, test_loader, device)
-            t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
+            # (
+            #     t_conf_matrix,
+            #     t_accuracy,
+            #     t_labels_list,
+            #     t_predictions,
+            #     t_confidences,
+            # ) = test_classification_net_ensemble(t_ensemble, test_loader, device)
+            # t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
         else:
             (
                 conf_matrix,
@@ -202,28 +199,28 @@ if __name__ == "__main__":
                 predictions,
                 confidences,
             ) = test_classification_net(net, test_loader, device)
-            ece = expected_calibration_error(confidences, predictions, labels_list, num_bins=15)
+            # ece = expected_calibration_error(confidences, predictions, labels_list, num_bins=15)
 
-            #校准
-            temp_net = ModelWithTemperature(net, device)
-            temp_net.set_temperature(val_loader)
-            net.temp = temp_net.temperature
+            # #校准
+            # temp_net = ModelWithTemperature(net, device)
+            # temp_net.set_temperature(val_loader)
+            # net.temp = temp_net.temperature
 
-            (
-                t_conf_matrix,
-                t_accuracy,
-                t_labels_list,
-                t_predictions,
-                t_confidences,
-            ) = test_classification_net(temp_net, test_loader, device)
-            t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
+            # (
+            #     t_conf_matrix,
+            #     t_accuracy,
+            #     t_labels_list,
+            #     t_predictions,
+            #     t_confidences,
+            # ) = test_classification_net(temp_net, test_loader, device)
+            # t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
 
             if (args.evaltype == "gmm"):
-                if args.mcdropout:
-                    print("打开 dropout")
-                    for module in net.children():
-                        if isinstance(module, torch.nn.Dropout):
-                            module.train(True)
+                # if args.mcdropout:
+                #     print("打开 dropout")
+                #     for module in net.modules():
+                #         if isinstance(module, torch.nn.Dropout):
+                #             module.train(True)
 
                 # Evaluate a GMM model
                 print("GMM Model")
@@ -241,9 +238,8 @@ if __name__ == "__main__":
 
                     # test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=1, pin_memory=args.gpu)
                     # ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root, batch_size=1, pin_memory=args.gpu)
-                    
-                    
-                    logits, labels = gmm_evaluate(
+
+                    logits, labels, preds = gmm_evaluate(
                         net,
                         gaussians_model,
                         test_loader,
@@ -252,7 +248,7 @@ if __name__ == "__main__":
                         storage_device=device,
                     )
 
-                    ood_logits, ood_labels = gmm_evaluate(
+                    ood_logits, ood_labels, _ = gmm_evaluate(
                         net,
                         gaussians_model,
                         ood_test_loader,
@@ -261,13 +257,33 @@ if __name__ == "__main__":
                         storage_device=device,
                     )
                     m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, conf=True)
-                    # print(f"m1_auroc:{m1_auroc:.4f},m1_aupr:{m1_auprc:.4f}")
+
+                    #TODO:分析对抗样本
+                    # logits_adv, _, _ = gmm_evaluate_for_adv(
+                    #     net,
+                    #     gaussians_model,
+                    #     test_loader,
+                    #     device=device,
+                    #     num_classes=num_classes,
+                    #     storage_device=device,
+                    # )
+                    # logits_adv2, _, _ = gmm_evaluate_with_perturbation_for_adv(
+                    #     net,
+                    #     gaussians_model,
+                    #     test_loader,
+                    #     device=device,
+                    #     num_classes=num_classes,
+                    #     storage_device=device,
+                    # )
+                    # _, m1_auroc_adv, m1_auprc_adv = get_roc_auc_logits(logits, logits_adv, logsumexp, device, conf=True)
+                    # _, m2_auroc_adv, m2_auprc_adv = get_roc_auc_logits(logits, logits_adv2, logsumexp, device, conf=True)
+                    # print(f"m1_auroc_adv:{m1_auprc_adv},m1_auprc_adv:{m1_auprc_adv},m2_auroc_adv:{m2_auroc_adv},m2_auprc_adv:{m2_auprc_adv}")
 
                     for epsilon in [0.01]:
                         for temp in [1]:
                             if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
-                                print(f"{args.perturbation}")
-                                logits2, labels2, acc, _ = gmm_evaluate_with_perturbation(
+                                print(f"add noise:{args.perturbation}")
+                                logits2, labels2, preds2, acc, acc_perturb = gmm_evaluate_with_perturbation(
                                     net,
                                     gaussians_model,
                                     test_loader,
@@ -279,7 +295,7 @@ if __name__ == "__main__":
                                     epsilon=epsilon,
                                     temperature=temp,
                                 )
-                                ood_logits2, ood_labels2, _, _ = gmm_evaluate_with_perturbation(
+                                ood_logits2, ood_labels2, _, _, _ = gmm_evaluate_with_perturbation(
                                     net,
                                     gaussians_model,
                                     ood_test_loader,
@@ -292,7 +308,7 @@ if __name__ == "__main__":
                                     temperature=temp,
                                 )
                             else:  #使用gradient norm
-                                print("gradient norm")
+                                print("using gradient norm")
                                 logits2 = gradient_norm_collect(
                                     net,
                                     gaussians_model,
@@ -315,7 +331,7 @@ if __name__ == "__main__":
                             else:
                                 m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, None, device, conf=True)
 
-                            # print(f"epsilon:{epsilon},temp:{temp},m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}")
+                            # print(f"epsilon:{epsilon},temp:{temp},acc:{acc},acc_perturb:{acc_perturb},m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}")
 
                     # logits2, _ = maxp_evaluate(
                     #     net,
@@ -331,54 +347,11 @@ if __name__ == "__main__":
                     #     num_classes=num_classes,
                     #     storage_device=device,
                     # )
+
                     # m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, confidence, device, conf=True)
                     # print(f"m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}")
 
-                    # if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
-                    #     logits2, labels2, acc, _ = gmm_evaluate_with_perturbation(
-                    #         net,
-                    #         gaussians_model,
-                    #         test_loader,
-                    #         device=device,
-                    #         num_classes=num_classes,
-                    #         storage_device=device,
-                    #         perturbation=args.perturbation,
-                    #     )
-                    #     ood_logits2, ood_labels2, _, _ = gmm_evaluate_with_perturbation(
-                    #         net,
-                    #         gaussians_model,
-                    #         ood_test_loader,
-                    #         device=device,
-                    #         num_classes=num_classes,
-                    #         storage_device=device,
-                    #         perturbation=args.perturbation,
-                    #     )
-                    # else:  #使用gradient norm
-                    #     logits2 = gradient_norm_collect(
-                    #         net,
-                    #         gaussians_model,
-                    #         test_loader,
-                    #         device=device,
-                    #         storage_device=device,
-                    #         norm=1,
-                    #     )
-                    #     ood_logits2 = gradient_norm_collect(
-                    #         net,
-                    #         gaussians_model,
-                    #         ood_test_loader,
-                    #         device=device,
-                    #         storage_device=device,
-                    #         norm=1,
-                    #     )
-                    # if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
-                    #     m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device, conf=True)
-                    # else:
-                    #     m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, None, device, conf=True)
-
-                    acc = 0
-                    print(
-                        f"accu:{acc:.4f},ece:{ece:.6f},t_ece:{t_ece:.6f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"
-                    )
+                    print(f"noise-:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
                 except RuntimeError as e:
                     print("Runtime Error caught: " + str(e))
                     continue
@@ -425,8 +398,12 @@ if __name__ == "__main__":
                     continue
 
         accuracies.append(accuracy)
-        eces.append(ece)
-        t_eces.append(t_ece)
+        eces.append(0.0)
+        t_eces.append(0.0)
+        # eces.append(ece)
+        # t_eces.append(t_ece)
+        eces.append(0)
+        t_eces.append(0)
         m1_aurocs.append(m1_auroc)
         m1_auprcs.append(m1_auprc)
         m2_aurocs.append(m2_auroc)

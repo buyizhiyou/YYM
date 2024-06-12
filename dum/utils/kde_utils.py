@@ -27,26 +27,10 @@ class KdeModel():
         return np.sum(self.weights * np.exp(self.log_prob(x)))
 
 
-def kde_forward(net, kde_model, data_B_X):
-
-    if isinstance(net, nn.DataParallel):
-        features_B_Z = net.module(data_B_X)
-        features_B_Z = net.module.feature
-    else:
-        features_B_Z = net(data_B_X)
-        features_B_Z = net.feature
-
-    log_probs_B_Y = kde_model.log_prob(features_B_Z.cpu().numpy())
-
-    return log_probs_B_Y
-
-
 def kde_evaluate(net, kde_model, loader, device, num_classes, storage_device):
 
     num_samples = len(loader.dataset)
-    logits_N_C = torch.empty((num_samples, num_classes),
-                             dtype=torch.float,
-                             device=storage_device)
+    logits_N_C = torch.empty((num_samples, num_classes), dtype=torch.float, device=storage_device)
     labels_N = torch.empty(num_samples, dtype=torch.int, device=storage_device)
 
     with torch.no_grad():
@@ -54,7 +38,9 @@ def kde_evaluate(net, kde_model, loader, device, num_classes, storage_device):
         for data, label in tqdm(loader):
             data = data.to(device)
             label = label.to(device)
-            logit_B_C = kde_forward(net, kde_model, data)
+            net(data)
+            features = net.feature
+            logit_B_C = kde_model.log_prob(features.cpu().numpy())
 
             end = start + len(data)
             logits_N_C[start:end] = torch.from_numpy(logit_B_C)
@@ -77,12 +63,7 @@ def kde_fit(embeddings, labels, num_classes):
         kernel = "gaussian"
 
         # kdes = [NaiveKDE(kernel='gaussian', bw=1).fit(embeddings[labels == c].cpu().numpy()) for c in range(num_classes)]
-        kdes = [
-            KernelDensity(kernel=kernel, bandwidth=best_KDEbandwidth).fit(
-                embeddings[labels == c].cpu().numpy())
-            for c in range(num_classes)
-        ]
-        weights = [(labels == c).sum().cpu().numpy() / len(labels)
-                   for c in range(num_classes)]
+        kdes = [KernelDensity(kernel=kernel, bandwidth=best_KDEbandwidth).fit(embeddings[labels == c].cpu().numpy()) for c in range(num_classes)]
+        weights = [(labels == c).sum().cpu().numpy() / len(labels) for c in range(num_classes)]
 
     return KdeModel(kdes, weights)

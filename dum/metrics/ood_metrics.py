@@ -25,13 +25,10 @@ def plot_roc(preds, labels, title="Receiver operating characteristic"):
 
     # Compute values for curve
     fpr, tpr, _ = roc_curve(labels, preds)
-
     # Compute FPR (95% TPR)
     tpr95 = fpr_at_95_tpr(preds, labels)
-
     # Compute AUROC
     roc_auc = auroc(preds, labels)
-
     # Draw the plot
     plt.figure()
     lw = 2
@@ -63,7 +60,6 @@ def plot_pr(preds, labels, title="Precision recall curve"):
     # Compute values for curve
     precision, recall, _ = precision_recall_curve(labels, preds)
     prc_auc = auc(recall, precision)
-
     plt.figure()
     lw = 2
     plt.plot(recall, precision, color='darkorange',
