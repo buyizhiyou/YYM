@@ -88,8 +88,6 @@ if __name__ == "__main__":
 
     # Taking input for the dataset
     num_classes = dataset_num_classes[args.dataset]
-    test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=args.batch_size, pin_memory=args.gpu)
-    ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root, batch_size=args.batch_size, pin_memory=args.gpu)
 
     # Evaluating the models
     accuracies = []
@@ -165,6 +163,10 @@ if __name__ == "__main__":
             net.eval()
 
         if args.evaltype == "ensemble":
+            test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=args.batch_size, pin_memory=args.gpu)
+            ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root,
+                                                                               batch_size=args.batch_size,
+                                                                               pin_memory=args.gpu)
             (
                 conf_matrix,
                 accuracy,
@@ -194,6 +196,8 @@ if __name__ == "__main__":
             # ) = test_classification_net_ensemble(t_ensemble, test_loader, device)
             # t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
         else:
+            test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=512, pin_memory=args.gpu)
+            ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root, batch_size=512, pin_memory=args.gpu)
             (
                 conf_matrix,
                 accuracy,
@@ -218,12 +222,6 @@ if __name__ == "__main__":
             # t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
 
             if (args.evaltype == "gmm"):
-                # if args.mcdropout:
-                #     print("打开 dropout")
-                #     for module in net.modules():
-                #         if isinstance(module, torch.nn.Dropout):
-                #             module.train(True)
-
                 # Evaluate a GMM model
                 print("GMM Model")
                 cache_path = re.sub(r"[^/]*_best.model", "cache", saved_model_name)
@@ -232,8 +230,8 @@ if __name__ == "__main__":
                     print(f"load cache from {cache_path}")
                     with open(cache_path, 'rb') as file:
                         cache = pkl.load(file)
-                        embeddings = cache["embeddings"]
-                        labels = cache["labels"]
+                        embeddings = cache["embeddings"].to(device)
+                        labels = cache["labels"].to(device)
                         norm_threshold = cache["norm_threshold"]
                 else:
                     embeddings, labels, norm_threshold = get_embeddings(
@@ -244,7 +242,7 @@ if __name__ == "__main__":
                         device=device,
                         storage_device=device,
                     )
-                    cache = {"embeddings": embeddings, "labels": labels, "norm_threshold": norm_threshold}
+                    cache = {"embeddings": embeddings.cpu(), "labels": labels.cpu(), "norm_threshold": norm_threshold}
                     with open(cache_path, "wb") as f:
                         pkl.dump(cache, f)
 
@@ -269,7 +267,7 @@ if __name__ == "__main__":
                     )
                     m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, maxval, device, conf=True)
                     print(f"m1_auroc:{m1_auroc:.4f},m1_aupr:{m1_auprc:.4f}")
-                    
+
                     #TODO:分析对抗样本
                     # logits_adv, _, _ = gmm_evaluate_for_adv(
                     #     net,
@@ -291,7 +289,8 @@ if __name__ == "__main__":
                     # _, m2_auroc_adv, m2_auprc_adv = get_roc_auc_logits(logits, logits_adv2, logsumexp, device, conf=True)
                     # print(f"m1_auroc_adv:{m1_auprc_adv},m1_auprc_adv:{m1_auprc_adv},m2_auroc_adv:{m2_auroc_adv},m2_auprc_adv:{m2_auprc_adv}")
 
-                    for epsilon in [0.01]:
+                    m2_res = []
+                    for epsilon in [0.0001, 0.0005, 0.0006, 0.0007, 0.0008, 0.0009, 0.001, 0.002, 0.003, 0.004, 0.005, 0.007, 0.01]:
                         for temp in [1]:
                             if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
                                 print(f"add noise:{args.perturbation}")
@@ -350,16 +349,20 @@ if __name__ == "__main__":
                             else:
                                 m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, None, device, conf=True)
 
-                            # print(f"m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}")
+                            print(
+                                f"noise-:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}"
+                            )
+                            m2_res.append([m2_auroc, m2_auprc, epsilon])
+                    m2_auroc, m2_auprc, epsilon = sorted(m2_res)[-1]  #从小到大排序，并且取最大的
 
-                    # logits2, _ = maxp_evaluate(
+                    # logits3, _ = maxp_evaluate(
                     #     net,
                     #     test_loader,
                     #     device=device,
                     #     num_classes=num_classes,
                     #     storage_device=device,
                     # )
-                    # ood_logits2, _ = maxp_evaluate(
+                    # ood_logits3, _ = maxp_evaluate(
                     #     net,
                     #     ood_test_loader,
                     #     device=device,
@@ -367,10 +370,11 @@ if __name__ == "__main__":
                     #     storage_device=device,
                     # )
 
-                    # m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, confidence, device, conf=True)
-                    # print(f"m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}")
-                    # import pdb;pdb.set_trace()
-                    print(f"noise-:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
+                    # m3_fpr95, m3_auroc, m3_auprc = get_roc_auc_logits(logits3, ood_logits3, confidence, device, conf=True)
+                    # print(f"m3_auroc:{m3_auroc:.4f},m3_aupr:{m3_auprc:.4f}")
+                    print(
+                        f"noise-:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"
+                    )
                 except RuntimeError as e:
                     print("Runtime Error caught: " + str(e))
                     continue

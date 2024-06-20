@@ -44,7 +44,7 @@ def get_embeddings(
 
     start = 0
     print("get embeddings from dataloader...")
-    for images, label in tqdm(loader):  # 多个少batch
+    for images, label in tqdm(loader,dynamic_ncols=True):  # 多个少batch
         images = images.to(device)
         label = label.to(device)
 
@@ -90,7 +90,7 @@ def gmm_evaluate(net, gaussians_model, loader, device, num_classes, storage_devi
     with torch.no_grad():
         start = 0
         total = 0
-        for data, label in tqdm(loader):
+        for data, label in tqdm(loader,dynamic_ncols=True):
             data = data.to(device)
             label = label.to(device)
 
@@ -155,12 +155,6 @@ def gmm_evaluate_with_perturbation(
     elif perturbation == "pgd":
         perturb = pgd_attack
 
-    if net._get_name() == "VGG":
-        gamma = 100
-    elif net._get_name() == "ResNet":
-        gamma = 50
-    else:
-        sys.exit(0)
 
     fc_grad = []
 
@@ -172,38 +166,45 @@ def gmm_evaluate_with_perturbation(
         fc_grad.append(torch.norm(input_grad, p=1))  #1-norm
         # fc_grad.append(w_grad)
 
-    handler = net.fc.register_backward_hook(bp_hook)
+    # handler = net.fc.register_backward_hook(bp_hook)
     # handler.remove()
     #/2024_04_23_02_33_15/vgg16_sn_3.0_mod_seed_1_best.model svhn:m1_auroc1:0.9334,m1_auprc:0.9503
-    for images, label in tqdm(loader):
+    for images, label in tqdm(loader,dynamic_ncols=True):
         images = images.to(device)
         label = label.to(device)
-        label = label % 10
         images.requires_grad = True  #images.required_grad区分,用required_grad梯度为None
         logits = net(images)
         acc = accuracy(logits, label)[0].item()
         accs.append(acc)
         _, pred = torch.max(logits, 1)
 
-        #1.加扰动
-        # perturbed_images_normalized = perturb(net, images, label, device)
 
-        # embedding = net.feature
-        # log_probs = gaussians_model.log_prob(embedding[:, None, :])
-        # max_log_probs = log_probs.max(1, keepdim=True)[0]  # get the index of the max log-probability
-        # loss = -max_log_probs.sum()
-        loss = loss_func(logits / temperature, pred)  #这个loss效果好一些 TODO:-号 ; 如果这里loss使用所有类别呢
-        # targets = torch.ones((images.shape[0], num_classes)).to(device)
-        # loss = torch.mean(torch.sum(-targets *torch.nn.functional.log_softmax(logits,dim=-1), dim=-1))
+        # 1.加扰动
+        # loss = loss_func(logits / temperature, pred)
+        # net.zero_grad()
+        # loss.backward()
+        # gradient = images.grad.data
+        # norms = torch.norm(gradient, p=1).item()
+        # coeff = torch.exp(torch.tensor(max(gamma * (norms - norm_threshold), 0))) - 1  #gamma=30/10/15
+        # gradient = (gradient - gradient.min() / (gradient.max() - gradient.min()) - 0.5) * 2
+        # perturbed_images_normalized = torch.add(images, gradient, alpha=-coeff)
+
+        # 2. fgsm
+        embedding = net.feature
+        log_probs = gaussians_model.log_prob(embedding[:, None, :])
+        max_log_probs = log_probs.max(1, keepdim=True)[0]  # get the index of the max log-probability
+        loss = max_log_probs.sum() #这个loss效果好一些
+        # loss = loss_func(logits / temperature, pred)
         net.zero_grad()
         loss.backward()
-
-        # #2.加扰动
         gradient = images.grad.data
-        norms = torch.norm(gradient, p=1).item()
-        coeff = torch.exp(torch.tensor(max(gamma * (norms - norm_threshold), 0))) - 1  #gamma=30/10/15
-        gradient = (gradient - gradient.min() / (gradient.max() - gradient.min()) - 0.5) * 2
-        perturbed_images_normalized = torch.add(images, gradient, alpha=-coeff)
+        # gradient = (gradient - gradient.min() / (gradient.max() - gradient.min()) - 0.5) * 2#TODO:验证和下面哪一种效果好
+        gradient = gradient.sign()
+        #TODO:验证要不要/std
+        gradient.index_copy_(1, torch.LongTensor([0]).to(device), gradient.index_select(1, torch.LongTensor([0]).to(device)) / std[0])
+        gradient.index_copy_(1, torch.LongTensor([1]).to(device), gradient.index_select(1, torch.LongTensor([1]).to(device)) / std[1])
+        gradient.index_copy_(1, torch.LongTensor([2]).to(device), gradient.index_select(1, torch.LongTensor([2]).to(device)) / std[2])
+        perturbed_images_normalized = torch.add(images, gradient, alpha=epsilon)
 
         out = net(perturbed_images_normalized)
         acc = accuracy(out, label)[0].item()
@@ -238,7 +239,7 @@ def gmm_evaluate_for_adv(net, gaussians_model, loader, device, num_classes, stor
 
     start = 0
     total = 0
-    for images, label in tqdm(loader):
+    for images, label in tqdm(loader,dynamic_ncols=True):
         images = images.to(device)
         label = label.to(device)
         images.requires_grad = True  #images.required_grad区分,用required_grad梯度为None
@@ -297,7 +298,7 @@ def gmm_evaluate_with_perturbation_for_adv(
         perturb = pgd_attack
 
     #/2024_04_23_02_33_15/vgg16_sn_3.0_mod_seed_1_best.model svhn:m1_auroc1:0.9334,m1_auprc:0.9503
-    for images, label in tqdm(loader):
+    for images, label in tqdm(loader,dynamic_ncols=True):
         images = images.to(device)
         label = label.to(device)
         images.requires_grad = True  #images.required_grad区分,用required_grad梯度为None
@@ -356,7 +357,7 @@ def gradient_norm_collect(net, gaussians_model, loader, device, storage_device, 
     loss_func = nn.CrossEntropyLoss()
     start = 0
 
-    for images, label in tqdm(loader):
+    for images, label in tqdm(loader,dynamic_ncols=True):
         images = images.to(device)
         label = label.to(device)
         label = label % 10
@@ -404,7 +405,7 @@ def maxp_evaluate_with_perturbation(
     std = torch.tensor(std).to(device)
     mean = torch.tensor(mean).to(device)
     start = 0
-    for data, label in tqdm(loader):
+    for data, label in tqdm(loader,dynamic_ncols=True):
         data = data.to(device)
         data.requires_grad = True  #data.required_grad区分,用required_grad梯度为None
 
@@ -435,7 +436,7 @@ def maxp_evaluate(net, loader, device, num_classes, storage_device):
 
     with torch.no_grad():
         start = 0
-        for data, label in tqdm(loader):
+        for data, label in tqdm(loader,dynamic_ncols=True):
             data = data.to(device)
             label = label.to(device)
 

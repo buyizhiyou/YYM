@@ -35,7 +35,7 @@ def kde_evaluate(net, kde_model, loader, device, num_classes, storage_device):
 
     with torch.no_grad():
         start = 0
-        for data, label in tqdm(loader):
+        for data, label in tqdm(loader,dynamic_ncols=True):
             data = data.to(device)
             label = label.to(device)
             net(data)

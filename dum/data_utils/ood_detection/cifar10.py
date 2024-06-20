@@ -156,9 +156,9 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     )
 
     num_train = len(dataset)
-    if (num_train >= 10000):
+    if (num_train >= 1000):
         indices = list(range(num_train))
-        split = 10000
+        split = 1000
         np.random.seed(1)
         np.random.shuffle(indices)
         valid_idx = indices[:split]

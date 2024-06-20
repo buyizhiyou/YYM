@@ -58,6 +58,15 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     ])
 
     dataset = GaussDataset()
+    num_train = len(dataset)
+    print(f"gauss test:{num_train}")
+    if (num_train >= 1000):
+        indices = list(range(num_train))
+        split = 1000
+        np.random.seed(1)
+        np.random.shuffle(indices)
+        valid_idx = indices[:split]
+        dataset = Subset(dataset, valid_idx)
 
     data_loader = torch.utils.data.DataLoader(
         dataset,
