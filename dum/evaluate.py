@@ -5,7 +5,8 @@ import os
 import json
 import math
 import torch
-import glob
+import pickle as pkl
+import glob, re
 import argparse
 import torch.backends.cudnn as cudnn
 
@@ -34,7 +35,7 @@ from net.vit import vit
 # Import metrics to compute
 from metrics.classification_metrics import (test_classification_net, test_classification_net_logits, test_classification_net_ensemble)
 from metrics.calibration_metrics import expected_calibration_error
-from metrics.uncertainty_confidence import entropy, logsumexp, confidence, sumexp, max
+from metrics.uncertainty_confidence import entropy, logsumexp, confidence, sumexp, maxval
 from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ensemble
 
 # Import GMM utils
@@ -108,15 +109,15 @@ if __name__ == "__main__":
     model_name = model_load_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive) + "_best.model"
 
     if args.evaltype == "ensemble":
-        model_files = glob.glob(f"{args.load_loc}/run{args.run}/ensemble/{save_name}/*")
+        model_files = sorted(glob.glob(f"{args.load_loc}/run{args.run}/ensemble/{save_name}/*"))
     else:
-        model_files = glob.glob(f"{args.load_loc}/run{args.run}/{save_name}/*/{model_name}")
+        model_files = sorted(glob.glob(f"{args.load_loc}/run{args.run}/{save_name}/*/{model_name}"))
 
     if len(model_files) == 0:
         exit()
     for i, saved_model_name in enumerate(model_files):
         # saved_model_name = "/home/sq/YYM/dum/saved_models/run1/2024_03_07_21_49_57/vgg16_seed_1_best.model"
-        print(f"Run {args.run}, Evaluating for {i}/{len(model_files)}: {saved_model_name}")
+        print(f"Run {args.run},OOD dataset {args.ood_dataset} Evaluating for {i}/{len(model_files)}: {saved_model_name}")
         if args.evaltype == "ensemble":
             val_loaders = []
             for j in range(args.ensemble):
@@ -171,6 +172,7 @@ if __name__ == "__main__":
                 predictions,
                 confidences,
             ) = test_classification_net_ensemble(net_ensemble, test_loader, device)
+            print(f"{saved_model_name} accu:{accuracy}")
             # ece = expected_calibration_error(confidences, predictions, labels_list, num_bins=15)
 
             (_, _, _), (_, _, _), m1_auroc, m1_auprc = get_roc_auc_ensemble(net_ensemble, test_loader, ood_test_loader, "mutual_information", device)
@@ -224,21 +226,30 @@ if __name__ == "__main__":
 
                 # Evaluate a GMM model
                 print("GMM Model")
-                embeddings, labels, norm_threshold = get_embeddings(
-                    net,
-                    train_loader,
-                    num_dim=model_to_num_dim[args.model],
-                    dtype=torch.double,
-                    device=device,
-                    storage_device=device,
-                )
+                cache_path = re.sub(r"[^/]*_best.model", "cache", saved_model_name)
+
+                if os.path.exists(cache_path):
+                    print(f"load cache from {cache_path}")
+                    with open(cache_path, 'rb') as file:
+                        cache = pkl.load(file)
+                        embeddings = cache["embeddings"]
+                        labels = cache["labels"]
+                        norm_threshold = cache["norm_threshold"]
+                else:
+                    embeddings, labels, norm_threshold = get_embeddings(
+                        net,
+                        train_loader,
+                        num_dim=model_to_num_dim[args.model],
+                        dtype=torch.double,
+                        device=device,
+                        storage_device=device,
+                    )
+                    cache = {"embeddings": embeddings, "labels": labels, "norm_threshold": norm_threshold}
+                    with open(cache_path, "wb") as f:
+                        pkl.dump(cache, f)
 
                 try:
                     gaussians_model, jitter_eps = gmm_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
-
-                    # test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=1, pin_memory=args.gpu)
-                    # ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root, batch_size=1, pin_memory=args.gpu)
-
                     logits, labels, preds = gmm_evaluate(
                         net,
                         gaussians_model,
@@ -256,8 +267,9 @@ if __name__ == "__main__":
                         num_classes=num_classes,
                         storage_device=device,
                     )
-                    m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, conf=True)
-
+                    m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, maxval, device, conf=True)
+                    print(f"m1_auroc:{m1_auroc:.4f},m1_aupr:{m1_auprc:.4f}")
+                    
                     #TODO:分析对抗样本
                     # logits_adv, _, _ = gmm_evaluate_for_adv(
                     #     net,
@@ -283,6 +295,11 @@ if __name__ == "__main__":
                         for temp in [1]:
                             if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
                                 print(f"add noise:{args.perturbation}")
+                                test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=1, pin_memory=args.gpu)
+                                ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root,
+                                                                                                   batch_size=1,
+                                                                                                   pin_memory=args.gpu)
+
                                 logits2, labels2, preds2, acc, acc_perturb = gmm_evaluate_with_perturbation(
                                     net,
                                     gaussians_model,
@@ -295,6 +312,7 @@ if __name__ == "__main__":
                                     epsilon=epsilon,
                                     temperature=temp,
                                 )
+                                inf = torch.min(logits2).item()
                                 ood_logits2, ood_labels2, _, _, _ = gmm_evaluate_with_perturbation(
                                     net,
                                     gaussians_model,
@@ -306,6 +324,7 @@ if __name__ == "__main__":
                                     perturbation=args.perturbation,
                                     epsilon=epsilon,
                                     temperature=temp,
+                                    inf=inf,
                                 )
                             else:  #使用gradient norm
                                 print("using gradient norm")
@@ -327,11 +346,11 @@ if __name__ == "__main__":
                                 )
 
                             if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
-                                m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device, conf=True)
+                                m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, maxval, device, conf=True)
                             else:
                                 m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, None, device, conf=True)
 
-                            # print(f"epsilon:{epsilon},temp:{temp},acc:{acc},acc_perturb:{acc_perturb},m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}")
+                            # print(f"m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}")
 
                     # logits2, _ = maxp_evaluate(
                     #     net,
@@ -350,7 +369,7 @@ if __name__ == "__main__":
 
                     # m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, confidence, device, conf=True)
                     # print(f"m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}")
-
+                    # import pdb;pdb.set_trace()
                     print(f"noise-:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
                 except RuntimeError as e:
                     print("Runtime Error caught: " + str(e))
@@ -390,9 +409,7 @@ if __name__ == "__main__":
                     m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, conf=True)
                     m1_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits, ood_logits, entropy, device, conf=True)
                     acc = 0
-                    print(
-                        f"accu:{acc:.4f},ece:{ece:.6f},t_ece:{t_ece:.6f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"
-                    )
+                    print(f"accu:{acc:.4f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
                 except RuntimeError as e:
                     print("Runtime Error caught: " + str(e))
                     continue
@@ -464,9 +481,9 @@ if __name__ == "__main__":
     res_dict["info"] = vars(args)
     res_dict["files"] = model_files
 
-
-    saved_name = "res_" + model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed,args.contrastive) + "_" \
-                            +args.evaltype + "_" + args.dataset + "_" + args.ood_dataset + "_" + args.perturbation + ".json"
+    saved_name = "res_" + model_save_name(
+        args.model, args.sn, args.mod, args.coeff, args.seed,
+        args.contrastive) + "_" + args.evaltype + "_" + args.dataset + "_" + args.ood_dataset + "_" + args.perturbation + ".json"
     saved_dir = f"./results/run{args.run}/"
     if (not os.path.exists(saved_dir)):
         os.makedirs(saved_dir)

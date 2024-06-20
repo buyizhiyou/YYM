@@ -10,6 +10,7 @@ from utils.ensemble_utils import ensemble_forward_pass
 
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import confusion_matrix
+from tqdm import tqdm 
 
 
 def get_logits_labels(model, data_loader, device):
@@ -20,7 +21,7 @@ def get_logits_labels(model, data_loader, device):
     logits = []
     labels = []
     with torch.no_grad():
-        for data, label in data_loader:
+        for data, label in tqdm(data_loader):
             data = data.to(device)
             label = label.to(device)
 

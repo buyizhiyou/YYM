@@ -2,7 +2,7 @@
 
 echo "###########  Evaluate with sn and mod;
 ###########  Usage:
-###########   ./train.sh --gpu  0 --run 8 --batchsize 64 --epochs 300 --model  vgg16 --contrastive 0 --adv 0"
+###########   ./train.sh --gpu  0 --run 17 --batchsize 64 --epochs 300 --model  vgg16 --contrastive 0 --adv 0"
 # 解析命令行参数
 options=$(getopt -o g:r:b:e:m:c:a --long gpu:,run:,batchsize:,epochs:,model:,contrastive:,adv:, -- "$@")
 eval set -- "$options"

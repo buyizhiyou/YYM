@@ -21,7 +21,7 @@ def sumexp(logits):
     return torch.sum(torch.exp(logits), axis=1)
 
 
-def max(logits):
+def maxval(logits):
     return torch.max(logits, axis=1)[0]
 
 

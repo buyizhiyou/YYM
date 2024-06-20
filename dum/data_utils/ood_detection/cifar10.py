@@ -17,7 +17,7 @@ from utils.simclr_utils import ContrastiveLearningViewTransform, get_simclr_pipe
 def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_workers=4, pin_memory=False, contrastive=0, **kwargs):
     """
     Utility function for loading and returning train and valid
-    multi-process iterators over the CIFAR-10 dataset. 
+    multi-process iterators over the CIFAR-10 dataset.
     Params:
     ------
     - batch_size: how many samples per batch to load.
@@ -95,24 +95,27 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_work
     np.random.seed(val_seed)
     np.random.shuffle(indices)
 
-    train_idx, valid_idx = indices[split:], indices[:split]#...14347, 38403, 49563, 16500, 49787, 19719, 47381]
+    train_idx, valid_idx = indices[split:], indices[:split]  #...14347, 38403, 49563, 16500, 49787, 19719, 47381]
 
     train_subset = Subset(train_dataset, train_idx)
     valid_subset = Subset(valid_dataset, valid_idx)
+
+    # train_data_sampler = torch.utils.data.distributed.DistributedSampler(dataset=train_subset)
+    # val_data_sampler = torch.utils.data.distributed.DistributedSampler(dataset=valid_subset)
 
     train_loader = torch.utils.data.DataLoader(
         train_subset,
         batch_size=batch_size,
         num_workers=num_workers,
         pin_memory=pin_memory,
-        shuffle=True,
+        shuffle=False,
     )
     valid_loader = torch.utils.data.DataLoader(
         valid_subset,
         batch_size=batch_size,
         num_workers=num_workers,
         pin_memory=pin_memory,
-        shuffle=True,
+        shuffle=False,
     )
 
     return (train_loader, valid_loader)

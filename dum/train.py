@@ -4,6 +4,7 @@ Script for training a single model for OOD detection.
 
 import argparse
 import datetime
+import time
 import json
 import os
 
@@ -19,7 +20,8 @@ from net.wide_resnet import wrn
 from net.vit import vit
 from torch import optim
 from torch.utils.tensorboard import SummaryWriter
-
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
 import data_utils.dirty_mnist as dirty_mnist
 
 import data_utils.ood_detection.cifar10 as cifar10
@@ -43,6 +45,19 @@ models = {"lenet": lenet, "resnet18": resnet18, "resnet50": resnet50, "wide_resn
 
 # torch.backends.cudnn.benchmark = False
 if __name__ == "__main__":
+    # print(os.environ)
+    # rank = int(os.environ['RANK'])
+    # local_rank = int(os.environ['LOCAL_RANK'])
+    # # local_rank = args.local_rank
+    # master_addr = os.environ['MASTER_ADDR']
+    # master_port = os.environ['MASTER_PORT']
+    # world_size = int(os.environ['WORLD_SIZE'])
+    # print(f"rank = {rank} is initialized in {master_addr}:{master_port}; local_rank = {local_rank}")
+    # dist.init_process_group(backend="nccl", init_method='env://')
+
+    torch.manual_seed(0)
+    # device = torch.device(f"cuda:{args.gpu}")
+
     args = training_args().parse_args()
 
     print("Parsed args", args)
@@ -55,7 +70,8 @@ if __name__ == "__main__":
     num_classes = dataset_num_classes[args.dataset]
 
     # Choosing the model to train
-    net = models[args.model](spectral_normalization=args.sn, mod=args.mod, num_classes=num_classes)
+    net = models[args.model](spectral_normalization=args.sn, mod=args.mod, num_classes=num_classes).to(device)
+    # net = DDP(net, device_ids=[local_rank],output_device=local_rank,find_unused_parameters=True)
 
     if args.gpu:
         net.to(device)
@@ -129,7 +145,7 @@ if __name__ == "__main__":
             loss_mean=args.loss_mean,
         )
 
-        if (epoch % 3 == 0):
+        if epoch % 3 == 0:
             val_acc = test_single_epoch(epoch, net, val_loader, device)
             writer.add_scalar("train_loss", train_loss, (epoch + 1))
             writer.add_scalar("train_acc", train_acc, (epoch + 1))

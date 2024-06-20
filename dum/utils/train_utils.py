@@ -56,17 +56,17 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
 
             return hook
 
-        if contrastive == 1 or contrastive == 3:
-            model.fc.register_forward_hook(get_activation1('embedding'))
-        elif contrastive == 2:
-            model.projection_head.out.register_forward_hook(get_activation2('embedding'))
+        if contrastive == 3:  #centerloss
+            model.module.fc.register_forward_hook(get_activation1('embedding'))
+            centerloss = CenterLoss(10, model.module.fc.in_features)
+        else:  #ConLoss or supConLoss
+            model.module.projection_head.out.register_forward_hook(get_activation2('embedding'))
 
     if label_smooth:  #使用label smoothing，使特征空间更紧密
         loss_func = LabelSmoothing()
     else:
         loss_func = nn.CrossEntropyLoss()
 
-    centerloss = CenterLoss(10, model.fc.in_features)
     for batch_idx, (x, y) in enumerate(tqdm(train_loader)):
         if (isinstance(x, list)):  #生成的多个视角的增强图片
             data = torch.cat(x, dim=0)
@@ -78,82 +78,95 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
         labels = labels.to(device)
         batch_size = data.shape[0]
         optimizer.zero_grad()
-
-        if contrastive == 1:
-            """
-            类间对比loss
-            """
-            logits = model(data)
-            embeddings = activation['embedding']
-            loss1 = loss_func(logits, labels)
-            loss2 = supervisedContrastiveLoss(embeddings, labels, device, temperature=0.5)
-            # if(epoch):第一阶段,只训练对比loss
-            loss = loss1 - 0.01 * loss2  #这个好一些？？让同一类尽量分散
-            # loss = loss1 + 0.01 * loss2  #让同一类尽量拥挤 #TODO:是距离选择有问题嘛？
-            acc1, _ = accuracy(logits, labels, (1, 5))
-            acc += acc1.item() * len(data)
-        elif contrastive == 2:
-            """
-            样本间对比loss
-            """
-            logits = model(data)
-            embeddings = activation['embedding']
-            logits2, labels2 = info_nce_loss(embeddings, batch_size / 2, device)  #这里/2
-            loss2 = F.cross_entropy(logits2, labels2)
-            if (epoch < 300):  #第一阶段，只训练对比loss
-                loss = loss2
-            else:  #第二阶段，对比loss+分类loss
+        use_amp = False  #TODO:USE-AMP不收敛
+        scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+        with torch.autocast("cuda", enabled=use_amp):
+            if contrastive == 1:
+                """
+                类间对比loss
+                """
+                device2 = "cuda:1"  # 如果显存不够，可以将device2设为其他设备
+                logits = model(data).to(device2)
+                labels = labels.to(device2)
+                embeddings = activation['embedding'].to(device2)
                 loss1 = loss_func(logits, labels)
-                loss = 100 * loss1 + loss2
-
-            acc1, _ = accuracy(logits2, labels2, (1, 5))
-            acc += acc1.item() * len(data)
-        elif contrastive == 3:
-            logits = model(data)
-            embeddings = activation['embedding']
-            loss1 = loss_func(logits, labels)
-            loss2 = centerloss(labels, embeddings)
-            loss = loss1 + 0.01 * loss2
-
-            acc1, _ = accuracy(logits, labels, (1, 5))
-            acc += acc1.item() * len(data)
-        elif adv == 1:
-            """对抗训练"""
-            if batch_idx % 20 == 0:
-                data.requires_grad = True  #data.required_grad区分,用required_grad梯度为None
+                loss2 = supervisedContrastiveLoss(embeddings, labels, device2, temperature=0.5)
+                if (epoch < 800):  #第一阶段，只训练对比loss
+                    loss = loss2
+                else:  #第二阶段，对比loss+分类loss
+                    loss1 = loss_func(logits, labels)
+                    loss = 100 * loss1 + loss2
+                # if(epoch):第一阶段,只训练对比loss
+                # loss = loss1 - 0.01 * loss2  #这个好一些？？让同一类尽量分散
+                # loss = loss1 + 0.01 * loss2  #让同一类尽量拥挤 #TODO:是距离选择有问题嘛？
+                acc1, _ = accuracy(logits, labels, (1, 5))
+                acc += acc1.item() * len(data)
+            elif contrastive == 2:
+                """
+                样本间对比loss
+                """
                 logits = model(data)
-                loss = loss_func(logits, labels)
+                embeddings = activation['embedding']
+                logits2, labels2 = info_nce_loss(embeddings, batch_size / 2, device)  #这里/2
+                loss2 = F.cross_entropy(logits2, labels2)
+                if (epoch < 800):  #第一阶段，只训练对比loss
+                    loss = loss2
+                else:  #第二阶段，对比loss+分类loss
+                    loss1 = loss_func(logits, labels)
+                    loss = 100 * loss1 + loss2
 
-                model.zero_grad()
-                loss.backward()
+                acc1, _ = accuracy(logits2, labels2, (1, 5))
+                acc += acc1.item() * len(data)
+            elif contrastive == 3:
+                logits = model(data)
+                embeddings = activation['embedding']
+                loss1 = loss_func(logits, labels)
+                loss2 = centerloss(labels, embeddings)
+                loss = loss1 + 0.01 * loss2
 
-                # Collect ``datagrad``
-                data_grad = data.grad.data
-                data_denorm = data * std.view(1, -1, 1, 1) + mean.view(1, -1, 1, 1)
-                perturbed_data = fgsm_attack(data_denorm, 0.01, data_grad)
-                perturbed_data_normalized = (perturbed_data - mean.view(1, -1, 1, 1)) / std.view(1, -1, 1, 1)
+                acc1, _ = accuracy(logits, labels, (1, 5))
+                acc += acc1.item() * len(data)
+            elif adv == 1:
+                """对抗训练"""
+                if batch_idx % 20 == 0:
+                    data.requires_grad = True  #data.required_grad区分,用required_grad梯度为None
+                    logits = model(data)
+                    loss = loss_func(logits, labels)
 
-                data2 = torch.concat([data, perturbed_data_normalized])
-                labels2 = torch.concat([labels, labels])
-                logits2 = model(data2)
+                    model.zero_grad()
+                    loss.backward()
+
+                    # Collect ``datagrad``
+                    data_grad = data.grad.data
+                    data_denorm = data * std.view(1, -1, 1, 1) + mean.view(1, -1, 1, 1)
+                    perturbed_data = fgsm_attack(data_denorm, 0.01, data_grad)
+                    perturbed_data_normalized = (perturbed_data - mean.view(1, -1, 1, 1)) / std.view(1, -1, 1, 1)
+
+                    data2 = torch.concat([data, perturbed_data_normalized])
+                    labels2 = torch.concat([labels, labels])
+                    logits2 = model(data2)
+                else:
+                    logits2 = model(data)
+                    labels2 = labels
+                loss = loss_func(logits2, labels2)
+                acc1, _ = accuracy(logits2, labels2, (1, 5))
+                acc += acc1.item() * len(data)
             else:
-                logits2 = model(data)
-                labels2 = labels
-            loss = loss_func(logits2, labels2)
-            acc1, _ = accuracy(logits2, labels2, (1, 5))
-            acc += acc1.item() * len(data)
-        else:
-            logits = model(data)
-            loss1 = loss_func(logits, labels)
-            loss = loss1
+                logits = model(data)
+                loss1 = loss_func(logits, labels)
+                loss = loss1
 
-            acc1, _ = accuracy(logits, labels, (1, 5))
-            acc += acc1.item() * len(data)
+                acc1, _ = accuracy(logits, labels, (1, 5))
+                acc += acc1.item() * len(data)
 
-        loss.backward()
-        train_loss += loss.item()
-        optimizer.step()
-        num_samples += len(data)
+            # loss.backward()
+            # optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+
+            train_loss += loss.item()
+            num_samples += len(data)
 
     tqdm.write("====> Epoch: {}  Average loss: {:.4f}\t Average Acc:{:.4f}".format(epoch, train_loss / num_samples, acc / num_samples))
     return train_loss / num_samples, acc / num_samples
