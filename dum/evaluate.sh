@@ -1,7 +1,7 @@
 #! /bin/bash
 echo "###########  Evaluate with sn and mod;
 ###########  Usage:
-###########   ./evaluate.sh --gpu  0 --run 17 --batchsize 256 --evaltype gmm --ooddataset svhn --model vgg16  --perturbation fgsm --contrastive 0 --adv 0"
+###########   ./evaluate.sh --gpu  0 --run 17 --batchsize 512 --evaltype gmm --ooddataset svhn --model vgg16  --perturbation fgsm --contrastive 0 --adv 0"
 
 # 解析命令行参数
 options=$(getopt -o g:r:b:t:d:m:c:a --long gpu:,run:,batchsize:,evaltype:,ooddataset:,model:,perturbation:,contrastive:,adv:, -- "$@")

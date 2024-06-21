@@ -101,6 +101,7 @@ if __name__ == "__main__":
     # m2_fpr95s = []
     m2_aurocs = []
     m2_auprcs = []
+    epsilons = []
 
     topt = None
     save_name = model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive)
@@ -142,11 +143,12 @@ if __name__ == "__main__":
             train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(
                 root=args.dataset_root,
                 batch_size=args.batch_size,
-                augment=args.data_aug,
+                augment=args.data_aug,#False
                 val_seed=(args.seed),
                 val_size=0.1,
                 pin_memory=args.gpu,
             )
+
 
             #load model
             print(f"load {saved_model_name}")
@@ -325,7 +327,7 @@ if __name__ == "__main__":
                                     temperature=temp,
                                     inf=inf,
                                 )
-                            else:  #使用gradient norm
+                            elif args.perturbation=="gradnorm":  #使用gradient norm
                                 print("using gradient norm")
                                 logits2 = gradient_norm_collect(
                                     net,
@@ -343,9 +345,12 @@ if __name__ == "__main__":
                                     storage_device=device,
                                     norm=1,
                                 )
+                            else:
+                                raise ValueError("perturbation is invalid...")
 
                             if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
-                                m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, maxval, device, conf=True)
+                                m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, maxval, device,
+                                                                                  conf=True)  #这里使用maxval是求最大logP，使用logsumexp是求平均logP
                             else:
                                 m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, None, device, conf=True)
 
@@ -369,9 +374,9 @@ if __name__ == "__main__":
                     #     num_classes=num_classes,
                     #     storage_device=device,
                     # )
-
                     # m3_fpr95, m3_auroc, m3_auprc = get_roc_auc_logits(logits3, ood_logits3, confidence, device, conf=True)
                     # print(f"m3_auroc:{m3_auroc:.4f},m3_aupr:{m3_auprc:.4f}")
+
                     print(
                         f"noise-:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"
                     )
@@ -417,14 +422,13 @@ if __name__ == "__main__":
                 except RuntimeError as e:
                     print("Runtime Error caught: " + str(e))
                     continue
-
+       
+        epsilons.append(epsilon)
         accuracies.append(accuracy)
         eces.append(0.0)
         t_eces.append(0.0)
         # eces.append(ece)
         # t_eces.append(t_ece)
-        eces.append(0)
-        t_eces.append(0)
         m1_aurocs.append(m1_auroc)
         m1_auprcs.append(m1_auprc)
         m2_aurocs.append(m2_auroc)
@@ -484,6 +488,8 @@ if __name__ == "__main__":
 
     res_dict["info"] = vars(args)
     res_dict["files"] = model_files
+    res_dict["epsilon"] = epsilons
+    res_dict["annotations"] = "m1:without noise,m2:add noise"
 
     saved_name = "res_" + model_save_name(
         args.model, args.sn, args.mod, args.coeff, args.seed,
@@ -491,9 +497,6 @@ if __name__ == "__main__":
     saved_dir = f"./results/run{args.run}/"
     if (not os.path.exists(saved_dir)):
         os.makedirs(saved_dir)
-    with open(
-            os.path.join(saved_dir, saved_name),
-            "w",
-    ) as f:
+    with open(os.path.join(saved_dir, saved_name), "w") as f:
         json.dump(res_dict, f)
         print(f"save to {os.path.join(saved_dir,saved_name)}")

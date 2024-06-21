@@ -212,11 +212,7 @@ def gmm_evaluate_with_perturbation(
         features_B_Z = net.feature
 
         if torch.nonzero(torch.isnan(features_B_Z) == True).sum() > 0:  ##如果含有nan
-            print("nan")
-            # features_B_Z = torch.nan_to_num(features_B_Z, nan=10000)
-            # logit_B_C = gaussians_model.log_prob(features_B_Z[:, None, :])
             logit_B_C = torch.ones_like(logits) * float("-inf")
-            # logit_B_C = torch.ones_like(logits) * (inf/10)
         else:
             logit_B_C = gaussians_model.log_prob(features_B_Z[:, None, :])
 
