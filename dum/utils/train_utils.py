@@ -57,17 +57,17 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
             return hook
 
         if contrastive == 3:  #centerloss
-            model.module.fc.register_forward_hook(get_activation1('embedding'))
+            model.fc.register_forward_hook(get_activation1('embedding'))
             centerloss = CenterLoss(10, model.module.fc.in_features)
         else:  #ConLoss or supConLoss
-            model.module.projection_head.out.register_forward_hook(get_activation2('embedding'))
+            model.projection_head.out.register_forward_hook(get_activation2('embedding'))
 
     if label_smooth:  #使用label smoothing，使特征空间更紧密
         loss_func = LabelSmoothing()
     else:
         loss_func = nn.CrossEntropyLoss()
 
-    for batch_idx, (x, y) in enumerate(tqdm(train_loader),dynamic_ncols=True):
+    for batch_idx, (x, y) in enumerate(tqdm(train_loader,dynamic_ncols=True)):
         if (isinstance(x, list)):  #生成的多个视角的增强图片
             data = torch.cat(x, dim=0)
             labels = torch.cat([y, y], dim=0)
