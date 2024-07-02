@@ -91,7 +91,7 @@ class LARC(object):
                     grad_norm = torch.norm(p.grad.data)
 
                     if param_norm != 0 and grad_norm != 0:
-                        # calculate adaptive lr + weight decay
+                        # calculate adaptive lr + weight decay，逐层局部的自适应学习率
                         adaptive_lr = self.trust_coefficient * (param_norm) / (grad_norm + param_norm * weight_decay + self.eps)
 
                         # clip learning rate for LARC

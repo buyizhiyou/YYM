@@ -64,14 +64,14 @@ if [ -z "$adv" ]; then
        exit 1
 fi
 
-for i in {1..2}; do
+for i in {1..5}; do
        echo "训练第$i次"
        python train.py \
               --seed 1 \
               --gpu $gpu \
               --run $run \
               --data-aug \
-              --lr 0.1 \
+              --lr 1.0 \
               -b $batchsize \
               --epochs $epochs --dataset cifar10 \
               --model $model \

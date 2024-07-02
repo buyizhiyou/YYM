@@ -10,6 +10,7 @@ import os
 
 import torch
 import torch.backends.cudnn as cudnn
+import warmup_scheduler
 
 from net.lenet import lenet
 from net.resnet import resnet18, resnet50  #自己实现的spectral norm
@@ -29,6 +30,7 @@ import data_utils.ood_detection.cifar100 as cifar100
 import data_utils.ood_detection.svhn as svhn
 
 from utils.args import training_args
+from utils.lars import LARC
 from utils.eval_utils import get_eval_stats
 from utils.train_utils import (model_save_name, save_config_file, test_single_epoch, train_single_epoch)
 
@@ -92,14 +94,12 @@ if __name__ == "__main__":
 
     # 学习率schduler
     if args.scheduler == "step":
-        scheduler = optim.lr_scheduler.MultiStepLR(
-            optimizer,
-            # milestones=[args.first_milestone, args.second_milestone],
-            milestones=[100, 200, 250],
-            gamma=0.1,
-            verbose=False)
+        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[50, 100, 200, 300, 400], gamma=0.1, verbose=False)
     elif args.scheduler == "cos":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=300, eta_min=1e-7, verbose=False)
+
+    scheduler = warmup_scheduler.GradualWarmupScheduler(optimizer, multiplier=1.0, total_epoch=10, after_scheduler=scheduler)
+    optimimizer = LARC(optimizer)
 
     train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(root=args.dataset_root,
                                                                                    batch_size=args.train_batch_size,
@@ -155,19 +155,19 @@ if __name__ == "__main__":
             writer.add_scalar("val_acc", val_acc, (epoch + 1))
             writer.add_scalar('learning_rate', scheduler.get_last_lr()[0], global_step=(epoch + 1))
 
-        if epoch == 300:  #进入第二阶段训练，只训练fc层，重新设置optimizer和lr
-            for name, param in net.named_parameters():
-                if "fc." not in name:
-                    param.requires_grad = False  #冻结fc之前的所有层
-            opt_params = net.fc.parameters()
-            optimizer = optim.SGD(
-                opt_params,
-                lr=args.learning_rate,
-                momentum=args.momentum,
-                weight_decay=args.weight_decay,
-                nesterov=args.nesterov,
-            )
-            scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 90, 120], gamma=0.1, verbose=False)
+        # if epoch == 300:  #进入第二阶段训练，只训练fc层，重新设置optimizer和lr
+        #     for name, param in net.named_parameters():
+        #         if "fc." not in name:
+        #             param.requires_grad = False  #冻结fc之前的所有层
+        #     opt_params = net.fc.parameters()
+        #     optimizer = optim.SGD(
+        #         opt_params,
+        #         lr=args.learning_rate,
+        #         momentum=args.momentum,
+        #         weight_decay=args.weight_decay,
+        #         nesterov=args.nesterov,
+        #     )
+        #     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 90, 120], gamma=0.1, verbose=False)
 
         scheduler.step()
         if val_acc > best_acc:
