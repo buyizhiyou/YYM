@@ -143,12 +143,11 @@ if __name__ == "__main__":
             train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(
                 root=args.dataset_root,
                 batch_size=args.batch_size,
-                augment=args.data_aug,#False
+                augment=args.data_aug,  #False
                 val_seed=(args.seed),
                 val_size=0.1,
                 pin_memory=args.gpu,
             )
-
 
             #load model
             print(f"load {saved_model_name}")
@@ -327,7 +326,7 @@ if __name__ == "__main__":
                                     temperature=temp,
                                     inf=inf,
                                 )
-                            elif args.perturbation=="gradnorm":  #使用gradient norm
+                            elif args.perturbation == "gradnorm":  #使用gradient norm
                                 print("using gradient norm")
                                 logits2 = gradient_norm_collect(
                                     net,
@@ -422,7 +421,7 @@ if __name__ == "__main__":
                 except RuntimeError as e:
                     print("Runtime Error caught: " + str(e))
                     continue
-       
+
         epsilons.append(epsilon)
         accuracies.append(accuracy)
         eces.append(0.0)

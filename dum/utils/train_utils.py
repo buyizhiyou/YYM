@@ -27,7 +27,7 @@ def fgsm_attack(image, epsilon, data_grad):
     return perturbed_image
 
 
-def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastive=0, adv=0, label_smooth=False, loss_mean=False):
+def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastive=0, adv=0, label_smooth=False):
     """
     Util method for training a model for a single epoch.
     """
@@ -67,7 +67,7 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
     else:
         loss_func = nn.CrossEntropyLoss()
 
-    for batch_idx, (x, y) in enumerate(tqdm(train_loader,dynamic_ncols=True)):
+    for batch_idx, (x, y) in enumerate(tqdm(train_loader, dynamic_ncols=True)):
         if (isinstance(x, list)):  #生成的多个视角的增强图片
             data = torch.cat(x, dim=0)
             labels = torch.cat([y, y], dim=0)
@@ -85,17 +85,18 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
                 """
                 类间对比loss
                 """
-                device2 = "cuda:1"  # 如果显存不够，可以将device2设为其他设备
+                device2 = device  # 如果显存不够，可以将device2设为其他设备
                 logits = model(data).to(device2)
                 labels = labels.to(device2)
                 embeddings = activation['embedding'].to(device2)
                 loss1 = loss_func(logits, labels)
-                loss2 = supervisedContrastiveLoss(embeddings, labels, device2, temperature=0.5)
-                if (epoch < 800):  #第一阶段，只训练对比loss
+                loss2 = supervisedContrastiveLoss(embeddings, labels, device2, temperature=0.1)
+                if (epoch < 300):  #第一阶段，前300epoch只训练对比loss
                     loss = loss2
                 else:  #第二阶段，对比loss+分类loss
                     loss1 = loss_func(logits, labels)
-                    loss = 100 * loss1 + loss2
+                    # loss = 100 * loss1 + loss2
+                    loss = loss1
                 # if(epoch):第一阶段,只训练对比loss
                 # loss = loss1 - 0.01 * loss2  #这个好一些？？让同一类尽量分散
                 # loss = loss1 + 0.01 * loss2  #让同一类尽量拥挤 #TODO:是距离选择有问题嘛？
@@ -109,7 +110,7 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
                 embeddings = activation['embedding']
                 logits2, labels2 = info_nce_loss(embeddings, batch_size / 2, device)  #这里/2
                 loss2 = F.cross_entropy(logits2, labels2)
-                if (epoch < 800):  #第一阶段，只训练对比loss
+                if (epoch < 300):  #第一阶段，只训练对比loss
                     loss = loss2
                 else:  #第二阶段，对比loss+分类loss
                     loss1 = loss_func(logits, labels)

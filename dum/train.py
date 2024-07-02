@@ -95,7 +95,7 @@ if __name__ == "__main__":
         scheduler = optim.lr_scheduler.MultiStepLR(
             optimizer,
             # milestones=[args.first_milestone, args.second_milestone],
-            milestones=[0.3 * args.epoch, 0.6 * args.epoch, 0.9 * args.epoch],
+            milestones=[100, 200, 250],
             gamma=0.1,
             verbose=False)
     elif args.scheduler == "cos":
@@ -132,6 +132,10 @@ if __name__ == "__main__":
 
     best_acc = 0
     for epoch in range(0, args.epoch):
+        """
+        1. 300epoch 原始单阶段训练crossEntropy
+        2. 两阶段训练:前300epoch只训练supCon,后面150个epoch只训练fc层
+        """
         print("Starting epoch", epoch)
         train_loss, train_acc = train_single_epoch(
             epoch,
@@ -142,7 +146,6 @@ if __name__ == "__main__":
             args.contrastive,
             adv=args.adv,
             label_smooth=args.ls,
-            loss_mean=args.loss_mean,
         )
 
         if epoch % 3 == 0:
@@ -152,16 +155,23 @@ if __name__ == "__main__":
             writer.add_scalar("val_acc", val_acc, (epoch + 1))
             writer.add_scalar('learning_rate', scheduler.get_last_lr()[0], global_step=(epoch + 1))
 
+        if epoch == 300:  #进入第二阶段训练，只训练fc层，重新设置optimizer和lr
+            for name, param in net.named_parameters():
+                if "fc." not in name:
+                    param.requires_grad = False  #冻结fc之前的所有层
+            opt_params = net.fc.parameters()
+            optimizer = optim.SGD(
+                opt_params,
+                lr=args.learning_rate,
+                momentum=args.momentum,
+                weight_decay=args.weight_decay,
+                nesterov=args.nesterov,
+            )
+            scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 90, 120], gamma=0.1, verbose=False)
+
         scheduler.step()
-
-        if epoch == 350:  # 训练完第一阶段
-            save_path = save_loc + save_name + "_mid" + ".model"
-            torch.save(net.state_dict(), save_path)
-            print("Model saved to ", save_path)
-
         if val_acc > best_acc:
             best_acc = val_acc
-
             save_path = save_loc + save_name + "_best" + ".model"
             torch.save(net.state_dict(), save_path)
             print("Model saved to ", save_path)

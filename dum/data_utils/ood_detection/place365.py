@@ -159,14 +159,14 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     data_dir = kwargs['root']
     dataset = datasets.Places365(
         root=data_dir,
-        split="val",  #TODO: split="test"时,label=None，会报错
+        split="val",
         transform=transform,
         # target_transform=transforms.ToTensor(),
         download=True
     )
 
     num_train = len(dataset)
-    print(f"stl10 test:{num_train}")
+    print(f"places365 test:{num_train}")
     if (num_train >= 1000):
         indices = list(range(num_train))
         split = 1000
