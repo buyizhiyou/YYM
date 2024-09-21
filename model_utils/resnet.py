@@ -54,8 +54,6 @@ class Bottleneck(nn.Module):
                                           nn.BatchNorm2d(self.expansion * planes))
 
     def forward(self, x):
-        import pdb
-        pdb.set_trace()
         out = F.relu(self.bn1(self.conv1(x)))
         out = F.relu(self.bn2(self.conv2(out)))
         out = self.bn3(self.conv3(out))
@@ -94,8 +92,6 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        import pdb
-        pdb.set_trace()
         out = F.relu(self.bn1(self.conv1(x)))  #torch.Size([1, 64, 32, 32])
         out = self.layer1(out)
         out = self.layer2(out)

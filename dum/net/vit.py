@@ -2,185 +2,211 @@
 # -*- encoding: utf-8 -*-
 '''
 @File    :   vit.py
-@Time    :   2023/11/15 14:32:44
+@Time    :   2024/09/21 15:48:32
 @Author  :   shiqing
 @Version :   Cinnamoroll V1
 '''
-"""vit for cifar10 32x32"""
 
-import torch
+
+'''
+官方vit实现
+224*224的输入
+'''
+import math
+from collections import OrderedDict
+from functools import partial
+from typing import Any, Callable, List, NamedTuple, Optional, Dict
+import torch 
+from torchvision import models
+from torchvision.models.vision_transformer import Conv2dNormActivation,ConvStemConfig,Encoder
+from torchvision.models._api import Weights
 from torch import nn
-import torchsummary
-from einops import rearrange, repeat
-from einops.layers.torch import Rearrange
-from net.spectral_normalization.spectral_norm_official import spectral_norm
-from net.extra import ProjectionHead
 
 
-def pair(t):
-    return t if isinstance(t, tuple) else (t, t)
+def vit(spectral_normalization=True, mod=True, num_classes=10,temp=1.0):
+    weights=models.ViT_B_32_Weights.IMAGENET1K_V1
+    model = VisionTransformer(
+        image_size=224,
+        patch_size=32,
+        num_layers=12,
+        num_heads=12,
+        hidden_dim=768,
+        mlp_dim=3072,
+    )
+
+    # weights=models.ViT_B_16_Weights.IMAGENET1K_V1
+    # model = VisionTransformer(
+    #     image_size=224,
+    #     patch_size=16,
+    #     num_layers=12,
+    #     num_heads=12,
+    #     hidden_dim=768,
+    #     mlp_dim=3072,
+    # )
 
 
-class PreNorm(nn.Module):
+    model.load_state_dict(weights.get_state_dict(progress=True))
+    lastlayer_dims = model.heads[0].in_features
+    model.heads[0] = nn.Linear(lastlayer_dims, num_classes)
+    return model
 
-    def __init__(self, dim, fn):
+class VisionTransformer(nn.Module):
+    """Vision Transformer as per https://arxiv.org/abs/2010.11929."""
+
+    def __init__(
+        self,
+        image_size: int,
+        patch_size: int,
+        num_layers: int,
+        num_heads: int,
+        hidden_dim: int,
+        mlp_dim: int,
+        dropout: float = 0.0,
+        attention_dropout: float = 0.0,
+        num_classes: int = 1000,
+        representation_size: Optional[int] = None,
+        norm_layer: Callable[..., torch.nn.Module] = partial(nn.LayerNorm, eps=1e-6),
+        conv_stem_configs: Optional[List[ConvStemConfig]] = None,
+    ):
         super().__init__()
-        self.norm = nn.LayerNorm(dim)
-        self.fn = fn
+        torch._assert(image_size % patch_size == 0, "Input shape indivisible by patch size!")
+        self.image_size = image_size
+        self.patch_size = patch_size
+        self.hidden_dim = hidden_dim
+        self.mlp_dim = mlp_dim
+        self.attention_dropout = attention_dropout
+        self.dropout = dropout
+        self.num_classes = num_classes
+        self.representation_size = representation_size
+        self.norm_layer = norm_layer
 
-    def forward(self, x, **kwargs):
-        return self.fn(self.norm(x), **kwargs)
+        if conv_stem_configs is not None:
+            # As per https://arxiv.org/abs/2106.14881
+            seq_proj = nn.Sequential()
+            prev_channels = 3
+            for i, conv_stem_layer_config in enumerate(conv_stem_configs):
+                seq_proj.add_module(
+                    f"conv_bn_relu_{i}",
+                    Conv2dNormActivation(
+                        in_channels=prev_channels,
+                        out_channels=conv_stem_layer_config.out_channels,
+                        kernel_size=conv_stem_layer_config.kernel_size,
+                        stride=conv_stem_layer_config.stride,
+                        norm_layer=conv_stem_layer_config.norm_layer,
+                        activation_layer=conv_stem_layer_config.activation_layer,
+                    ),
+                )
+                prev_channels = conv_stem_layer_config.out_channels
+            seq_proj.add_module(
+                "conv_last", nn.Conv2d(in_channels=prev_channels, out_channels=hidden_dim, kernel_size=1)
+            )
+            self.conv_proj: nn.Module = seq_proj
+        else:
+            self.conv_proj = nn.Conv2d(
+                in_channels=3, out_channels=hidden_dim, kernel_size=patch_size, stride=patch_size
+            )
 
+        seq_length = (image_size // patch_size) ** 2
 
-class FeedForward(nn.Module):
+        # Add a class token
+        self.class_token = nn.Parameter(torch.zeros(1, 1, hidden_dim))
+        seq_length += 1
 
-    def __init__(self, dim, hidden_dim, dropout=0.):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(dim, hidden_dim),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim, dim),
-            nn.GELU(),  #ADD
-            nn.Dropout(dropout))  #MLP
+        self.encoder = Encoder(
+            seq_length,
+            num_layers,
+            num_heads,
+            hidden_dim,
+            mlp_dim,
+            dropout,
+            attention_dropout,
+            norm_layer,
+        )
+        self.seq_length = seq_length
 
-    def forward(self, x):
-        return self.net(x)
+        heads_layers: OrderedDict[str, nn.Module] = OrderedDict()
+        if representation_size is None:
+            heads_layers["head"] = nn.Linear(hidden_dim, num_classes)
+        else:
+            heads_layers["pre_logits"] = nn.Linear(hidden_dim, representation_size)
+            heads_layers["act"] = nn.Tanh()
+            heads_layers["head"] = nn.Linear(representation_size, num_classes)
 
+        self.heads = nn.Sequential(heads_layers)
 
-class Attention(nn.Module):
+        if isinstance(self.conv_proj, nn.Conv2d):
+            # Init the patchify stem
+            fan_in = self.conv_proj.in_channels * self.conv_proj.kernel_size[0] * self.conv_proj.kernel_size[1]
+            nn.init.trunc_normal_(self.conv_proj.weight, std=math.sqrt(1 / fan_in))
+            if self.conv_proj.bias is not None:
+                nn.init.zeros_(self.conv_proj.bias)
+        elif self.conv_proj.conv_last is not None and isinstance(self.conv_proj.conv_last, nn.Conv2d):
+            # Init the last 1x1 conv of the conv stem
+            nn.init.normal_(
+                self.conv_proj.conv_last.weight, mean=0.0, std=math.sqrt(2.0 / self.conv_proj.conv_last.out_channels)
+            )
+            if self.conv_proj.conv_last.bias is not None:
+                nn.init.zeros_(self.conv_proj.conv_last.bias)
 
-    def __init__(self, dim, wrapped_fc, heads=8, dim_head=64, dropout=0):
-        super().__init__()
-        inner_dim = dim_head * heads  #512
-        project_out = not (heads == 1 and dim_head == dim)  #True
+        if hasattr(self.heads, "pre_logits") and isinstance(self.heads.pre_logits, nn.Linear):
+            fan_in = self.heads.pre_logits.in_features
+            nn.init.trunc_normal_(self.heads.pre_logits.weight, std=math.sqrt(1 / fan_in))
+            nn.init.zeros_(self.heads.pre_logits.bias)
 
-        self.heads = heads
-        self.scale = dim_head**-0.5  #0.125
+        if isinstance(self.heads.head, nn.Linear):
+            nn.init.zeros_(self.heads.head.weight)
+            nn.init.zeros_(self.heads.head.bias)
+        
+        self.feature=None
 
-        self.attend = nn.Softmax(dim=-1)
-        self.to_qkv = wrapped_fc(nn.Linear(dim, inner_dim * 3, bias=False))
-        self.to_out = nn.Sequential(wrapped_fc(nn.Linear(inner_dim, dim)), nn.Dropout(dropout)) if project_out else nn.Identity()
+    def _process_input(self, x: torch.Tensor) -> torch.Tensor:
+        n, c, h, w = x.shape
+        p = self.patch_size
+        torch._assert(h == self.image_size, "Wrong image height!")
+        torch._assert(w == self.image_size, "Wrong image width!")
+        n_h = h // p
+        n_w = w // p
 
-    def forward(self, x):
-        qkv = self.to_qkv(x).chunk(3, dim=-1)  #tuple ,len=3,torch.Size([4, 65, 512])
-        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h=self.heads), qkv)  #torch.Size([4, 8, 65, 64])
+        # (n, c, h, w) -> (n, hidden_dim, n_h, n_w)
+        x = self.conv_proj(x)
+        # (n, hidden_dim, n_h, n_w) -> (n, hidden_dim, (n_h * n_w))
+        x = x.reshape(n, self.hidden_dim, n_h * n_w)
 
-        dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
+        # (n, hidden_dim, (n_h * n_w)) -> (n, (n_h * n_w), hidden_dim)
+        # The self attention layer expects inputs in the format (N, S, E)
+        # where S is the source sequence length, N is the batch size, E is the
+        # embedding dimension
+        x = x.permute(0, 2, 1)
 
-        attn = self.attend(dots)
+        return x
 
-        out = torch.matmul(attn, v)
-        out = rearrange(out, 'b h n d -> b n (h d)')
-        return self.to_out(out)
+    def forward(self, x: torch.Tensor):
+        # Reshape and permute the input tensor
+        x = self._process_input(x)
+        n = x.shape[0]
 
+        # Expand the class token to the full batch
+        batch_class_token = self.class_token.expand(n, -1, -1)
+        x = torch.cat([batch_class_token, x], dim=1)
 
-class Transformer(nn.Module):  #Encoder
+        x = self.encoder(x)
 
-    def __init__(self, dim, depth, heads, dim_head, mlp_dim, wrapped_fc, dropout=0.):
-        super().__init__()
-        self.layers = nn.ModuleList([])
-        for _ in range(depth):  #6
-            self.layers.append(
-                nn.ModuleList([
-                    PreNorm(dim, Attention(dim, wrapped_fc, heads=heads, dim_head=dim_head, dropout=dropout)),
-                    PreNorm(dim, FeedForward(dim, mlp_dim, dropout=dropout))
-                ]))
+        # Classifier "token" as used by standard language architectures
+        x = x[:, 0]
 
-    def forward(self, x):
-        for attn, ff in self.layers:
-            x = attn(x) + x
-            x = ff(x) + x
+        self.feature = x
+
+        x = self.heads(x)
+
         return x
 
 
-class ViT(nn.Module):
-
-    def __init__(self,
-                 spectral_normalization=True,
-                 mod=True,
-                 temp=1.0,
-                 image_size=32,
-                 patch_size=4,
-                 num_classes=10,
-                 dim=512,
-                 depth=6,
-                 heads=8,
-                 mlp_dim=512,
-                 pool='cls',
-                 channels=3,
-                 dim_head=64,
-                 dropout=0.0,
-                 emb_dropout=0.0):
-        super().__init__()
-        image_height, image_width = pair(image_size)
-        patch_height, patch_width = pair(patch_size)  #4x4
-
-        wrapped_fc = spectral_norm if spectral_normalization else nn.Identity()
-
-        self.temp = temp
-
-        assert image_height % patch_height == 0 and image_width % patch_width == 0, 'Image dimensions must be divisible by the patch size.'
-
-        num_patches = (image_height // patch_height) * (image_width // patch_width)  #64
-        patch_dim = channels * patch_height * patch_width  #48
-        assert pool in {'cls', 'mean'}, 'pool type must be either cls (cls token) or mean (mean pooling)'
-
-        self.to_patch_embedding = nn.Sequential(
-            Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1=patch_height, p2=patch_width),
-            wrapped_fc(nn.Linear(patch_dim, dim)),
-        )  #划分patch
-        #torch.einsum("bhif, bhjf->bhij", q, k)
-
-        self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))  #torch.Size([1, 65, 512]) nn.Parameter类，加入参数
-        self.cls_token = nn.Parameter(torch.randn(1, 1, dim))  #torch.Size([1, 1, 512])
-        self.dropout = nn.Dropout(emb_dropout)
-
-        self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, wrapped_fc, dropout)
-
-        self.pool = pool
-        self.to_latent = nn.Identity()
-
-        self.mlp_head = nn.Sequential(nn.LayerNorm(dim), wrapped_fc(nn.Linear(dim, num_classes)))
-        self.projection_head = ProjectionHead(512, 256)
-
-        self.embedding=None
-        self.feature=None
-       
-
-
-    def forward(self, img):
-        x = self.to_patch_embedding(img)
-        b, n, _ = x.shape
-
-        cls_tokens = repeat(self.cls_token, '() n d -> b n d', b=b)  #[1,1,512]->[b,1,512]
-        x = torch.cat((cls_tokens, x), dim=1)
-        x += self.pos_embedding[:, :(n + 1)]
-        x = self.dropout(x)
-
-        x = self.transformer(x)
-
-        x = x.mean(dim=1) if self.pool == 'mean' else x[:, 0]  #使用第0个cls_token作为最终Mlp head 的输入
-
-        x = self.to_latent(x)
-
-        self.embedding=self.projection_head(x)
-        self.feature=x
-
-        return self.mlp_head(x) / self.temp
-
-
-def vit(spectral_normalization=True, mod=True, temp=1.0, mnist=False, **kwargs):
-    model = ViT(spectral_normalization=spectral_normalization, mod=mod, temp=temp, **kwargs)
-    return model
-
 
 if __name__ == "__main__":
-    b, c, h, w = 4, 3, 32, 32
+    b, c, h, w = 4, 3, 224, 224
     device = "cuda"
     x = torch.randn(b, c, h, w).to(device)
-    net = ViT().to(device)
+    net = vit().to(device)
     out = net(x)
-    # out.mean().backward()
-    torchsummary.summary(net, (c, h, w), device=device)
-    # print(out.shape)
+    print(net.feature.shape)
+    print(out.shape)

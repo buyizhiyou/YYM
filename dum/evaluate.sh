@@ -77,7 +77,7 @@ fi
 #check ooddataset
 ooddatasets=("cifar100" "lsun" "svhn" "tiny_imagenet" "mnist")
 #check model
-models=("vgg16" "resnet50" "wide_resnet")
+models=("vgg16" "resnet50" "wide_resnet","vit")
 if [[ " ${models[@]}" =~ "$model" ]]; then
        echo "###########  evaluate model $model"
 else

@@ -44,30 +44,32 @@ def get_embeddings(
 
     start = 0
     print("get embeddings from dataloader...")
-    for images, label in tqdm(loader,dynamic_ncols=True):  # 多个少batch
-        images = images.to(device)
-        label = label.to(device)
+    with torch.no_grad():
+        for images, label in tqdm(loader,dynamic_ncols=True):  # 多个少batch
+            images = images.to(device)
+            label = label.to(device)
 
-        images.requires_grad = True  #images.required_grad区分,用required_grad梯度为None
-        logits = net(images)
-        acc = accuracy(logits, label)[0].item()
-        _, pred = torch.max(logits, 1)
+            # images.requires_grad = True  #images.required_grad区分,用required_grad梯度为None
+            logits = net(images)
+            acc = accuracy(logits, label)[0].item()
+            _, pred = torch.max(logits, 1)
 
-        loss = loss_func(logits, pred)  #这个loss效果好一些
-        net.zero_grad()
-        loss.backward()
-        gradient = images.grad.data
-        norm_batch = torch.norm(gradient, p=1)
-        out = net.feature
+            # loss = loss_func(logits, pred)  #这个loss效果好一些
+            # net.zero_grad()
+            # loss.backward()
+            # gradient = images.grad.data
+            # norm_batch = torch.norm(gradient, p=1)
+            out = net.feature
 
-        end = start + len(images)
-        norms[start:end].copy_(norm_batch, non_blocking=True)
-        embeddings[start:end].copy_(out, non_blocking=True)
-        labels[start:end].copy_(label, non_blocking=True)
-        start = end
+            end = start + len(images)
+            # norms[start:end].copy_(norm_batch, non_blocking=True)
+            embeddings[start:end].copy_(out, non_blocking=True)
+            labels[start:end].copy_(label, non_blocking=True)
+            start = end
 
-    norm_threshold = (norms.quantile(1).item())
-    print(f"norm threshold:{norm_threshold}")
+    # norm_threshold = (norms.quantile(1).item())
+    norm_threshold=0
+    # print(f"norm threshold:{norm_threshold}")
 
     return embeddings, labels, norm_threshold
 

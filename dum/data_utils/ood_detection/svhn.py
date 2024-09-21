@@ -106,11 +106,12 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
         mean=[0.4914, 0.4822, 0.4465],
         std=[0.2023, 0.1994, 0.2010],
     )
-
+    size = 224
     # define transform
     torch.manual_seed(1)
     transform = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
+        transforms.Resize((size, size)),
+        transforms.RandomCrop(size, padding=4),
         transforms.ToTensor(),
         normalize,
     ])

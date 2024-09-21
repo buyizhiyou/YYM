@@ -42,21 +42,25 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_work
         std=[0.2023, 0.1994, 0.2010],
     )
 
+    size = 224 ##vit模型:224 ,其他的模型设置为32
     # define transforms
     valid_transform = transforms.Compose([
+        transforms.Resize((size, size)),
         transforms.ToTensor(),
         normalize,
     ])
 
     if augment:
         train_transform = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
+            transforms.Resize((size, size)),
+            transforms.RandomCrop(size, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             normalize,
         ])
     else:
         train_transform = transforms.Compose([
+            transforms.Resize((size, size)),
             transforms.ToTensor(),
             normalize,
         ])
@@ -128,8 +132,10 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     )
 
     torch.manual_seed(1)
+    size = 224
     transform = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
+        transforms.Resize((size, size)),
+        transforms.RandomCrop(size, padding=4),
         transforms.ToTensor(),
         normalize,
     ])

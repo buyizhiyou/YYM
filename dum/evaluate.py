@@ -69,7 +69,7 @@ dataset_loader = {
 # Mapping model name to model function
 models = {"lenet": lenet, "resnet18": resnet18, "resnet50": resnet50, "wide_resnet": wrn, "vgg16": vgg16, "vit": vit}
 
-model_to_num_dim = {"resnet18": 512, "resnet50": 2048, "resnet101": 2048, "resnet152": 2048, "wide_resnet": 640, "vgg16": 512, "vit": 512}
+model_to_num_dim = {"resnet18": 512, "resnet50": 2048, "resnet101": 2048, "resnet152": 2048, "wide_resnet": 640, "vgg16": 512, "vit": 768}
 
 torch.backends.cudnn.enabled = False
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"

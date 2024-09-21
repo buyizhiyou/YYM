@@ -134,8 +134,10 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     )
 
     # define transform
+    size = 224
     torch.manual_seed(1)
     transform = transforms.Compose([
+        transforms.Resize((size, size)),
         transforms.RandomCrop(32, padding=4),
         transforms.ToTensor(),
         transforms.Lambda(lambda x: x.repeat(3, 1, 1)),

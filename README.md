@@ -25,10 +25,6 @@
   
 
 ## Evaluate uncertaitny
-- [ ] ood
-- [ ] adversarial attach 
-- [ ] AUPR/AUROC
-
-
-## Analalyze Networks and Ablation study 
-- [ ] uncertainty and network structure
+- [x] ood
+- [x] adversarial attach 
+- [x] AUPR/AUROC
