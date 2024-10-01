@@ -148,14 +148,14 @@ def gmm_evaluate_with_perturbation(
     accs_pertubration = []
     total = 0
 
-    if perturbation == "fgsm":
-        perturb = fgsm_attack
-    elif perturbation == "bim":
-        perturb = bim_attack
-    elif perturbation == "cw":
-        perturb = cw_attack
-    elif perturbation == "pgd":
-        perturb = pgd_attack
+    # if perturbation == "fgsm":
+    #     perturb = fgsm_attack
+    # elif perturbation == "bim":
+    #     perturb = bim_attack
+    # elif perturbation == "cw":
+    #     perturb = cw_attack
+    # elif perturbation == "pgd":
+    #     perturb = pgd_attack
 
 
     fc_grad = []

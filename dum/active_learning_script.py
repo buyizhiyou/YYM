@@ -281,7 +281,7 @@ if __name__ == "__main__":
                                                                     device=device,
                                                                     num_classes=num_classes,
                                                                     storage_device=device,
-                                                                    epsilon=0.001,
+                                                                    epsilon=0.01,
                                                                     mean=mean,
                                                                     std=std)
                 (

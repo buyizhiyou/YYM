@@ -83,7 +83,6 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     val_transform = transforms.Compose([
         transforms.Resize((size, size)),
         transforms.RandomCrop(size, padding=4),
-        # transforms.Resize((32, 32)),
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ])
