@@ -12,7 +12,10 @@ import data_utils.ood_detection.cifar10 as cifar10
 from net.vgg import vgg16
 from utils.eval_utils import accuracy
 from utils.attack_utils import fgsm_attack, bim_attack, deepfool_attack, pgd_attack, cw_attack
+from utils.plots_utils import save_adv
 import warnings
+
+from functools import partial
 
 # 忽略特定的警告
 warnings.filterwarnings("ignore", category=UserWarning, module="torch")
@@ -45,7 +48,7 @@ def get_embeddings(
     start = 0
     print("get embeddings from dataloader...")
     with torch.no_grad():
-        for images, label in tqdm(loader,dynamic_ncols=True):  # 多个少batch
+        for images, label in tqdm(loader, dynamic_ncols=True):  # 多个少batch
             images = images.to(device)
             label = label.to(device)
 
@@ -68,7 +71,7 @@ def get_embeddings(
             start = end
 
     # norm_threshold = (norms.quantile(1).item())
-    norm_threshold=0
+    norm_threshold = 0
     # print(f"norm threshold:{norm_threshold}")
 
     return embeddings, labels, norm_threshold
@@ -92,7 +95,7 @@ def gmm_evaluate(net, gaussians_model, loader, device, num_classes, storage_devi
     with torch.no_grad():
         start = 0
         total = 0
-        for data, label in tqdm(loader,dynamic_ncols=True):
+        for data, label in tqdm(loader, dynamic_ncols=True):
             data = data.to(device)
             label = label.to(device)
 
@@ -157,7 +160,6 @@ def gmm_evaluate_with_perturbation(
     # elif perturbation == "pgd":
     #     perturb = pgd_attack
 
-
     fc_grad = []
 
     def bp_hook(module, grad_input, grad_output):
@@ -171,7 +173,7 @@ def gmm_evaluate_with_perturbation(
     # handler = net.fc.register_backward_hook(bp_hook)
     # handler.remove()
     #/2024_04_23_02_33_15/vgg16_sn_3.0_mod_seed_1_best.model svhn:m1_auroc1:0.9334,m1_auprc:0.9503
-    for images, label in tqdm(loader,dynamic_ncols=True):
+    for images, label in tqdm(loader, dynamic_ncols=True):
         images = images.to(device)
         label = label.to(device)
         images.requires_grad = True  #images.required_grad区分,用required_grad梯度为None
@@ -179,7 +181,6 @@ def gmm_evaluate_with_perturbation(
         acc = accuracy(logits, label)[0].item()
         accs.append(acc)
         _, pred = torch.max(logits, 1)
-
 
         # 1.加扰动
         # loss = loss_func(logits / temperature, pred)
@@ -195,7 +196,7 @@ def gmm_evaluate_with_perturbation(
         embedding = net.feature
         log_probs = gaussians_model.log_prob(embedding[:, None, :])
         max_log_probs = log_probs.max(1, keepdim=True)[0]  # get the index of the max log-probability
-        loss = max_log_probs.sum() #这个loss效果好一些
+        loss = max_log_probs.sum()  #这个loss效果好一些
         # loss = loss_func(logits / temperature, pred)
         net.zero_grad()
         loss.backward()
@@ -228,7 +229,7 @@ def gmm_evaluate_with_perturbation(
     return logits_N_C.to(device), labels_N.to(device), preds_N.to(device), sum(accs) / len(accs), sum(accs_pertubration) / len(accs_pertubration)
 
 
-def gmm_evaluate_for_adv(net, gaussians_model, loader, device, num_classes, storage_device):
+def gmm_evaluate_for_adv(net, gaussians_model, loader, device, num_classes, storage_device, perturbation="fgsm"):
 
     num_samples = len(loader.dataset)
     logits_N_C = torch.zeros((num_samples, num_classes), dtype=torch.float, device=storage_device)
@@ -237,16 +238,34 @@ def gmm_evaluate_for_adv(net, gaussians_model, loader, device, num_classes, stor
 
     start = 0
     total = 0
-    for images, label in tqdm(loader,dynamic_ncols=True):
+    #下面的攻击方式全部使用默认的参数，不同的攻击强度也影响实验结果
+    if perturbation == "fgsm":
+        perturb = partial(fgsm_attack)
+    elif perturbation == "bim":
+        perturb = partial(bim_attack)
+    elif perturbation == "cw":
+        perturb = partial(cw_attack)
+    elif perturbation == "pgd":
+        perturb = partial(pgd_attack)
+    else:
+        raise ValueError("perturbation is not valid")
+
+    for images, label in tqdm(loader, dynamic_ncols=True):
         images = images.to(device)
         label = label.to(device)
         images.requires_grad = True  #images.required_grad区分,用required_grad梯度为None
         logits = net(images)
+        init_prob = torch.softmax(logits, axis=1)
+        clean_prob, init_pred = init_prob.max(1, keepdim=True)
+
         _, pred = torch.max(logits, 1)
-        images_adv = fgsm_attack(net, images, pred, device)
+        images_adv = perturb(net, images, pred, device)
         images_adv.requires_grad = True  #images.required_grad区分,用required_grad梯度为None
 
         logits = net(images_adv)
+        final_prob = torch.softmax(logits, axis=1)
+        adv_prob, final_pred = final_prob.max(1, keepdim=True)
+
         _, pred = torch.max(logits, 1)
         features_B_Z = net.feature
         logit_B_C = gaussians_model.log_prob(features_B_Z[:, None, :])  # torch.Size([128, 10]),每个类别一个多元高斯模型
@@ -256,6 +275,18 @@ def gmm_evaluate_for_adv(net, gaussians_model, loader, device, num_classes, stor
         labels_N[start:end].copy_(label.cpu().detach(), non_blocking=True)
         preds_N[start:end].copy_(pred.cpu().detach(), non_blocking=True)
         start = end
+    
+    #可视化中间攻击的图片
+    images = images[1].cpu().detach().numpy()
+    images_adv = images_adv[1].cpu().detach().numpy()
+    init_pred = init_pred[1].item()
+    final_pred = final_pred[1].item()
+    clean_prob = clean_prob[1].item()
+    adv_prob = adv_prob[0].item()
+    mean = [0.4914, 0.4822, 0.4465]
+    std = [0.2023, 0.1994, 0.2010]
+    save_adv("./results/images/adv.png", images, images_adv, init_pred, final_pred, clean_prob, adv_prob, mean, std)
+
 
     return logits_N_C.to(device), labels_N.to(device), preds_N.to(device)
 
@@ -286,17 +317,20 @@ def gmm_evaluate_with_perturbation_for_adv(
     accs_pertubration = []
     total = 0
 
+    #下面的攻击方式全部使用默认的参数，不同的攻击强度也影响实验结果
     if perturbation == "fgsm":
-        perturb = fgsm_attack
+        perturb = partial(fgsm_attack)
     elif perturbation == "bim":
-        perturb = bim_attack
+        perturb = partial(bim_attack)
     elif perturbation == "cw":
-        perturb = cw_attack
+        perturb = partial(cw_attack)
     elif perturbation == "pgd":
-        perturb = pgd_attack
+        perturb = partial(pgd_attack)
+    else:
+        raise ValueError("perturbation is not valid")
 
     #/2024_04_23_02_33_15/vgg16_sn_3.0_mod_seed_1_best.model svhn:m1_auroc1:0.9334,m1_auprc:0.9503
-    for images, label in tqdm(loader,dynamic_ncols=True):
+    for images, label in tqdm(loader, dynamic_ncols=True):
         images = images.to(device)
         label = label.to(device)
         images.requires_grad = True  #images.required_grad区分,用required_grad梯度为None
@@ -314,20 +348,36 @@ def gmm_evaluate_with_perturbation_for_adv(
         # log_probs = gaussians_model.log_prob(embedding[:, None, :])
         # max_log_probs = log_probs.max(1, keepdim=True)[0]  # get the index of the max log-probability
         # loss = -max_log_probs.sum()
-        loss = loss_func(logits / temperature, pred)  #这个loss效果好一些
+        # loss = loss_func(logits / temperature, pred)  #这个loss效果好一些
+        # net.zero_grad()
+        # loss.backward()
+
+        embedding = net.feature
+        log_probs = gaussians_model.log_prob(embedding[:, None, :])
+        max_log_probs = log_probs.max(1, keepdim=True)[0]  # get the index of the max log-probability
+        loss = max_log_probs.sum()  #这个loss效果好一些
+        # loss = loss_func(logits / temperature, pred)
         net.zero_grad()
         loss.backward()
-
-        # #2.加扰动
         gradient = images_adv.grad.data
-        norms = torch.norm(gradient).item()
-        coeff = epsilon * torch.exp(torch.tensor(max(30 * (norms - 0.1), 0)))
-        # gradient = (gradient - gradient.min() / (gradient.max() - gradient.min()) - 0.5) * 2
-        # gradient = gradient.sign()
+        # gradient = (gradient - gradient.min() / (gradient.max() - gradient.min()) - 0.5) * 2#TODO:验证和下面哪一种效果好
+        gradient = gradient.sign()
+        #TODO:验证要不要/std
         gradient.index_copy_(1, torch.LongTensor([0]).to(device), gradient.index_select(1, torch.LongTensor([0]).to(device)) / std[0])
         gradient.index_copy_(1, torch.LongTensor([1]).to(device), gradient.index_select(1, torch.LongTensor([1]).to(device)) / std[1])
         gradient.index_copy_(1, torch.LongTensor([2]).to(device), gradient.index_select(1, torch.LongTensor([2]).to(device)) / std[2])
-        perturbed_images_normalized = torch.add(images_adv, gradient, alpha=coeff)
+        perturbed_images_normalized = torch.add(images_adv, gradient, alpha=epsilon)
+
+        # # #2.加扰动
+        # gradient = images_adv.grad.data
+        # norms = torch.norm(gradient).item()
+        # coeff = epsilon * torch.exp(torch.tensor(max(30 * (norms - 0.1), 0)))
+        # # gradient = (gradient - gradient.min() / (gradient.max() - gradient.min()) - 0.5) * 2
+        # # gradient = gradient.sign()
+        # gradient.index_copy_(1, torch.LongTensor([0]).to(device), gradient.index_select(1, torch.LongTensor([0]).to(device)) / std[0])
+        # gradient.index_copy_(1, torch.LongTensor([1]).to(device), gradient.index_select(1, torch.LongTensor([1]).to(device)) / std[1])
+        # gradient.index_copy_(1, torch.LongTensor([2]).to(device), gradient.index_select(1, torch.LongTensor([2]).to(device)) / std[2])
+        # perturbed_images_normalized = torch.add(images_adv, gradient, alpha=coeff)
 
         out = net(perturbed_images_normalized)
         acc = accuracy(out, label)[0].item()
@@ -345,7 +395,8 @@ def gmm_evaluate_with_perturbation_for_adv(
         preds_N[start:end].copy_(pred.cpu().detach(), non_blocking=True)
         start = end
 
-    return logits_N_C.to(device), labels_N.to(device), preds_N.to(device)
+    # return logits_N_C.to(device), labels_N.to(device), preds_N.to(device)
+    return logits_N_C.to(device), labels_N.to(device), preds_N.to(device), sum(accs) / len(accs), sum(accs_pertubration) / len(accs_pertubration)
 
 
 def gradient_norm_collect(net, gaussians_model, loader, device, storage_device, temperature=1, norm=1):
@@ -355,7 +406,7 @@ def gradient_norm_collect(net, gaussians_model, loader, device, storage_device, 
     loss_func = nn.CrossEntropyLoss()
     start = 0
 
-    for images, label in tqdm(loader,dynamic_ncols=True):
+    for images, label in tqdm(loader, dynamic_ncols=True):
         images = images.to(device)
         label = label.to(device)
         label = label % 10
@@ -403,7 +454,7 @@ def maxp_evaluate_with_perturbation(
     std = torch.tensor(std).to(device)
     mean = torch.tensor(mean).to(device)
     start = 0
-    for data, label in tqdm(loader,dynamic_ncols=True):
+    for data, label in tqdm(loader, dynamic_ncols=True):
         data = data.to(device)
         data.requires_grad = True  #data.required_grad区分,用required_grad梯度为None
 
@@ -434,7 +485,7 @@ def maxp_evaluate(net, loader, device, num_classes, storage_device):
 
     with torch.no_grad():
         start = 0
-        for data, label in tqdm(loader,dynamic_ncols=True):
+        for data, label in tqdm(loader, dynamic_ncols=True):
             data = data.to(device)
             label = label.to(device)
 
@@ -493,7 +544,8 @@ if __name__ == '__main__':
     ).to(device)
     net.eval()
     net.drop.training = True
-    test_loader = cifar10.get_test_loader(root="../data", batch_size=64, pin_memory=0)
+    #这里的参数sample_size对结果有影响
+    test_loader = cifar10.get_test_loader(root="../data", batch_size=64, pin_memory=0, size=32, sample_size=100)
     logits2, labels2 = gmm_evaluate_with_perturbation(
         net,
         gaussians_model,

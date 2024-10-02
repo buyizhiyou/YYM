@@ -7,7 +7,7 @@ from torchvision import datasets
 from torchvision import transforms
 
 
-def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_workers=4, pin_memory=False, **kwargs):
+def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_workers=4, pin_memory=False,size=32, **kwargs):
     """
     Utility function for loading and returning train and valid
     multi-process iterators over the SVHN dataset. 
@@ -87,7 +87,7 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_work
     return (train_loader, valid_loader)
 
 
-def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
+def get_test_loader(batch_size, num_workers=4, pin_memory=False,size=32, **kwargs):
     """
     Utility function for loading and returning a multi-process
     test iterator over the SVHN dataset.
@@ -106,7 +106,7 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
         mean=[0.4914, 0.4822, 0.4465],
         std=[0.2023, 0.1994, 0.2010],
     )
-    size = 224
+    # size = 224
     # define transform
     torch.manual_seed(1)
     transform = transforms.Compose([

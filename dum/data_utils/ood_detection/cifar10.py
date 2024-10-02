@@ -14,7 +14,7 @@ from torchvision import transforms
 from utils.simclr_utils import ContrastiveLearningViewTransform, get_simclr_pipeline_transform
 
 
-def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_workers=4, pin_memory=False, contrastive=0, **kwargs):
+def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_workers=4, pin_memory=False, contrastive=0, size=32, **kwargs):
     """
     Utility function for loading and returning train and valid
     multi-process iterators over the CIFAR-10 dataset.
@@ -48,8 +48,7 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_work
         std=[0.2023, 0.1994, 0.2010],
     )
 
-
-    size = 224 ##vit模型:224 ,其他的模型设置为32
+    # size = 224 ##vit模型:224 ,其他的模型设置为32
     # define transforms
     valid_transform = transforms.Compose([
         transforms.Resize((size, size)),
@@ -126,7 +125,7 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_work
     return (train_loader, valid_loader)
 
 
-def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
+def get_test_loader(batch_size, num_workers=4, pin_memory=False, size=32,sample_size=1000, **kwargs):
     """
     Utility function for loading and returning a multi-process
     test iterator over the CIFAR-10 dataset.
@@ -148,7 +147,7 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
 
     # define transform
 
-    size = 224 ##vit模型:224 ,其他的模型设置为32
+    # size = 224 ##vit模型:224 ,其他的模型设置为32
     transform = transforms.Compose([
         transforms.Resize((size, size)),
         transforms.ToTensor(),
@@ -164,9 +163,9 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     )
 
     num_train = len(dataset)
-    if (num_train >= 1000):
+    if (num_train >= sample_size):
         indices = list(range(num_train))
-        split = 1000
+        split = sample_size
         np.random.seed(1)
         np.random.shuffle(indices)
         valid_idx = indices[:split]

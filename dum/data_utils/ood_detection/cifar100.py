@@ -13,7 +13,7 @@ from torchvision import datasets
 from torchvision import transforms
 
 
-def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_workers=4, pin_memory=False, **kwargs):
+def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_workers=4, pin_memory=False,size=32, **kwargs):
     """
     Utility function for loading and returning train and valid
     multi-process iterators over the CIFAR-100 dataset. 
@@ -42,7 +42,7 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_work
         std=[0.2023, 0.1994, 0.2010],
     )
 
-    size = 224 ##vit模型:224 ,其他的模型设置为32
+    # size = 224 ##vit模型:224 ,其他的模型设置为32
     # define transforms
     valid_transform = transforms.Compose([
         transforms.Resize((size, size)),
@@ -111,7 +111,7 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_work
     return (train_loader, valid_loader)
 
 
-def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
+def get_test_loader(batch_size, num_workers=4, pin_memory=False,size=32, **kwargs):
     """
     Utility function for loading and returning a multi-process
     test iterator over the CIFAR-100 dataset.
@@ -132,7 +132,7 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     )
 
     torch.manual_seed(1)
-    size = 224
+    # size = 224
     transform = transforms.Compose([
         transforms.Resize((size, size)),
         transforms.RandomCrop(size, padding=4),

@@ -25,7 +25,7 @@ def fgsm_attack(model, images, labels, device=None, epsilon=0.1, normalized=True
     return adv_images
 
 
-def bim_attack(model, images, labels, device=None, epsilon=0.001, normalized=True):
+def bim_attack(model, images, labels, device=None, epsilon=0.1, normalized=True):
     attack = BIM(model, eps=epsilon)
     if device:
         attack.set_device(device)
@@ -47,8 +47,8 @@ def deepfool_attack(model, images, labels, device=None, steps=50, normalized=Tru
     return adv_images
 
 
-def pgd_attack(model, images, labels, device=None, epsilon=0.001, normalized=True):
-    attack = PGD(model, eps=epsilon, alpha=1 / 255, steps=10, random_start=True)
+def pgd_attack(model, images, labels, device=None, epsilon=0.1, normalized=True):
+    attack = PGD(model, eps=epsilon, alpha=10 / 255, steps=10, random_start=True)
     if device:
         attack.set_device(device)
     if normalized:

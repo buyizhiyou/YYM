@@ -86,7 +86,7 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_work
     return (train_loader, valid_loader)
 
 
-def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
+def get_test_loader(batch_size, num_workers=4, pin_memory=False, size=32,**kwargs):
     """
     Utility function for loading and returning a multi-process
     test iterator over the LSUN dataset.
@@ -108,7 +108,7 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
 
     # define transform
     torch.manual_seed(1)
-    size = 224
+    # size = 224
     transform = transforms.Compose([
         transforms.Resize((size, size)),
         transforms.RandomCrop(size, padding=4),

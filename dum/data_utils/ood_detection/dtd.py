@@ -26,7 +26,7 @@ from torchvision import datasets
 from torchvision import transforms
 
 
-def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_workers=4, pin_memory=False, contrastive=0, **kwargs):
+def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_workers=4, pin_memory=False, contrastive=0,size=32, **kwargs):
     """
     Utility function for loading and returning train and valid
     multi-process iterators over the CIFAR-10 dataset. 
