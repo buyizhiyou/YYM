@@ -2,6 +2,7 @@
 FastMNIST taken from: https://gist.github.com/y0ast/f69966e308e549f013a92dc66debeeb4
 """
 import torch
+from torchvision import transforms
 from torchvision.datasets import MNIST
 
 class FastMNIST(MNIST):
@@ -26,6 +27,8 @@ class FastMNIST(MNIST):
             tuple: (image, target) where target is index of the target class.
         """
         img, target = self.data[index], self.targets[index]
+        img = img.repeat(3,1,1)
+        img = transforms.Resize((32, 32))(img)
 
         return img, target
 

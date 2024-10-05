@@ -67,7 +67,8 @@ def train_single_epoch(epoch, model, train_loader, optimizer, device, contrastiv
     else:
         loss_func = nn.CrossEntropyLoss()
 
-    for batch_idx, (x, y) in enumerate(tqdm(train_loader, dynamic_ncols=True)):
+    # for batch_idx, (x, y) in enumerate(tqdm(train_loader, dynamic_ncols=True)):
+    for batch_idx, (x, y) in enumerate((train_loader)):
         if (isinstance(x, list)):  #生成的多个视角的增强图片
             data = torch.cat(x, dim=0)
             labels = torch.cat([y, y], dim=0)

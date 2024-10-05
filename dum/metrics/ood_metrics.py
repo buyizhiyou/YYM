@@ -219,7 +219,7 @@ def get_roc_auc_ensemble(model_ensemble, test_loader, ood_test_loader, uncertain
     return (fpr, tpr, roc_thresholds), (precision, recall, prc_thresholds), auroc, auprc
 
 
-def get_roc_auc_ensemble_adv(model_ensemble, test_loader, ood_test_loader, uncertainty, device,perturbation = "fgsm"):
+def get_roc_auc_ensemble_adv(model_ensemble, test_loader, uncertainty, device,perturbation = "fgsm"):
     bin_labels_uncertainties = None
     uncertainties = None
 
@@ -228,45 +228,44 @@ def get_roc_auc_ensemble_adv(model_ensemble, test_loader, ood_test_loader, uncer
 
     bin_labels_uncertainties = []
     uncertainties = []
-    with torch.no_grad():
-        # Getting uncertainties for in-distribution data
-        for data, label in test_loader:
-            data = data.to(device)
-            label = label.to(device)
+    # with torch.no_grad():
+        # Getting entropies for inD data
+    for data, label in test_loader:
+        data = data.to(device)
+        label = label.to(device)
 
-            bin_label_uncertainty = torch.zeros(label.shape).to(device)
-            if uncertainty == "mutual_information":
-                net_output, _, unc = ensemble_forward_pass_adv(model_ensemble, data,device,perturbation == "fgsm")
-            else:
-                net_output, unc, _ = ensemble_forward_pass_adv(model_ensemble, data,device,perturbation == "fgsm")
+        bin_label_uncertainty = torch.zeros(label.shape).to(device)
+        if uncertainty == "mutual_information":
+            net_output, _, unc = ensemble_forward_pass(model_ensemble, data)
+        else:
+            net_output, unc, _ = ensemble_forward_pass(model_ensemble, data)
 
-            bin_labels_uncertainties.append(bin_label_uncertainty)
-            uncertainties.append(unc)
+        bin_labels_uncertainties.append(bin_label_uncertainty)
+        uncertainties.append(unc)
+        
+    # Getting uncertainties for advasarial data
+    # import pdb;pdb.set_trace()
+    for data, label in test_loader:
+        data = data.to(device)
+        label = label.to(device)
 
-        # Getting entropies for OOD data
-        for data, label in ood_test_loader:
-            data = data.to(device)
-            label = label.to(device)
+        bin_label_uncertainty = torch.ones(label.shape).to(device)
+        if uncertainty == "mutual_information":
+            net_output, _, unc = ensemble_forward_pass_adv(model_ensemble, data,label,device,perturbation = "fgsm")
+        else:
+            net_output, unc, _ = ensemble_forward_pass_adv(model_ensemble, data,label,device,perturbation = "fgsm")
 
-            bin_label_uncertainty = torch.ones(label.shape).to(device)
-            if uncertainty == "mutual_information":
-                net_output, _, unc = ensemble_forward_pass_adv(model_ensemble, data,device,perturbation == "fgsm")
-            else:
-                net_output, unc, _ = ensemble_forward_pass_adv(model_ensemble, data,device,perturbation == "fgsm")
-
-            bin_labels_uncertainties.append(bin_label_uncertainty)
-            uncertainties.append(unc)
+        bin_labels_uncertainties.append(bin_label_uncertainty)
+        uncertainties.append(unc)
 
         bin_labels_uncertainties = torch.cat(bin_labels_uncertainties)
         uncertainties = torch.cat(uncertainties)
 
-    fpr, tpr, roc_thresholds = metrics.roc_curve(bin_labels_uncertainties.cpu().numpy(), uncertainties.cpu().numpy())
+    fpr, tpr, roc_thresholds = metrics.roc_curve(bin_labels_uncertainties.detach().cpu().numpy(), uncertainties.detach().cpu().numpy())
     precision, recall, prc_thresholds = metrics.precision_recall_curve(
-        bin_labels_uncertainties.cpu().numpy(), uncertainties.cpu().numpy()
+        bin_labels_uncertainties.detach().cpu().numpy(), uncertainties.detach().cpu().numpy()
     )
-    auroc = metrics.roc_auc_score(bin_labels_uncertainties.cpu().numpy(), uncertainties.cpu().numpy())
-    auprc = metrics.average_precision_score(bin_labels_uncertainties.cpu().numpy(), uncertainties.cpu().numpy())
-
-
+    auroc = metrics.roc_auc_score(bin_labels_uncertainties.detach().cpu().numpy(), uncertainties.detach().cpu().numpy())
+    auprc = metrics.average_precision_score(bin_labels_uncertainties.detach().cpu().numpy(), uncertainties.detach().cpu().numpy())
 
     return (fpr, tpr, roc_thresholds), (precision, recall, prc_thresholds), auroc, auprc

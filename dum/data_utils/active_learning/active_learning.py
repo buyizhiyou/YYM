@@ -22,6 +22,8 @@ class ActiveLearningData:
         self.training_mask = np.full((len(dataset),), False)
         self.pool_mask = np.full((len(dataset),), True)
 
+        #Subset是PyTorch提供的一个用于创建数据集子集的工具。它接收两个参数：一个原始数据集和一个索引列表，
+        # 然后返回一个新的数据集，其中仅包含原始数据集中与索引列表对应的元素。
         self.training_dataset = data.Subset(self.dataset, None)
         self.pool_dataset = data.Subset(self.dataset, None)
 
@@ -146,6 +148,7 @@ class RandomFixedLengthSampler(data.Sampler):
         # Sample slightly more indices to avoid biasing towards start of dataset.
         # Have the same number of duplicates for each sample.
         indices = torch.randperm(self.target_length + (-self.target_length % len(self.dataset)))
+        #torch.randperm(n) 函数用于生成一个从 0 到 n-1 的随机排列的整数序列
 
         return iter((indices[: self.target_length] % len(self.dataset)).tolist())
 

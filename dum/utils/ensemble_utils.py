@@ -55,11 +55,12 @@ def ensemble_forward_pass(model_ensemble, data):
     return mean_output, predictive_entropy, mut_info
 
 
-def ensemble_forward_pass_adv(model_ensemble, images, device, perturbation="fgsm"):
+def ensemble_forward_pass_adv(model_ensemble, images, labels,device, perturbation="fgsm"):
     """
     Single forward pass in a given ensemble providing softmax distribution,
     predictive entropy and mutual information.
     """
+    
     if perturbation == "fgsm":
         perturb = partial(fgsm_attack)
     elif perturbation == "bim":
@@ -75,9 +76,9 @@ def ensemble_forward_pass_adv(model_ensemble, images, device, perturbation="fgsm
 
     images.requires_grad = True  #images.required_grad区分,用required_grad梯度为None
     net0 = model_ensemble[0]
-    logits = net0(images)
-    _, pred = torch.max(logits, 1)
-    images_adv = perturb(net0, images, pred, device)
+    # logits = net0(images)
+    # _, pred = torch.max(logits, 1)
+    images_adv = perturb(net0, images, labels, device)
     # images_adv.requires_grad = True  #images.required_grad区分,用required_grad梯度为None
 
     for i, model in enumerate(model_ensemble):

@@ -113,23 +113,15 @@ if __name__ == "__main__":
         model_files = sorted(glob.glob(f"{args.load_loc}/run{args.run}/{save_name}/*/{model_name}"))
 
     if len(model_files) == 0:
+        print("No models checkpoint files")
         exit()
+        
+    ##加载模型文件
     for i, saved_model_name in enumerate(model_files):
-        # saved_model_name = "/home/sq/YYM/dum/saved_models/run1/2024_03_07_21_49_57/vgg16_seed_1_best.model"
         print(f"Run {args.run},inD dataset {args.dataset},OOD dataset {args.ood_dataset} Evaluating for {i}/{len(model_files)}: {saved_model_name}")
         if args.evaltype == "ensemble":
-            val_loaders = []
-            for j in range(args.ensemble):
-                train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(
-                    root=args.dataset_root,
-                    batch_size=args.batch_size,
-                    augment=args.data_aug,
-                    val_seed=(args.seed + (5 * i) + j),
-                    val_size=0.1,
-                    pin_memory=args.gpu,
-                )
-                val_loaders.append(val_loader)
-            # Evaluate an ensemble
+            #load ensemble models
+            print(f"load {saved_model_name}")
             net_ensemble = load_ensemble(ensemble_loc=saved_model_name,
                                          model_name=args.model,
                                          device=device,
@@ -164,10 +156,7 @@ if __name__ == "__main__":
             net.eval()
 
         if args.evaltype == "ensemble":
-            test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=512, pin_memory=args.gpu,size=32,sample_size=100)
-            ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root,
-                                                                               batch_size=args.batch_size,
-                                                                               pin_memory=args.gpu)
+            test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=512, pin_memory=args.gpu,size=32,sample_size=200)
 
             (
                 conf_matrix,
@@ -179,11 +168,12 @@ if __name__ == "__main__":
             print(f"{saved_model_name} accu:{accuracy}")
             # ece = expected_calibration_error(confidences, predictions, labels_list, num_bins=15)
 
-            # (_, _, _), (_, _, _), m1_auroc, m1_auprc = get_roc_auc_ensemble_adv(net_ensemble, test_loader, ood_test_loader, "mutual_information", device)
-            # (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc_ensemble_adv(net_ensemble, test_loader, ood_test_loader, "entropy", device)
-            # print(f"mutual_info:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f}; entropy:m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
+            (_, _, _), (_, _, _), m1_auroc_adv, m1_auprc_adv = get_roc_auc_ensemble_adv(net_ensemble, test_loader, "mutual_information", device)
+            (_, _, _), (_, _, _), m2_auroc_adv, m2_auprc_adv = get_roc_auc_ensemble_adv(net_ensemble, test_loader, "entropy", device)
+            print(f"ensemble,mutual_info:m1_auroc1:{m1_auroc_adv:.4f},m1_auprc:{m1_auprc_adv:.4f}; entropy:m2_auroc:{m2_auroc_adv:.4f},m2_auprc:{m2_auprc_adv:.4f}")
+            epsilon=0
         else:
-            test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=512, pin_memory=args.gpu,size=32,sample_size=1000)
+            test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=200, pin_memory=args.gpu,size=224,sample_size=200)
             (
                 conf_matrix,
                 accuracy,
@@ -194,7 +184,7 @@ if __name__ == "__main__":
 
             if (args.evaltype == "gmm"):
                 # Evaluate a GMM model
-                print("GMM Model")
+                print("Evaluate gmm Model")
                 cache_path = re.sub(r"[^/]*_best.model", "cache", saved_model_name)
 
                 if os.path.exists(cache_path):
@@ -228,6 +218,7 @@ if __name__ == "__main__":
                         storage_device=device,
                     )
 
+                    test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=1, pin_memory=args.gpu,size=224,sample_size=200)
                     logits_adv, _, _ = gmm_evaluate_for_adv(
                         net,
                         gaussians_model,
@@ -245,7 +236,7 @@ if __name__ == "__main__":
                             if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
                                 print(f"add noise:{args.perturbation}")
                                 #sample_size越小，结果越大
-                                test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=1, pin_memory=args.gpu,size=32,sample_size=200)
+                                test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=1, pin_memory=args.gpu,size=224,sample_size=200)
                                 logits_adv2, _, _, acc, acc_perturb = gmm_evaluate_with_perturbation_for_adv(
                                     net,
                                     gaussians_model,
@@ -263,13 +254,13 @@ if __name__ == "__main__":
                             _, m1_auroc_adv, m1_auprc_adv = get_roc_auc_logits(logits, logits_adv, maxval, device, conf=True)
                             _, m2_auroc_adv, m2_auprc_adv = get_roc_auc_logits(logits, logits_adv2, maxval, device, conf=True)
                             print(
-                                f"adv:epsilon:{epsilon},m1_auroc_adv:{m1_auprc_adv:.4f},m1_auprc_adv:{m1_auprc_adv:.4f},m2_auroc_adv:{m2_auroc_adv:.4f},m2_auprc_adv:{m2_auprc_adv:.4f}"
+                                f"{args.model},adv:epsilon:{epsilon},m1_auroc_adv:{m1_auprc_adv:.4f},m1_auprc_adv:{m1_auprc_adv:.4f},m2_auroc_adv:{m2_auroc_adv:.4f},m2_auprc_adv:{m2_auprc_adv:.4f}"
                             )
 
                             m2_res.append([m2_auroc_adv, m2_auprc_adv, epsilon])
                     m2_auroc_adv, m2_auprc_adv, epsilon = sorted(m2_res)[-1]  #从小到大排序，并且取最大的
 
-                    print(f"adv:epsilon:{epsilon},m1_auroc_adv:{m1_auprc_adv:.4f},m1_auprc_adv:{m1_auprc_adv:.4f},m2_auroc_adv:{m2_auroc_adv:.4f},m2_auprc_adv:{m2_auprc_adv:.4f}")
+                    print(f"{args.model},adv:epsilon:{epsilon},m1_auroc_adv:{m1_auprc_adv:.4f},m1_auprc_adv:{m1_auprc_adv:.4f},m2_auroc_adv:{m2_auroc_adv:.4f},m2_auprc_adv:{m2_auprc_adv:.4f}")
                     
                 except RuntimeError as e:
                     print("Runtime Error caught: " + str(e))
@@ -286,6 +277,8 @@ if __name__ == "__main__":
         m2_aurocs.append(m2_auroc_adv)
         m2_auprcs.append(m2_auprc_adv)
 
+
+    ##保存结果
     accuracy_tensor = torch.tensor(accuracies)
     ece_tensor = torch.tensor(eces)
     t_ece_tensor = torch.tensor(t_eces)

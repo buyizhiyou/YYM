@@ -204,6 +204,7 @@ def gmm_evaluate_with_perturbation(
         # gradient = (gradient - gradient.min() / (gradient.max() - gradient.min()) - 0.5) * 2#TODO:验证和下面哪一种效果好
         gradient = gradient.sign()
         #TODO:验证要不要/std
+        # import pdb;pdb.set_trace()
         gradient.index_copy_(1, torch.LongTensor([0]).to(device), gradient.index_select(1, torch.LongTensor([0]).to(device)) / std[0])
         gradient.index_copy_(1, torch.LongTensor([1]).to(device), gradient.index_select(1, torch.LongTensor([1]).to(device)) / std[1])
         gradient.index_copy_(1, torch.LongTensor([2]).to(device), gradient.index_select(1, torch.LongTensor([2]).to(device)) / std[2])
@@ -259,7 +260,7 @@ def gmm_evaluate_for_adv(net, gaussians_model, loader, device, num_classes, stor
         clean_prob, init_pred = init_prob.max(1, keepdim=True)
 
         _, pred = torch.max(logits, 1)
-        images_adv = perturb(net, images, pred, device)
+        images_adv = perturb(net, images, label, device)
         images_adv.requires_grad = True  #images.required_grad区分,用required_grad梯度为None
 
         logits = net(images_adv)
@@ -277,15 +278,15 @@ def gmm_evaluate_for_adv(net, gaussians_model, loader, device, num_classes, stor
         start = end
     
     #可视化中间攻击的图片
-    images = images[1].cpu().detach().numpy()
-    images_adv = images_adv[1].cpu().detach().numpy()
-    init_pred = init_pred[1].item()
-    final_pred = final_pred[1].item()
-    clean_prob = clean_prob[1].item()
-    adv_prob = adv_prob[0].item()
-    mean = [0.4914, 0.4822, 0.4465]
-    std = [0.2023, 0.1994, 0.2010]
-    save_adv("./results/images/adv.png", images, images_adv, init_pred, final_pred, clean_prob, adv_prob, mean, std)
+    # images = images[0].cpu().detach().numpy()
+    # images_adv = images_adv[0].cpu().detach().numpy()
+    # init_pred = init_pred[0].item()
+    # final_pred = final_pred[0].item()
+    # clean_prob = clean_prob[0].item()
+    # adv_prob = adv_prob[0].item()
+    # mean = [0.4914, 0.4822, 0.4465]
+    # std = [0.2023, 0.1994, 0.2010]
+    # save_adv("./results/images/adv.png", images, images_adv, init_pred, final_pred, clean_prob, adv_prob, mean, std)
 
 
     return logits_N_C.to(device), labels_N.to(device), preds_N.to(device)
@@ -339,7 +340,8 @@ def gmm_evaluate_with_perturbation_for_adv(
         accs.append(acc)
         _, pred = torch.max(logits, 1)
 
-        images_adv = perturb(net, images, pred, device)
+        # images_adv = perturb(net, images, pred, device)
+        images_adv = perturb(net, images, label, device)
         images_adv.requires_grad = True  #images.required_grad区分,用required_grad梯度为None
         logits = net(images_adv)
         _, pred = torch.max(logits, 1)

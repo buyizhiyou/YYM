@@ -14,7 +14,7 @@ sys.path.append("../")
 from .attack import PGD, FGSM, BIM, DeepFool, CW
 
 
-def fgsm_attack(model, images, labels, device=None, epsilon=0.1, normalized=True):
+def fgsm_attack(model, images, labels, device=None, epsilon=0.05, normalized=True):
     attack = FGSM(model, eps=epsilon)
     if device:
         attack.set_device(device)
@@ -25,7 +25,7 @@ def fgsm_attack(model, images, labels, device=None, epsilon=0.1, normalized=True
     return adv_images
 
 
-def bim_attack(model, images, labels, device=None, epsilon=0.1, normalized=True):
+def bim_attack(model, images, labels, device=None, epsilon=0.05, normalized=True):
     attack = BIM(model, eps=epsilon)
     if device:
         attack.set_device(device)
@@ -47,7 +47,7 @@ def deepfool_attack(model, images, labels, device=None, steps=50, normalized=Tru
     return adv_images
 
 
-def pgd_attack(model, images, labels, device=None, epsilon=0.1, normalized=True):
+def pgd_attack(model, images, labels, device=None, epsilon=0.05, normalized=True):
     attack = PGD(model, eps=epsilon, alpha=10 / 255, steps=10, random_start=True)
     if device:
         attack.set_device(device)
