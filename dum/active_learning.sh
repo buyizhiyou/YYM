@@ -56,6 +56,7 @@ python active_learning_script.py \
        --seed 1 \
        --gpu $gpu \
        --model $model \
+       --dataset $dataset \
        --perturbation $perturbation \
        -sn -mod \
        --al-type $type

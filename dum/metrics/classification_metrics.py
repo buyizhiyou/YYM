@@ -21,7 +21,8 @@ def get_logits_labels(model, data_loader, device):
     logits = []
     labels = []
     with torch.no_grad():
-        for data, label in tqdm(data_loader):
+        # for data, label in tqdm(data_loader):
+        for data, label in (data_loader):
             data = data.to(device)
             label = label.to(device)
 
