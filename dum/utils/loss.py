@@ -29,7 +29,7 @@ class LabelSmoothing(nn.Module):
         # 此处的self.smoothing即我们的epsilon平滑参数。
 
     def forward(self, x, target):
-        logprobs = torch.nn.functional.log_softmax(x, dim=-1)
+        logprobs = F.log_softmax(x, dim=-1)
         nll_loss = -logprobs.gather(dim=-1, index=target.unsqueeze(1))
         nll_loss = nll_loss.squeeze(1)
         smooth_loss = -logprobs.mean(dim=-1)
@@ -196,14 +196,15 @@ def supervisedContrastiveLoss(representations, labels, device, temperature=0.5):
     Returns:
         _type_: scalar
     """
+    import pdb;pdb.set_trace()
     T = temperature  #温度参数T
     n = labels.shape[0]  # batch
     #这步得到它的相似度矩阵
     similarity_matrix = F.cosine_similarity(representations.unsqueeze(1), representations.unsqueeze(0), dim=2)  # N*N
     #这步得到它的labels矩阵，相同labels的位置为1
-    mask = torch.ones_like(similarity_matrix).to(device) * (labels.expand(n, n).eq(labels.expand(n, n).t()))
+    mask_eq = torch.ones_like(similarity_matrix).to(device) * (labels.expand(n, n).eq(labels.expand(n, n).t()))
     #这步得到它的不同类的矩阵，不同类的位置为1
-    mask_not_eq = torch.ones_like(mask).to(device) - mask
+    mask_not_eq = torch.ones_like(mask_eq).to(device) - mask_eq
     #这步产生一个对角线全为0的，其他位置为1的矩阵
     mask_no_diag = torch.ones(n, n).to(device) - torch.eye(n, n).to(device)
     #这步给相似度矩阵求exp,并且除以温度参数T
@@ -211,12 +212,11 @@ def supervisedContrastiveLoss(representations, labels, device, temperature=0.5):
     #这步将相似度矩阵的对角线上的值全置0，因为对比损失不需要自己与自己的相似度
     similarity_matrix = similarity_matrix * mask_no_diag
     #这步产生了相同类别的相似度矩阵，标签相同的位置保存它们的相似度，其他位置都是0，对角线上也为0
-    sim = mask * similarity_matrix
+    sim = mask_eq * similarity_matrix
     #用原先的对角线为0的相似度矩阵减去相同类别的相似度矩阵就是不同类别的相似度矩阵
     no_sim = similarity_matrix - sim
     #把不同类别的相似度矩阵按行求和，得到的是对比损失的分母(还差一个与分子相同的那个相似度，后面会加上)
     no_sim_sum = torch.sum(no_sim, dim=1)
-    # no_sim_sum = torch.sum(similarity_matrix,dim=1)#TODO：这会不会更好
     '''
     将上面的矩阵扩展一下，再转置，加到sim（也就是相同标签的矩阵上），然后再把sim矩阵与sim_num矩阵做除法。
     至于为什么这么做，就是因为对比损失的分母存在一个同类别的相似度，就是分子的数据。做了除法之后，就能得到
@@ -234,106 +234,93 @@ def supervisedContrastiveLoss(representations, labels, device, temperature=0.5):
     loss = -torch.log(loss)  #求-log
     # loss = torch.sum(torch.sum(loss, dim=1)) / (2 * n)  #将所有数据都加起来除以2n
     loss = torch.sum(torch.sum(loss, dim=1)) / (len(torch.nonzero(loss)))
-    # loss = torch.sum(torch.sum(loss, dim=1) / (torch.sum((loss != 0), dim=1)))#不收敛
+    # loss = torch.sum(torch.sum(loss,dim=1)/torch.sum(loss!=0,dim=1)) 
 
     return loss
 
 
-class SupConLoss(nn.Module):
-    """Supervised Contrastive Learning: https://arxiv.org/pdf/2004.11362.pdf.
-    It also supports the unsupervised contrastive loss in SimCLR"""
+def supConLoss(features, labels, device="cuda", temperature=0.07, contrast_mode='all', base_temperature=0.07, mask=None):
+    """
+    Args:
+        features: hidden vector of shape [bsz, n_views, ...].
+        labels: ground truth of shape [bsz].
+        mask: contrastive mask of shape [bsz, bsz], mask_{i,j}=1 if sample j
+            has the same class as sample i. Can be asymmetric.
+    Returns:
+        A loss scalar.
+    """
 
-    def __init__(self, temperature=0.07, contrast_mode='all', base_temperature=0.07):
-        super(SupConLoss, self).__init__()
-        self.temperature = temperature
-        self.contrast_mode = contrast_mode  #设置对比的模式有one和all两种，代表对比一个channel还是所有，个人理解
-        self.base_temperature = base_temperature  #设置的温度
+    if len(features.shape) < 3:
+        raise ValueError('`features` needs to be [bsz, n_views, ...],'
+                         'at least 3 dimensions are required')
+    if len(features.shape) > 3:  # batch_size, channel,H,W，平铺变成batch_size, channel, (H,W)
+        features = features.view(features.shape[0], features.shape[1], -1)
 
-    def forward(self, features, device, labels=None, mask=None):
-        """Compute loss for model. If both `labels` and `mask` are None,
-        it degenerates to SimCLR unsupervised loss:
-        https://arxiv.org/pdf/2002.05709.pdf
+    batch_size = features.shape[0]
+    if labels is not None and mask is not None:  #只能存在一个
+        raise ValueError('Cannot define both `labels` and `mask`')
+    elif labels is None and mask is None:  #如果两个都没有就是无监督对比损失，mask就是一个单位阵
+        mask = torch.eye(batch_size, dtype=torch.float32).to(device)
+    elif labels is not None:  #有标签，就把他变成mask
+        labels = labels.contiguous().view(-1, 1)  #contiguous深拷贝，与原来的labels没有关系，展开成一列,这样的话能够计算mask，否则labels一维的话labels.T是他本身捕获发生转置
+        if labels.shape[0] != batch_size:
+            raise ValueError('Num of labels does not match num of features')
+        mask = torch.eq(labels, labels.T).float().to(device)  #label和label的转置比较，感觉应该是广播机制，让label和label.T都扩充了然后进行比较，相同的是1，不同是0.
+        #这里就是由label形成mask,mask(i,j)代表第i个数据和第j个数据的关系，如果两个类别相同就是1， 不同就是0
+    else:
+        mask = mask.float().to(device)  #有mask就直接用mask，mask也是代表两个数据之间的关系
 
-        Args:
-            features: hidden vector of shape [bsz, n_views, ...].
-            labels: ground truth of shape [bsz].
-            mask: contrastive mask of shape [bsz, bsz], mask_{i,j}=1 if sample j
-                has the same class as sample i. Can be asymmetric.
-        Returns:
-            A loss scalar.
-        """
+    contrast_count = features.shape[1]  #对比数是channel的个数
+    contrast_feature = torch.cat(torch.unbind(features, dim=1), dim=0)  #把feature按照第1维拆开，然后在第0维上cat，(batch_size*channel,h*w..)#后面就是展开的feature的维度
+    #这个操作就和后面mask.repeat对上了，这个操作是第一个数据的第一维特征+第二个数据的第一维特征+第三个数据的第一维特征这样排列的与mask对应
+    if contrast_mode == 'one':  #如果mode=one，比较feature中第1维中的0号元素(batch, h*w)
+        anchor_feature = features[:, 0]
+        anchor_count = 1
+    elif contrast_mode == 'all':  #all就(batch*channel, h*w)
+        anchor_feature = contrast_feature
+        anchor_count = contrast_count
 
-        if len(features.shape) < 3:
-            raise ValueError('`features` needs to be [bsz, n_views, ...],'
-                             'at least 3 dimensions are required')
-        if len(features.shape) > 3:  # batch_size, channel,H,W，平铺变成batch_size, channel, (H,W)
-            features = features.view(features.shape[0], features.shape[1], -1)
+    # compute logits
+    anchor_dot_contrast = torch.div(
+        torch.matmul(anchor_feature, contrast_feature.T),  #两个相乘获得相似度矩阵，乘积值越大代表越相关
+        temperature)
+    # for numerical stability
+    logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)  #计算其中最大值
+    logits = anchor_dot_contrast - logits_max.detach()  #减去最大值，都是负的了，指数就小于等于1
 
-        batch_size = features.shape[0]
-        if labels is not None and mask is not None:  #只能存在一个
-            raise ValueError('Cannot define both `labels` and `mask`')
-        elif labels is None and mask is None:  #如果两个都没有就是无监督对比损失，mask就是一个单位阵
-            mask = torch.eye(batch_size, dtype=torch.float32).to(device)
-        elif labels is not None:  #有标签，就把他变成mask
-            labels = labels.contiguous().view(-1, 1)  #contiguous深拷贝，与原来的labels没有关系，展开成一列,这样的话能够计算mask，否则labels一维的话labels.T是他本身捕获发生转置
-            if labels.shape[0] != batch_size:
-                raise ValueError('Num of labels does not match num of features')
-            mask = torch.eq(labels, labels.T).float().to(device)  #label和label的转置比较，感觉应该是广播机制，让label和label.T都扩充了然后进行比较，相同的是1，不同是0.
-            #这里就是由label形成mask,mask(i,j)代表第i个数据和第j个数据的关系，如果两个类别相同就是1， 不同就是0
-        else:
-            mask = mask.float().to(device)  #有mask就直接用mask，mask也是代表两个数据之间的关系
+    # tile mask
+    mask = mask.repeat(anchor_count, contrast_count)  #repeat它就是把mask复制很多份
+    # mask-out self-contrast cases
+    logits_mask = torch.scatter(  #生成一个mask形状的矩阵除了对角线上的元素是0，其他位置都是1， 不会对自身进行比较
+        torch.ones_like(mask), 1,
+        torch.arange(batch_size * anchor_count).view(-1, 1).to(device), 0)
+    mask = mask * logits_mask
 
-        contrast_count = features.shape[1]  #对比数是channel的个数
-        contrast_feature = torch.cat(torch.unbind(features, dim=1), dim=0)  #把feature按照第1维拆开，然后在第0维上cat，(batch_size*channel,h*w..)#后面就是展开的feature的维度
-        #这个操作就和后面mask.repeat对上了，这个操作是第一个数据的第一维特征+第二个数据的第一维特征+第三个数据的第一维特征这样排列的与mask对应
-        if self.contrast_mode == 'one':  #如果mode=one，比较feature中第1维中的0号元素(batch, h*w)
-            anchor_feature = features[:, 0]
-            anchor_count = 1
-        elif self.contrast_mode == 'all':  #all就(batch*channel, h*w)
-            anchor_feature = contrast_feature
-            anchor_count = contrast_count
-        else:
-            raise ValueError('Unknown mode: {}'.format(self.contrast_mode))
+    # compute log_prob
+    exp_logits = torch.exp(logits) * logits_mask  #定义其中的相似度
+    log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True))  #softmax
 
-        # compute logits
-        anchor_dot_contrast = torch.div(
-            torch.matmul(anchor_feature, contrast_feature.T),  #两个相乘获得相似度矩阵，乘积值越大代表越相关
-            self.temperature)
-        # for numerical stability
-        logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)  #计算其中最大值
-        logits = anchor_dot_contrast - logits_max.detach()  #减去最大值，都是负的了，指数就小于等于1
+    # compute mean of log-likelihood over positive
+    # modified to handle edge cases when there is no positive pair
+    # for an anchor point.
+    # Edge case e.g.:-
+    # features of shape: [4,1,...]
+    # labels:            [0,1,1,2]
+    # loss before mean:  [nan, ..., ..., nan]
+    mask_pos_pairs = mask.sum(1)  #mask的和
+    mask_pos_pairs = torch.where(mask_pos_pairs < 1e-6, 1, mask_pos_pairs)  #满足返回1，不满足返回mask_pos_pairs.保证数值稳定
+    mean_log_prob_pos = (mask * log_prob).sum(1) / mask_pos_pairs
 
-        # tile mask
-        mask = mask.repeat(anchor_count, contrast_count)  #repeat它就是把mask复制很多份
-        # mask-out self-contrast cases
-        logits_mask = torch.scatter(  #生成一个mask形状的矩阵除了对角线上的元素是0，其他位置都是1， 不会对自身进行比较
-            torch.ones_like(mask), 1,
-            torch.arange(batch_size * anchor_count).view(-1, 1).to(device), 0)
-        mask = mask * logits_mask
+    # loss
+    loss = -(temperature / base_temperature) * mean_log_prob_pos  #类似蒸馏temperature温度越高，分布曲线越平滑不易陷入局部最优解，温度低，分布陡峭
+    loss = loss.view(anchor_count, batch_size).mean()  #计算平均
 
-        # compute log_prob
-        exp_logits = torch.exp(logits) * logits_mask  #定义其中的相似度
-        log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True))  #softmax
-
-        # compute mean of log-likelihood over positive
-        # modified to handle edge cases when there is no positive pair
-        # for an anchor point.
-        # Edge case e.g.:-
-        # features of shape: [4,1,...]
-        # labels:            [0,1,1,2]
-        # loss before mean:  [nan, ..., ..., nan]
-        mask_pos_pairs = mask.sum(1)  #mask的和
-        mask_pos_pairs = torch.where(mask_pos_pairs < 1e-6, 1, mask_pos_pairs)  #满足返回1，不满足返回mask_pos_pairs.保证数值稳定
-        mean_log_prob_pos = (mask * log_prob).sum(1) / mask_pos_pairs
-
-        # loss
-        loss = -(self.temperature / self.base_temperature) * mean_log_prob_pos  #类似蒸馏temperature温度越高，分布曲线越平滑不易陷入局部最优解，温度低，分布陡峭
-        loss = loss.view(anchor_count, batch_size).mean()  #计算平均
-
-        return loss
+    return loss
 
 
 if __name__ == '__main__':
-    x = torch.randn(7, 1024).to("cuda:0")
+    x = torch.randn((7,  1024)).to("cuda:0")
     y = torch.tensor([1, 2, 3, 1, 2, 3, 1]).to("cuda:0")
-    supervisedContrastiveLoss(x, y, "cuda:0")
+    # loss_val = supConLoss(x, y, "cuda:0")
+    loss_val = supervisedContrastiveLoss(x,y,"cuda:0")
+    print(loss_val)
