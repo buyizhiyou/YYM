@@ -222,7 +222,7 @@ class ResNet(nn.Module):
         # out = self.fc_add(out)
         # out = self.drop(self.activation(out))
 
-        self.embedding = self.projection_head(out)  # 对比loss的embedding
+        self.embedding = self.projection_head(out)  # 映射到对比loss的embedding空间
         self.feature = out
         out = self.fc(out) / self.temp
 

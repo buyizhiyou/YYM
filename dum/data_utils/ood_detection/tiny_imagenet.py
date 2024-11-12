@@ -73,7 +73,7 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_work
     return (train_loader, valid_loader)
 
 
-def get_test_loader(batch_size, num_workers=4, pin_memory=False,size=32,*kwargs):
+def get_test_loader(batch_size, num_workers=4, pin_memory=False,size=32,sample_size=1000,*kwargs):
 
     data_dir = kwargs['root']
     val_path = os.path.join(data_dir, "tiny-imagenet-200", "val")
@@ -88,16 +88,16 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False,size=32,*kwargs)
     ])
 
     dataset = datasets.ImageFolder(val_path, transform=val_transform)
+
     num_train = len(dataset)
-    print(f"tiny-imagenet test:{num_train}")
-    if (num_train >= 1000):
+    if (num_train >= sample_size):
         indices = list(range(num_train))
-        split = 1000
+        split = sample_size
         np.random.seed(1)
         np.random.shuffle(indices)
         valid_idx = indices[:split]
         dataset = Subset(dataset, valid_idx)
-
+        
     val_loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,

@@ -128,61 +128,142 @@ class CenterLoss1(nn.Module):
 
 
 class CenterLoss(nn.Module):
-    """https://github.com/jxgu1016/MNIST_center_loss_pytorch/tree/master
-
-    By dropping the bias of the last fc layer according to the issue, the centers tend to distribute around a circle as reported in the orignal paper.
-
+    """Center loss.
+    
+    Reference:
+    Wen et al. A Discriminative Feature Learning Approach for Deep Face Recognition. ECCV 2016.
+    
     Args:
-        nn (_type_): _description_
+        num_classes (int): number of classes.
+        feat_dim (int): feature dimension.
     """
 
-    def __init__(self, num_classes, feat_dim, size_average=True):
+    def __init__(self, num_classes, feat_dim,device):
         super(CenterLoss, self).__init__()
-        self.centers = nn.Parameter(torch.randn(num_classes, feat_dim))
-        self.centerlossfunc = CenterlossFunc.apply
+        self.num_classes = num_classes
         self.feat_dim = feat_dim
-        self.size_average = size_average
+        self.centers = nn.Parameter(torch.randn(self.num_classes, self.feat_dim).to(device))
+        self.device = device
 
-    def forward(self, label, feat):
-        batch_size = feat.size(0)
-        feat = feat.view(batch_size, -1)
-        # To check the dim of centers and features
-        if feat.size(1) != self.feat_dim:
-            raise ValueError("Center's dim: {0} should be equal to input feature's \
-                            dim: {1}".format(self.feat_dim, feat.size(1)))
-        batch_size_tensor = feat.new_empty(1).fill_(batch_size if self.size_average else 1)
-        loss = self.centerlossfunc(feat, label, self.centers.to(feat.device), batch_size_tensor)
+    def forward(self, labels, x):
+        """
+        Args:
+            x: feature matrix with shape (batch_size, feat_dim).
+            labels: ground truth labels with shape (batch_size).
+        """
+        # 下面的代码计算类内距离（与中心的距离）
+        batch_size = x.size(0)
+        distmat = torch.pow(x, 2).sum(dim=1, keepdim=True).expand(batch_size, self.num_classes) + \
+                  torch.pow(self.centers, 2).sum(dim=1, keepdim=True).expand(self.num_classes, batch_size).t()
+        distmat.addmm_(x, self.centers.t(), beta=1, alpha=-2)
+        #(x-c)^2=x^2+c^2-2*x*c.t()
+
+        classes = torch.arange(self.num_classes).long().to(self.device)
+        labels = labels.unsqueeze(1).expand(batch_size, self.num_classes)
+        mask = labels.eq(classes.expand(batch_size, self.num_classes))
+
+        dist = distmat * mask.float()
+        intra_class_distance = dist.clamp(min=1e-12, max=1e+12).sum() / batch_size
+        
+        # # 下面的代码计算类间距离
+        # num_classes = self.num_classes
+        # center_dists = torch.cdist(self.centers, self.centers, p=2)  # 计算所有类别中心之间的欧氏距离
+        # # 排除自身距离（对角线元素为 0）
+        # mask = torch.eye(num_classes, device=center_dists.device).bool()
+        # center_dists = center_dists.masked_fill(mask, 0)
+        # # 计算类间距离的平均值
+        # inter_class_distance = center_dists.sum() / (num_classes * (num_classes - 1))
+        # # print(f"Inra-class Distance (Average): {intra_class_distance.item()}",f"Inter-class Distance (Average): {inter_class_distance.item()}")
+        # loss = intra_class_distance/(10*inter_class_distance+1e-12)
+        
+        loss = intra_class_distance
+        
         return loss
 
 
-class CenterlossFunc(Function):
+    def center_contrastive_loss(self,x, labels, delta=1e-6):
+        #https://ar5iv.labs.arxiv.org/html/1707.07391
+        
+        batch_size = x.size(0)
+        num_classes =self.centers.size(0)
 
-    @staticmethod
-    def forward(ctx, feature, label, centers, batch_size):
-        ctx.save_for_backward(feature, label, centers, batch_size)
-        centers_batch = centers.index_select(0, label.long())
-        dist1 = (feature - centers_batch).pow(2).sum() / 2.0 / batch_size  #类内最小
-        #类间最大
-        centers2 = centers.reshape(centers.shape[0], 1, centers.shape[1])
-        dist2 = (centers - centers2).pow(2).sum() / 2.0 / batch_size
-        loss = dist1 / (dist2 + 1e-17)
+        # 计算每个样本到其所属类别中心的距离 ||x_i - c_{y_i}||^2
+        mask = F.one_hot(labels, num_classes).float()
+        dist_to_own_center = ((x -self.centers[labels]) ** 2).sum(dim=1)
 
+        # 计算每个样本到所有其他类别中心的距离 ||x_i - c_j||^2
+        expanded_x = x.unsqueeze(1).expand(batch_size, num_classes, -1)  # (batch_size, num_classes, feature_dim)
+        expanded_centers =self.centers.unsqueeze(0).expand(batch_size, num_classes, -1)  # (batch_size, num_classes, feature_dim)
+        dist_to_all_centers = ((expanded_x - expanded_centers) ** 2).sum(dim=2)  # (batch_size, num_classes)
+
+        # 将正确类别的距离排除
+        dist_to_other_centers = dist_to_all_centers * (1 - mask)
+        sum_dist_to_other_centers = dist_to_other_centers.sum(dim=1)
+
+        # 计算最终的对比损失
+        loss = (dist_to_own_center / (sum_dist_to_other_centers + delta)).mean() * 0.5
+        
         return loss
 
-    @staticmethod
-    def backward(ctx, grad_output):
-        feature, label, centers, batch_size = ctx.saved_tensors
-        centers_batch = centers.index_select(0, label.long())
-        diff = centers_batch - feature
-        # init every iteration
-        counts = centers.new_ones(centers.size(0))
-        ones = centers.new_ones(label.size(0))
-        grad_centers = centers.new_zeros(centers.size())
+# class CenterLoss(nn.Module):
+#     """https://github.com/jxgu1016/MNIST_center_loss_pytorch/tree/master
 
-        counts = counts.scatter_add_(0, label.long(), ones)
-        grad_centers.scatter_add_(0, label.unsqueeze(1).expand(feature.size()).long(), diff)
-        grad_centers = grad_centers / counts.view(-1, 1)
-        return -grad_output * diff / batch_size, None, grad_centers / batch_size, None
+#     By dropping the bias of the last fc layer according to the issue, the centers tend to distribute around a circle as reported in the orignal paper.
+
+#     Args:
+#         nn (_type_): _description_
+#     """
+
+#     def __init__(self, num_classes, feat_dim, size_average=True):
+#         super(CenterLoss, self).__init__()
+#         self.centers = nn.Parameter(torch.randn(num_classes, feat_dim))
+#         self.centerlossfunc = CenterlossFunc.apply
+#         self.feat_dim = feat_dim
+#         self.size_average = size_average
+
+#     def forward(self, label, feat):
+#         batch_size = feat.size(0)
+#         feat = feat.view(batch_size, -1)
+#         # To check the dim of centers and features
+#         if feat.size(1) != self.feat_dim:
+#             raise ValueError("Center's dim: {0} should be equal to input feature's \
+#                             dim: {1}".format(self.feat_dim, feat.size(1)))
+
+#         batch_size_tensor = feat.new_empty(1).fill_(
+#             batch_size if self.size_average else 1)  #new_empty返回一个大小为 size 的张量，其中填充了未初始化的数据。默认情况下，返回的张量与此张量具有相同的 torch.dtype 和 torch.device 。
+#         loss = self.centerlossfunc(feat, label, self.centers.to(feat.device), batch_size_tensor)
+#         return loss
+
+
+# class CenterlossFunc(Function):
+
+#     @staticmethod
+#     def forward(ctx, feature, label, centers, batch_size):
+#         ctx.save_for_backward(feature, label, centers, batch_size)
+
+#         centers_batch = centers.index_select(0, label.long())
+#         dist1 = (feature - centers_batch).pow(2).sum() / 2.0 / batch_size  #类内最小
+#         #类间最大
+#         centers2 = centers.reshape(centers.shape[0], 1, centers.shape[1])
+#         dist2 = (centers - centers2).pow(2).sum() / 2.0 / batch_size
+#         loss = dist1 / (dist2 + 1e-17)
+
+#         return loss
+
+#     @staticmethod
+#     def backward(ctx, grad_output):
+#         feature, label, centers, batch_size = ctx.saved_tensors
+#         centers_batch = centers.index_select(0, label.long())
+#         diff = centers_batch - feature
+#         # init every iteration
+#         counts = centers.new_ones(centers.size(0))
+#         ones = centers.new_ones(label.size(0))
+#         grad_centers = centers.new_zeros(centers.size())
+
+#         counts = counts.scatter_add_(0, label.long(), ones)
+#         grad_centers.scatter_add_(0, label.unsqueeze(1).expand(feature.size()).long(), diff)
+#         grad_centers = grad_centers / counts.view(-1, 1)
+#         return -grad_output * diff / batch_size, None, grad_centers / batch_size, None
 
 
 def supervisedContrastiveLoss(representations, labels, device, temperature=0.5):
@@ -196,7 +277,6 @@ def supervisedContrastiveLoss(representations, labels, device, temperature=0.5):
     Returns:
         _type_: scalar
     """
-    import pdb;pdb.set_trace()
     T = temperature  #温度参数T
     n = labels.shape[0]  # batch
     #这步得到它的相似度矩阵
@@ -234,7 +314,7 @@ def supervisedContrastiveLoss(representations, labels, device, temperature=0.5):
     loss = -torch.log(loss)  #求-log
     # loss = torch.sum(torch.sum(loss, dim=1)) / (2 * n)  #将所有数据都加起来除以2n
     loss = torch.sum(torch.sum(loss, dim=1)) / (len(torch.nonzero(loss)))
-    # loss = torch.sum(torch.sum(loss,dim=1)/torch.sum(loss!=0,dim=1)) 
+    # loss = torch.sum(torch.sum(loss,dim=1)/torch.sum(loss!=0,dim=1))
 
     return loss
 
@@ -319,8 +399,8 @@ def supConLoss(features, labels, device="cuda", temperature=0.07, contrast_mode=
 
 
 if __name__ == '__main__':
-    x = torch.randn((7,  1024)).to("cuda:0")
+    x = torch.randn((7, 1024)).to("cuda:0")
     y = torch.tensor([1, 2, 3, 1, 2, 3, 1]).to("cuda:0")
     # loss_val = supConLoss(x, y, "cuda:0")
-    loss_val = supervisedContrastiveLoss(x,y,"cuda:0")
+    loss_val = supervisedContrastiveLoss(x, y, "cuda:0")
     print(loss_val)

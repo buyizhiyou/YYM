@@ -8,9 +8,12 @@ import time
 import json
 import os
 
+from matplotlib import pyplot as plt
+import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 import warmup_scheduler
+from sklearn.manifold import TSNE
 
 from net.lenet import lenet
 from net.resnet import resnet18, resnet50  #自己实现的spectral norm
@@ -24,7 +27,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 import data_utils.dirty_mnist as dirty_mnist
-
+from utils.loss import supervisedContrastiveLoss, LabelSmoothing, CenterLoss
 import data_utils.ood_detection.cifar10 as cifar10
 import data_utils.ood_detection.cifar100 as cifar100
 import data_utils.ood_detection.svhn as svhn
@@ -33,6 +36,7 @@ from utils.args import training_args
 from utils.lars import LARC
 from utils.eval_utils import get_eval_stats
 from utils.train_utils import (model_save_name, save_config_file, test_single_epoch, train_single_epoch)
+from utils.plots_utils import plot_embedding_2d, inter_intra_class_ratio, create_gif_from_images
 
 dataset_num_classes = {"cifar10": 10, "cifar100": 100, "svhn": 10, "dirty_mnist": 10}
 
@@ -93,13 +97,19 @@ if __name__ == "__main__":
         optimizer = optim.Adam(opt_params, lr=args.learning_rate, weight_decay=args.weight_decay)
 
     # 学习率schduler
+    # import pdb;pdb.set_trace()
     if args.scheduler == "step":
-        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[50, 100, 200, 300, 400], gamma=0.1, verbose=False)
+        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 150, 200,250], gamma=0.1, verbose=False)
     elif args.scheduler == "cos":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=300, eta_min=1e-7, verbose=False)
 
-    scheduler = warmup_scheduler.GradualWarmupScheduler(optimizer, multiplier=1.0, total_epoch=10, after_scheduler=scheduler)
-    optimimizer = LARC(optimizer)
+    # scheduler = warmup_scheduler.GradualWarmupScheduler(optimizer, multiplier=1.0, total_epoch=10, after_scheduler=scheduler)
+    #TODO:这个schduler有Bug，无法step更新学习率
+    # optimimizer = LARC(optimizer)
+
+    criterion_center = CenterLoss(num_classes=10, feat_dim=2048, device=device)
+    optimizer_centloss = torch.optim.SGD(criterion_center.parameters(), lr=0.5)
+    scheduler_centerloss = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 200, 300], gamma=0.1, verbose=False)
 
     train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(root=args.dataset_root,
                                                                                    batch_size=args.train_batch_size,
@@ -113,6 +123,13 @@ if __name__ == "__main__":
         root=args.dataset_root,
         batch_size=args.train_batch_size,
     )
+    test_loader2 = dataset_loader[args.dataset].get_test_loader(
+        root=args.dataset_root,
+        batch_size=32,
+        sample_size=5000,
+    )
+    ood_test_loader = svhn.get_test_loader(32,root="../data/",sample_size=1000)
+
 
     # Creating summary writer in tensorboard
     curr_time = datetime.datetime.now()
@@ -131,6 +148,7 @@ if __name__ == "__main__":
     save_config_file(save_loc, args)
 
     best_acc = 0
+    best_distance_ratio = 0 
     for epoch in range(0, args.epoch):
         """
         1. 300epoch 原始单阶段训练crossEntropy
@@ -142,6 +160,8 @@ if __name__ == "__main__":
             net,
             train_loader,
             optimizer,
+            criterion_center,
+            optimizer_centloss,
             device,
             args.contrastive,
             adv=args.adv,
@@ -170,10 +190,41 @@ if __name__ == "__main__":
         #     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 90, 120], gamma=0.1, verbose=False)
 
         scheduler.step()
-        if val_acc > best_acc:
+
+
+        Xs = []
+        ys = []
+        for images, labels in test_loader2:
+            images = images.to(device)
+            _ = net(images)
+            embeddings = net.feature
+            Xs.append(embeddings.cpu().detach().numpy())
+            ys.append(labels.detach().numpy())
+        X = np.concatenate(Xs)
+        y = np.concatenate(ys)
+        distance_ratio = inter_intra_class_ratio(X,y)
+        
+        for images,_ in ood_test_loader:
+            labels = np.ones(images.shape[0])*10 #标记label=10为OOD样本
+            images = images.to(device)
+            _ = net(images)
+            embeddings = net.feature
+            Xs.append(embeddings.cpu().detach().numpy())
+            ys.append(labels)
+    
+
+        if val_acc > best_acc and distance_ratio>best_distance_ratio:
             best_acc = val_acc
             save_path = save_loc + save_name + "_best" + ".model"
             torch.save(net.state_dict(), save_path)
             print("Model saved to ", save_path)
+            
+            X = np.concatenate(Xs)
+            y = np.concatenate(ys)
+            tsne = TSNE(n_components=2, init='pca', perplexity=50, random_state=0)
+            X_tsne = tsne.fit_transform(X)
+            fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},inter_intra_distance_ratio:{distance_ratio:.3f}")
+            fig.savefig(os.path.join(save_loc, f"{epoch}.png"), dpi=300, bbox_inches='tight')
 
     writer.close()
+    create_gif_from_images(save_loc)

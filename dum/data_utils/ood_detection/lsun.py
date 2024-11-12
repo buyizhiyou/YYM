@@ -86,7 +86,7 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_work
     return (train_loader, valid_loader)
 
 
-def get_test_loader(batch_size, num_workers=4, pin_memory=False, size=32,**kwargs):
+def get_test_loader(batch_size, num_workers=4, pin_memory=False, size=32,sample_size=1000,**kwargs):
     """
     Utility function for loading and returning a multi-process
     test iterator over the LSUN dataset.
@@ -124,15 +124,14 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, size=32,**kwarg
     )
 
     num_train = len(dataset)
-    print(f"lsun test:{num_train}")
-    if (num_train >= 1000):
+    if (num_train >= sample_size):
         indices = list(range(num_train))
-        split = 1000
+        split = sample_size
         np.random.seed(1)
         np.random.shuffle(indices)
         valid_idx = indices[:split]
         dataset = Subset(dataset, valid_idx)
-
+        
     data_loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,

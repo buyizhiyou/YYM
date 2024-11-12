@@ -197,8 +197,8 @@ if __name__ == "__main__":
             # ) = test_classification_net_ensemble(t_ensemble, test_loader, device)
             # t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
         else:
-            test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=512, size=224, pin_memory=args.gpu)
-            ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root, batch_size=512, size=224, pin_memory=args.gpu)
+            test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=512, size=32, pin_memory=args.gpu)
+            ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root, batch_size=512, size=32, pin_memory=args.gpu)
             (
                 conf_matrix,
                 accuracy,
@@ -291,17 +291,17 @@ if __name__ == "__main__":
                     # print(f"m1_auroc_adv:{m1_auprc_adv},m1_auprc_adv:{m1_auprc_adv},m2_auroc_adv:{m2_auroc_adv},m2_auprc_adv:{m2_auprc_adv}")
 
                     m2_res = []
-                    for epsilon in [0.0001, 0.0005, 0.0006, 0.0007, 0.0008, 0.0009, 0.001, 0.002, 0.003, 0.004, 0.005, 0.007, 0.01]:
+                    for epsilon in [0.0001, 0.0005, 0.001, 0.002, 0.003, 0.004, 0.005, 0.01]:
                         for temp in [1]:
                             if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
                                 print(f"add noise:{args.perturbation}")
                                 test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root,
                                                                                            batch_size=1,
-                                                                                           size=224,
+                                                                                           size=32,
                                                                                            pin_memory=args.gpu)
                                 ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root,
                                                                                                    batch_size=1,
-                                                                                                   size=224,
+                                                                                                   size=32,
                                                                                                    pin_memory=args.gpu)
 
                                 logits2, labels2, preds2, acc, acc_perturb = gmm_evaluate_with_perturbation(
@@ -348,10 +348,15 @@ if __name__ == "__main__":
                                     storage_device=device,
                                     norm=1,
                                 )
+                            elif args.perturbation == "none":  #不使用扰动
+                                logits2 = logits
+                                ood_logits2 = ood_logits
                             else:
                                 raise ValueError("perturbation is invalid...")
 
-                            if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
+                            if args.perturbation in ["cw", "bim", "fgsm", "pgd","none"]:
+                                # logits2 -= logits
+                                # ood_logits2 -= ood_logits
                                 m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, maxval, device,
                                                                                   conf=True)  #这里使用maxval是求最大logP，使用logsumexp是求平均logP
                             else:
@@ -381,7 +386,7 @@ if __name__ == "__main__":
                     # print(f"m3_auroc:{m3_auroc:.4f},m3_aupr:{m3_auprc:.4f}")
 
                     print(
-                        f"noise-:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"
+                        f"最优noise-:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"
                     )
                 except RuntimeError as e:
                     print("Runtime Error caught: " + str(e))

@@ -20,7 +20,11 @@ class ProjectionHead(nn.Module):
         self.out = nn.Linear(emb_size, head_size)
 
     def forward(self, h: torch.Tensor) -> torch.Tensor:
+        h = F.normalize(h)
         h = self.hidden(h)
         h = F.relu(h)
         h = self.out(h)
+        h = F.normalize(h)
+        
+        
         return h

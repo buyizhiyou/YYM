@@ -18,6 +18,120 @@ from matplotlib.figure import Figure
 from sklearn import metrics
 
 
+import numpy as np
+from scipy.spatial.distance import euclidean
+
+
+import os
+from PIL import Image
+
+def create_gif_from_images(directory,duration=500):
+    """
+    将指定目录中的所有 PNG 图片按文件名顺序合并成 GIF。
+    
+    参数:
+        directory (str): 图片所在目录路径。
+        output_path (str): 输出 GIF 文件的路径。
+        duration (int): 每帧显示的时间（毫秒），默认为 500ms。
+    """
+    images = sorted([f for f in os.listdir(directory) if f.endswith(".png")])
+    
+    if not images:
+        print("目录中没有找到任何 PNG 图片。")
+        return
+    
+    # 打开第一张图片并获取尺寸
+    first_image = Image.open(os.path.join(directory, images[0]))
+    frames = [first_image]
+    first_image_size = first_image.size
+
+    # 打开其他图片并调整为与第一张图片相同的尺寸
+    for img in images[1:]:
+        image = Image.open(os.path.join(directory, img))
+        if image.size != first_image_size:
+            image = image.resize(first_image_size)
+        frames.append(image)
+
+
+    output_path = os.path.join(directory,"res.gif")
+    frames[0].save(output_path, format="GIF", append_images=frames[1:], save_all=True, duration=duration, loop=0)
+    print(f"GIF 已成功保存为 {output_path}")
+
+
+def inter_intra_class_ratio(features, labels):
+    """
+    计算多个类别特征的类间距离比类内距离。
+
+    参数:
+    features: 样本特征矩阵，形状为 (n_samples, n_features)
+    labels: 样本对应的类别标签，长度为 n_samples
+
+    返回:
+    类间距离比类内距离的比值
+    """
+    # 获取唯一类别
+    unique_classes = np.unique(labels)
+    
+    # 存储每个类别的均值向量和类内距离
+    class_means = {}
+    intra_class_distances = []
+
+    # 计算每个类别的均值向量和类内距离
+    for c in unique_classes:
+        class_samples = features[labels == c]  # 获取当前类别的所有样本
+        class_mean = np.mean(class_samples, axis=0)  # 计算均值向量
+        class_means[c] = class_mean  # 存储均值向量
+        
+        # 计算类内距离
+        intra_distance = np.mean([euclidean(sample, class_mean) for sample in class_samples])
+        intra_class_distances.append(intra_distance)
+    
+    # 计算类间距离
+    inter_class_distances = []
+    for i, class1 in enumerate(unique_classes):
+        for class2 in unique_classes[i+1:]:
+            inter_distance = euclidean(class_means[class1], class_means[class2])
+            inter_class_distances.append(inter_distance)
+    
+    # 计算类间距离的平均值和类内距离的平均值
+    inter_class_distance_avg = np.mean(inter_class_distances)
+    intra_class_distance_avg = np.mean(intra_class_distances)
+    
+    # 计算类间距离比类内距离的比值
+    ratio = inter_class_distance_avg / intra_class_distance_avg if intra_class_distance_avg > 0 else np.inf
+    return ratio
+
+
+def plot_embedding_2d(X, y, num_classes, title):
+    x_min, x_max = np.min(X, 0), np.max(X, 0)
+    # X = (X - x_min) / (x_max - x_min)
+    
+    fig, axes = plt.subplots(1,2, figsize=(20, 10))
+    fig.suptitle(title, fontsize=16)  # 设置整个图像的标题
+
+    
+    # plt.scatter(X[:,0], X[:,1], c = y, s = 5, cmap = plt.cm.Spectral)
+
+    cmap = plt.get_cmap('tab20')
+    colors = []
+    for i in range(13):
+        colors.append(np.array(cmap(i)).reshape(1,-1))
+
+    for i in range(num_classes):  # 对每类的数据画上特定颜色的点
+        index = (y == i)
+        axes[0].scatter(X[index, 0], X[index, 1], s=3, c=colors[i])
+    axes[0].legend([i for i in range(num_classes)])
+    for i in range(num_classes+1):  # 对每类的数据画上特定颜色的点
+        index = (y == i)
+        axes[1].scatter(X[index, 0], X[index, 1], s=3, c=colors[i])
+    axes[1].legend([i for i in range(num_classes+1)])
+    
+    
+    plt.tight_layout()
+    
+    return fig
+
+
 def plot_pr(ax: Axes, y_true: list, y_score: list, label: str = None):
     """绘制PR曲线
 
