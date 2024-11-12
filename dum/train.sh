@@ -64,7 +64,7 @@ if [ -z "$adv" ]; then
        exit 1
 fi
 
-for i in {1..5}; do
+for i in {1..1}; do
        echo "训练第$i次"
        python train.py \
               --seed 1 \

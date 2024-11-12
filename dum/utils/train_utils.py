@@ -52,7 +52,7 @@ def train_single_epoch(
     std = [0.2023, 0.1994, 0.2010]
     std = torch.tensor(std).to(device)
     mean = torch.tensor(mean).to(device)
-    weight_center = 0.01   
+    weight_center = 0.1   
 
 
     if contrastive:
@@ -172,6 +172,7 @@ def train_single_epoch(
         else:
             logits = model(data)
             loss1 = loss_func(logits, labels)
+            loss2 = torch.zeros(1)
             loss = loss1
 
             acc1, _ = accuracy(logits, labels, (1, 5))
@@ -179,9 +180,10 @@ def train_single_epoch(
 
         loss.backward()
         optimizer.step()
-        for param in criterion_center.parameters():
-            param.grad.data *= (1. / weight_center)
-        optimizer_centloss.step()
+        if contrastive==3:
+            for param in criterion_center.parameters():
+                param.grad.data *= (1. / weight_center)
+            optimizer_centloss.step()
 
         train_loss += loss.item()
         train_loss1 += loss1.item()

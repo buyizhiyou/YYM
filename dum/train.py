@@ -99,6 +99,7 @@ if __name__ == "__main__":
     # 学习率schduler
     # import pdb;pdb.set_trace()
     if args.scheduler == "step":
+        #[0.3 * args.epoch, 0.6 * args.epoch, 0.9 * args.epoch]
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 150, 200,250], gamma=0.1, verbose=False)
     elif args.scheduler == "cos":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=300, eta_min=1e-7, verbose=False)
@@ -128,7 +129,7 @@ if __name__ == "__main__":
         batch_size=32,
         sample_size=5000,
     )
-    ood_test_loader = svhn.get_test_loader(32,root="../data/",sample_size=1000)
+    ood_test_loader = svhn.get_test_loader(32,root="./data/",sample_size=1000)
 
 
     # Creating summary writer in tensorboard
@@ -212,19 +213,31 @@ if __name__ == "__main__":
             Xs.append(embeddings.cpu().detach().numpy())
             ys.append(labels)
     
-
-        if val_acc > best_acc and distance_ratio>best_distance_ratio:
-            best_acc = val_acc
-            save_path = save_loc + save_name + "_best" + ".model"
-            torch.save(net.state_dict(), save_path)
-            print("Model saved to ", save_path)
-            
+        if epoch<250:
+            if val_acc > best_acc and distance_ratio>best_distance_ratio:
+                best_acc = val_acc
+                save_path = save_loc + save_name + "_best" + ".model"
+                torch.save(net.state_dict(), save_path)
+                print("Model saved to ", save_path)
+                
+                X = np.concatenate(Xs)
+                y = np.concatenate(ys)
+                tsne = TSNE(n_components=2, init='pca', perplexity=50, random_state=0)
+                X_tsne = tsne.fit_transform(X)
+                fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},inter_intra_distance_ratio:{distance_ratio:.3f}")
+                fig.savefig(os.path.join(save_loc, f"{epoch}.png"), dpi=300, bbox_inches='tight')
+        else: #在最后50个epoch,acc已经基本平直,所以按照distance_ratio筛选最好的模型
             X = np.concatenate(Xs)
             y = np.concatenate(ys)
             tsne = TSNE(n_components=2, init='pca', perplexity=50, random_state=0)
             X_tsne = tsne.fit_transform(X)
             fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},inter_intra_distance_ratio:{distance_ratio:.3f}")
             fig.savefig(os.path.join(save_loc, f"{epoch}.png"), dpi=300, bbox_inches='tight')
+            
+            if distance_ratio>best_distance_ratio:
+                save_path = save_loc + save_name + "_best_discrimitive" + ".model"
+                torch.save(net.state_dict(), save_path)
+                print("Model saved to ", save_path)
 
     writer.close()
     create_gif_from_images(save_loc)
