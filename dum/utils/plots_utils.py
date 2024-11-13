@@ -34,7 +34,7 @@ def create_gif_from_images(directory,duration=500):
         output_path (str): 输出 GIF 文件的路径。
         duration (int): 每帧显示的时间（毫秒），默认为 500ms。
     """
-    images = sorted([f for f in os.listdir(directory) if f.endswith(".png")])
+    images = sorted([f for f in os.listdir(directory) if f.endswith(".png")],key=lambda x: int(x.split(".")[0]))
     
     if not images:
         print("目录中没有找到任何 PNG 图片。")
@@ -43,18 +43,21 @@ def create_gif_from_images(directory,duration=500):
     # 打开第一张图片并获取尺寸
     first_image = Image.open(os.path.join(directory, images[0]))
     frames = [first_image]
-    first_image_size = first_image.size
+    import pdb;pdb.set_trace()
+    # first_image_size = first_image.size
+    image_size = (800,400)
+    image = image.resize(image_size)
 
     # 打开其他图片并调整为与第一张图片相同的尺寸
     for img in images[1:]:
         image = Image.open(os.path.join(directory, img))
-        if image.size != first_image_size:
-            image = image.resize(first_image_size)
+        if image.size != image_size:
+            image = image.resize(image_size)
         frames.append(image)
 
 
     output_path = os.path.join(directory,"res.gif")
-    frames[0].save(output_path, format="GIF", append_images=frames[1:], save_all=True, duration=duration, loop=0)
+    frames[0].save(output_path, format="GIF", append_images=frames[1:], save_all=True, duration=duration, loop=1)
     print(f"GIF 已成功保存为 {output_path}")
 
 

@@ -11,6 +11,8 @@ dum/saved_models
 dum/data
 dum/logs
 dum/results
+dum/.ipynb_checkpoints/
+dum/utils/.ipynb_checkpoints/
 dum/utils/*.pth
 dum/notebooks/pngs/
 dum/_cache_datalsuntestlmdb

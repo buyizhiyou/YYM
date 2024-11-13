@@ -127,7 +127,7 @@ if __name__ == "__main__":
     test_loader2 = dataset_loader[args.dataset].get_test_loader(
         root=args.dataset_root,
         batch_size=32,
-        sample_size=5000,
+        sample_size=10000,
     )
     ood_test_loader = svhn.get_test_loader(32,root="./data/",sample_size=1000)
 
