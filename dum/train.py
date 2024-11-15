@@ -49,6 +49,37 @@ dataset_loader = {
 
 models = {"lenet": lenet, "resnet18": resnet18, "resnet50": resnet50, "wide_resnet": wrn, "vgg16": vgg16, "vit": vit}
 
+import numpy as np
+from scipy.stats import chi2
+from scipy.stats import shapiro
+
+def mahalanobis_distance_test(all_data,lables,num_classes=10):
+    #p值越高，数据符合正态分布的可能性越高。正太性检验
+    all_p_values = []
+    for i in range(num_classes):
+        data = all_data[labels==i]
+
+        mean = np.mean(data, axis=0)
+        cov = np.cov(data, rowvar=False)
+        # 计算每个样本的马氏距离
+        inv_covmat = np.linalg.inv(cov)
+        distances = []
+        for x in data:
+            delta = x - mean
+            dist = np.sqrt(delta @ inv_covmat @ delta.T)
+            distances.append(dist ** 2)  # 平方距离，服从卡方分布
+        
+        # 进行卡方检验
+        df = data.shape[1]  # 自由度为数据维数
+        p_values = [1 - chi2.cdf(d, df) for d in distances]
+        p_value = np.mean(p_values)
+        all_p_values.append(p_value)
+    
+
+    return sum(all_p_values)/len(all_p_values)
+
+
+
 # torch.backends.cudnn.benchmark = False
 if __name__ == "__main__":
     # print(os.environ)
@@ -100,7 +131,7 @@ if __name__ == "__main__":
     # import pdb;pdb.set_trace()
     if args.scheduler == "step":
         #[0.3 * args.epoch, 0.6 * args.epoch, 0.9 * args.epoch]
-        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 150, 200,250], gamma=0.1, verbose=False)
+        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 150, 200,230], gamma=0.1, verbose=False)
     elif args.scheduler == "cos":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=300, eta_min=1e-7, verbose=False)
 
@@ -127,9 +158,9 @@ if __name__ == "__main__":
     test_loader2 = dataset_loader[args.dataset].get_test_loader(
         root=args.dataset_root,
         batch_size=32,
-        sample_size=10000,
+        sample_size=100000,
     )
-    ood_test_loader = svhn.get_test_loader(32,root="./data/",sample_size=1000)
+    ood_test_loader = svhn.get_test_loader(32,root="./data/",sample_size=10000)
 
 
     # Creating summary writer in tensorboard
@@ -150,6 +181,7 @@ if __name__ == "__main__":
 
     best_acc = 0
     best_distance_ratio = 0 
+    best_p_value = 0
     for epoch in range(0, args.epoch):
         """
         1. 300epoch 原始单阶段训练crossEntropy
@@ -191,30 +223,29 @@ if __name__ == "__main__":
         #     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 90, 120], gamma=0.1, verbose=False)
 
         scheduler.step()
-
-
-        Xs = []
-        ys = []
-        for images, labels in test_loader2:
-            images = images.to(device)
-            _ = net(images)
-            embeddings = net.feature
-            Xs.append(embeddings.cpu().detach().numpy())
-            ys.append(labels.detach().numpy())
-        X = np.concatenate(Xs)
-        y = np.concatenate(ys)
-        distance_ratio = inter_intra_class_ratio(X,y)
         
-        for images,_ in ood_test_loader:
-            labels = np.ones(images.shape[0])*10 #标记label=10为OOD样本
-            images = images.to(device)
-            _ = net(images)
-            embeddings = net.feature
-            Xs.append(embeddings.cpu().detach().numpy())
-            ys.append(labels)
-    
         if epoch<250:
-            if val_acc > best_acc and distance_ratio>best_distance_ratio:
+            if val_acc > best_acc:
+                Xs = []
+                ys = []
+                for images, labels in test_loader2:
+                    images = images.to(device)
+                    _ = net(images)
+                    embeddings = net.feature
+                    Xs.append(embeddings.cpu().detach().numpy())
+                    ys.append(labels.detach().numpy())
+                X = np.concatenate(Xs)
+                y = np.concatenate(ys)
+                distance_ratio = inter_intra_class_ratio(X,y)
+                
+                for images,_ in ood_test_loader:
+                    labels = np.ones(images.shape[0])*10 #标记label=10为OOD样本
+                    images = images.to(device)
+                    _ = net(images)
+                    embeddings = net.feature
+                    Xs.append(embeddings.cpu().detach().numpy())
+                    ys.append(labels)
+    
                 best_acc = val_acc
                 save_path = save_loc + save_name + "_best" + ".model"
                 torch.save(net.state_dict(), save_path)
@@ -227,6 +258,27 @@ if __name__ == "__main__":
                 fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},inter_intra_distance_ratio:{distance_ratio:.3f}")
                 fig.savefig(os.path.join(save_loc, f"{epoch}.png"), dpi=300, bbox_inches='tight')
         else: #在最后50个epoch,acc已经基本平直,所以按照distance_ratio筛选最好的模型
+            Xs = []
+            ys = []
+            for images, labels in test_loader2:
+                images = images.to(device)
+                _ = net(images)
+                embeddings = net.feature
+                Xs.append(embeddings.cpu().detach().numpy())
+                ys.append(labels.detach().numpy())
+            X = np.concatenate(Xs)
+            y = np.concatenate(ys)
+            distance_ratio = inter_intra_class_ratio(X,y)
+            p_value = mahalanobis_distance_test(X,y)
+            
+            for images,_ in ood_test_loader:
+                labels = np.ones(images.shape[0])*10 #标记label=10为OOD样本
+                images = images.to(device)
+                _ = net(images)
+                embeddings = net.feature
+                Xs.append(embeddings.cpu().detach().numpy())
+                ys.append(labels)
+    
             X = np.concatenate(Xs)
             y = np.concatenate(ys)
             tsne = TSNE(n_components=2, init='pca', perplexity=50, random_state=0)
@@ -235,9 +287,18 @@ if __name__ == "__main__":
             fig.savefig(os.path.join(save_loc, f"{epoch}.png"), dpi=300, bbox_inches='tight')
             
             if distance_ratio>best_distance_ratio:
+                best_distance_ratio = distance_ratio
                 save_path = save_loc + save_name + "_best_discrimitive" + ".model"
                 torch.save(net.state_dict(), save_path)
                 print("Model saved to ", save_path)
+                
+            if p_value >best_p_value:
+                best_p_value = p_value
+                save_path = save_loc + save_name + "_best_gaussian" + ".model"
+                torch.save(net.state_dict(), save_path)
+                print("Model saved to ", save_path)
+                fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},p_value:{p_value:.3f}")
+                fig.savefig(os.path.join(save_loc, f"{epoch}.jpg"), dpi=300, bbox_inches='tight')#使用Jpg,区分生成gif的Png图片
 
     writer.close()
     create_gif_from_images(save_loc)

@@ -151,6 +151,11 @@ class CenterLoss(nn.Module):
             x: feature matrix with shape (batch_size, feat_dim).
             labels: ground truth labels with shape (batch_size).
         """
+        # center = self.centers[labels]
+        # dist = (x-center).pow(2).sum(dim=-1)
+        # loss = torch.clamp(dist, min=1e-12, max=1e+12).mean(dim=-1)
+
+
         # 下面的代码计算类内距离（与中心的距离）
         batch_size = x.size(0)
         distmat = torch.pow(x, 2).sum(dim=1, keepdim=True).expand(batch_size, self.num_classes) + \
@@ -205,15 +210,8 @@ class CenterLoss(nn.Module):
         
         return loss
 
+
 # class CenterLoss(nn.Module):
-#     """https://github.com/jxgu1016/MNIST_center_loss_pytorch/tree/master
-
-#     By dropping the bias of the last fc layer according to the issue, the centers tend to distribute around a circle as reported in the orignal paper.
-
-#     Args:
-#         nn (_type_): _description_
-#     """
-
 #     def __init__(self, num_classes, feat_dim, size_average=True):
 #         super(CenterLoss, self).__init__()
 #         self.centers = nn.Parameter(torch.randn(num_classes, feat_dim))
@@ -227,28 +225,18 @@ class CenterLoss(nn.Module):
 #         # To check the dim of centers and features
 #         if feat.size(1) != self.feat_dim:
 #             raise ValueError("Center's dim: {0} should be equal to input feature's \
-#                             dim: {1}".format(self.feat_dim, feat.size(1)))
-
-#         batch_size_tensor = feat.new_empty(1).fill_(
-#             batch_size if self.size_average else 1)  #new_empty返回一个大小为 size 的张量，其中填充了未初始化的数据。默认情况下，返回的张量与此张量具有相同的 torch.dtype 和 torch.device 。
-#         loss = self.centerlossfunc(feat, label, self.centers.to(feat.device), batch_size_tensor)
+#                             dim: {1}".format(self.feat_dim,feat.size(1)))
+#         batch_size_tensor = feat.new_empty(1).fill_(batch_size if self.size_average else 1)
+#         loss = self.centerlossfunc(feat, label, self.centers, batch_size_tensor)
 #         return loss
 
 
 # class CenterlossFunc(Function):
-
 #     @staticmethod
 #     def forward(ctx, feature, label, centers, batch_size):
 #         ctx.save_for_backward(feature, label, centers, batch_size)
-
 #         centers_batch = centers.index_select(0, label.long())
-#         dist1 = (feature - centers_batch).pow(2).sum() / 2.0 / batch_size  #类内最小
-#         #类间最大
-#         centers2 = centers.reshape(centers.shape[0], 1, centers.shape[1])
-#         dist2 = (centers - centers2).pow(2).sum() / 2.0 / batch_size
-#         loss = dist1 / (dist2 + 1e-17)
-
-#         return loss
+#         return (feature - centers_batch).pow(2).sum() / 2.0 / batch_size
 
 #     @staticmethod
 #     def backward(ctx, grad_output):
@@ -262,8 +250,8 @@ class CenterLoss(nn.Module):
 
 #         counts = counts.scatter_add_(0, label.long(), ones)
 #         grad_centers.scatter_add_(0, label.unsqueeze(1).expand(feature.size()).long(), diff)
-#         grad_centers = grad_centers / counts.view(-1, 1)
-#         return -grad_output * diff / batch_size, None, grad_centers / batch_size, None
+#         grad_centers = grad_centers/counts.view(-1, 1)
+#         return - grad_output * diff / batch_size, None, grad_centers / batch_size, None
 
 
 def supervisedContrastiveLoss(representations, labels, device, temperature=0.5):

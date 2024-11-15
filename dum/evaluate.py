@@ -114,6 +114,8 @@ if __name__ == "__main__":
 
     if len(model_files) == 0:
         exit()
+    
+    # model_files = ["/home/sq/YYM/dum/saved_models/run30/resnet50_sn_3.0_mod_seed_1_contrastive3/2024_11_12_19_37_09/resnet50_sn_3.0_mod_seed_1_contrastive3_best_discrimitive.model"]
     for i, saved_model_name in enumerate(model_files):
         # saved_model_name = "/home/sq/YYM/dum/saved_models/run1/2024_03_07_21_49_57/vgg16_seed_1_best.model"
         print(f"Run {args.run},OOD dataset {args.ood_dataset} Evaluating for {i}/{len(model_files)}: {saved_model_name}")
@@ -226,6 +228,7 @@ if __name__ == "__main__":
                 # Evaluate a GMM model
                 print("GMM Model")
                 cache_path = re.sub(r"[^/]*_best.model", "cache", saved_model_name)
+                # cache_path = "fdaf"
 
                 if os.path.exists(cache_path):
                     print(f"load cache from {cache_path}")

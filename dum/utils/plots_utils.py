@@ -46,7 +46,7 @@ def create_gif_from_images(directory,duration=500):
     import pdb;pdb.set_trace()
     # first_image_size = first_image.size
     image_size = (800,400)
-    image = image.resize(image_size)
+    image = first_image.resize(image_size)
 
     # 打开其他图片并调整为与第一张图片相同的尺寸
     for img in images[1:]:
