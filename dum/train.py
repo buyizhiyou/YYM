@@ -37,6 +37,7 @@ from utils.lars import LARC
 from utils.eval_utils import get_eval_stats
 from utils.train_utils import (model_save_name, save_config_file, test_single_epoch, train_single_epoch)
 from utils.plots_utils import plot_embedding_2d, inter_intra_class_ratio, create_gif_from_images
+from utils.normality_test import normality_score
 
 dataset_num_classes = {"cifar10": 10, "cifar100": 100, "svhn": 10, "dirty_mnist": 10}
 
@@ -48,36 +49,6 @@ dataset_loader = {
 }
 
 models = {"lenet": lenet, "resnet18": resnet18, "resnet50": resnet50, "wide_resnet": wrn, "vgg16": vgg16, "vit": vit}
-
-import numpy as np
-from scipy.stats import chi2
-from scipy.stats import shapiro
-
-def mahalanobis_distance_test(all_data,lables,num_classes=10):
-    #p值越高，数据符合正态分布的可能性越高。正太性检验
-    all_p_values = []
-    for i in range(num_classes):
-        data = all_data[labels==i]
-
-        mean = np.mean(data, axis=0)
-        cov = np.cov(data, rowvar=False)
-        # 计算每个样本的马氏距离
-        inv_covmat = np.linalg.inv(cov)
-        distances = []
-        for x in data:
-            delta = x - mean
-            dist = np.sqrt(delta @ inv_covmat @ delta.T)
-            distances.append(dist ** 2)  # 平方距离，服从卡方分布
-        
-        # 进行卡方检验
-        df = data.shape[1]  # 自由度为数据维数
-        p_values = [1 - chi2.cdf(d, df) for d in distances]
-        p_value = np.mean(p_values)
-        all_p_values.append(p_value)
-    
-
-    return sum(all_p_values)/len(all_p_values)
-
 
 
 # torch.backends.cudnn.benchmark = False
@@ -160,7 +131,7 @@ if __name__ == "__main__":
         batch_size=32,
         sample_size=100000,
     )
-    ood_test_loader = svhn.get_test_loader(32,root="./data/",sample_size=10000)
+    ood_test_loader = svhn.get_test_loader(32,root="./data/",sample_size=2000)
 
 
     # Creating summary writer in tensorboard
@@ -182,6 +153,7 @@ if __name__ == "__main__":
     best_acc = 0
     best_distance_ratio = 0 
     best_p_value = 0
+    best_stats = 1e10
     for epoch in range(0, args.epoch):
         """
         1. 300epoch 原始单阶段训练crossEntropy
@@ -224,7 +196,7 @@ if __name__ == "__main__":
 
         scheduler.step()
         
-        if epoch<250:
+        if epoch<000:
             if val_acc > best_acc:
                 Xs = []
                 ys = []
@@ -269,7 +241,7 @@ if __name__ == "__main__":
             X = np.concatenate(Xs)
             y = np.concatenate(ys)
             distance_ratio = inter_intra_class_ratio(X,y)
-            p_value = mahalanobis_distance_test(X,y)
+            p_value,stats = normality_score(X,y)
             
             for images,_ in ood_test_loader:
                 labels = np.ones(images.shape[0])*10 #标记label=10为OOD样本
@@ -284,21 +256,34 @@ if __name__ == "__main__":
             tsne = TSNE(n_components=2, init='pca', perplexity=50, random_state=0)
             X_tsne = tsne.fit_transform(X)
             fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},inter_intra_distance_ratio:{distance_ratio:.3f}")
-            fig.savefig(os.path.join(save_loc, f"{epoch}.png"), dpi=300, bbox_inches='tight')
-            
+            fig.savefig(os.path.join(save_loc, f"distace_ratio_{epoch}.png"), dpi=300, bbox_inches='tight')
+            fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},p_value:{p_value:.3f}")
+            fig.savefig(os.path.join(save_loc, f"pvalue_{epoch}.jpg"), dpi=300, bbox_inches='tight')
+            fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},stats:{stats:.3f}")
+            fig.savefig(os.path.join(save_loc, f"stats_{epoch}.jpg"), dpi=300, bbox_inches='tight')
+
             if distance_ratio>best_distance_ratio:
                 best_distance_ratio = distance_ratio
                 save_path = save_loc + save_name + "_best_discrimitive" + ".model"
                 torch.save(net.state_dict(), save_path)
-                print("Model saved to ", save_path)
+                print("best discrimitive model saved to ", save_path)
                 
-            if p_value >best_p_value:
+            if p_value > best_p_value:
                 best_p_value = p_value
-                save_path = save_loc + save_name + "_best_gaussian" + ".model"
+                save_path = save_loc + save_name + "_best_gaussian_pvalue" + ".model"
                 torch.save(net.state_dict(), save_path)
-                print("Model saved to ", save_path)
-                fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},p_value:{p_value:.3f}")
-                fig.savefig(os.path.join(save_loc, f"{epoch}.jpg"), dpi=300, bbox_inches='tight')#使用Jpg,区分生成gif的Png图片
+                print("best gaussian model saved to ", save_path)
+
+            if stats < best_stats:
+                best_stats = stats
+                save_path = save_loc + save_name + "_best_gaussian_stats" + ".model"
+                torch.save(net.state_dict(), save_path)
+                print("best gaussian Model saved to ", save_path)
+            
+            save_path = save_loc + save_name + f"_epoch{epoch}" + ".model"
+            torch.save(net.state_dict(), save_path)
+
+
 
     writer.close()
     create_gif_from_images(save_loc)

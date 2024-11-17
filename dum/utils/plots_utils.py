@@ -43,7 +43,6 @@ def create_gif_from_images(directory,duration=500):
     # 打开第一张图片并获取尺寸
     first_image = Image.open(os.path.join(directory, images[0]))
     frames = [first_image]
-    import pdb;pdb.set_trace()
     # first_image_size = first_image.size
     image_size = (800,400)
     image = first_image.resize(image_size)
@@ -131,7 +130,7 @@ def plot_embedding_2d(X, y, num_classes, title):
     
     
     plt.tight_layout()
-    
+
     return fig
 
 

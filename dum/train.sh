@@ -2,7 +2,7 @@
 
 echo "###########  Evaluate with sn and mod;
 ###########  Usage:
-###########   ./train.sh --gpu  0 --run 17 --batchsize 1024 --epochs 300 --model  vgg16 --contrastive 0 --adv 0"
+###########   ./train.sh --gpu  0 --run 17 --batchsize 512 --epochs 400 --model  resnet50 --contrastive 0 --adv 0"
 # 解析命令行参数
 options=$(getopt -o g:r:b:e:m:c:a --long gpu:,run:,batchsize:,epochs:,model:,contrastive:,adv:, -- "$@")
 eval set -- "$options"
@@ -64,7 +64,7 @@ if [ -z "$adv" ]; then
        exit 1
 fi
 
-for i in {1..1}; do
+for i in {1..5}; do
        echo "训练第$i次"
        python train.py \
               --seed 1 \
