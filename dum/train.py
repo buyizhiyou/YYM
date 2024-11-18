@@ -196,7 +196,7 @@ if __name__ == "__main__":
 
         scheduler.step()
         
-        if epoch<000:
+        if epoch<300:
             if val_acc > best_acc:
                 Xs = []
                 ys = []
@@ -257,8 +257,7 @@ if __name__ == "__main__":
             X_tsne = tsne.fit_transform(X)
             fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},inter_intra_distance_ratio:{distance_ratio:.3f}")
             fig.savefig(os.path.join(save_loc, f"distace_ratio_{epoch}.png"), dpi=300, bbox_inches='tight')
-            fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},p_value:{p_value:.3f}")
-            fig.savefig(os.path.join(save_loc, f"pvalue_{epoch}.jpg"), dpi=300, bbox_inches='tight')
+
             fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},stats:{stats:.3f}")
             fig.savefig(os.path.join(save_loc, f"stats_{epoch}.jpg"), dpi=300, bbox_inches='tight')
 
@@ -268,11 +267,6 @@ if __name__ == "__main__":
                 torch.save(net.state_dict(), save_path)
                 print("best discrimitive model saved to ", save_path)
                 
-            if p_value > best_p_value:
-                best_p_value = p_value
-                save_path = save_loc + save_name + "_best_gaussian_pvalue" + ".model"
-                torch.save(net.state_dict(), save_path)
-                print("best gaussian model saved to ", save_path)
 
             if stats < best_stats:
                 best_stats = stats

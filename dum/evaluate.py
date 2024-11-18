@@ -113,9 +113,10 @@ if __name__ == "__main__":
         model_files = sorted(glob.glob(f"{args.load_loc}/run{args.run}/{save_name}/*/{model_name}"))
 
     if len(model_files) == 0:
+        print("no model files in current config")
         exit()
     
-    model_files = ["/home/sq/YYM/dum/saved_models/run31/resnet50_sn_3.0_mod_seed_1/2024_11_17_12_51_30/resnet50_sn_3.0_mod_seed_1_best_gaussian_stats.model"]
+    model_files = ["/home/sq/YYM/dum/saved_models/run31/resnet50_sn_3.0_mod_seed_1/2024_11_17_22_18_14/resnet50_sn_3.0_mod_seed_1_best_gaussian_stats.model"]
     for i, saved_model_name in enumerate(model_files):
         # saved_model_name = "/home/sq/YYM/dum/saved_models/run1/2024_03_07_21_49_57/vgg16_seed_1_best.model"
         print(f"Run {args.run},OOD dataset {args.ood_dataset} Evaluating for {i}/{len(model_files)}: {saved_model_name}")
@@ -227,10 +228,9 @@ if __name__ == "__main__":
             if (args.evaltype == "gmm"):
                 # Evaluate a GMM model
                 print("GMM Model")
-                # cache_path = re.sub(r"[^/]*_best.model", "cache", saved_model_name)
-                cache_path = "fdaf"
-
-                if os.path.exists(cache_path):
+                cache_path = re.sub(r"[^/]*_best.model", "cache", saved_model_name)
+                load_cache = False
+                if load_cache and os.path.exists(cache_path):
                     print(f"load cache from {cache_path}")
                     with open(cache_path, 'rb') as file:
                         cache = pkl.load(file)
