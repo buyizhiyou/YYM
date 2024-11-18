@@ -227,8 +227,8 @@ if __name__ == "__main__":
                 y = np.concatenate(ys)
                 tsne = TSNE(n_components=2, init='pca', perplexity=50, random_state=0)
                 X_tsne = tsne.fit_transform(X)
-                fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},inter_intra_distance_ratio:{distance_ratio:.3f}")
-                fig.savefig(os.path.join(save_loc, f"{epoch}.png"), dpi=300, bbox_inches='tight')
+                # fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},inter_intra_distance_ratio:{distance_ratio:.3f}")
+                # fig.savefig(os.path.join(save_loc, f"{epoch}.png"), dpi=300, bbox_inches='tight')
         else: #在最后50个epoch,acc已经基本平直,所以按照distance_ratio筛选最好的模型
             Xs = []
             ys = []
@@ -267,12 +267,11 @@ if __name__ == "__main__":
                 torch.save(net.state_dict(), save_path)
                 print("best discrimitive model saved to ", save_path)
                 
-
             if stats < best_stats:
                 best_stats = stats
                 save_path = save_loc + save_name + "_best_gaussian_stats" + ".model"
                 torch.save(net.state_dict(), save_path)
-                print("best gaussian Model saved to ", save_path)
+                print("best gaussian model saved to ", save_path)
             
             save_path = save_loc + save_name + f"_epoch{epoch}" + ".model"
             torch.save(net.state_dict(), save_path)

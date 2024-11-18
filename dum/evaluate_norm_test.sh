@@ -1,7 +1,7 @@
 #! /bin/bash
 echo "###########  Evaluate with sn and mod;
 ###########  Usage:
-###########   ./evaluate.sh --gpu  0 --run 17 --batchsize 512 --evaltype gmm --ooddataset svhn --model resnet50  --perturbation fgsm --contrastive 0 --adv 0"
+###########   ./evaluate_norm_test.sh --gpu  0 --run 17 --batchsize 512 --evaltype gmm --ooddataset svhn --model resnet50  --perturbation fgsm --contrastive 0 --adv 0"
 
 # 解析命令行参数
 options=$(getopt -o g:r:b:t:d:m:c:a --long gpu:,run:,batchsize:,evaltype:,ooddataset:,model:,perturbation:,contrastive:,adv:, -- "$@")
@@ -86,7 +86,7 @@ fi
 
 if [[ "$ooddataset" = "all" ]]; then
        for ood in ${ooddatasets[@]}; do
-              python evaluate.py \
+              python evaluate_norm_test.py \
                      --seed 1 \
                      -b $batchsize \
                      --gpu $gpu \
@@ -103,7 +103,7 @@ if [[ "$ooddataset" = "all" ]]; then
                      -sn
        done
 else
-       python evaluate.py \
+       python evaluate_norm_test.py \
               --seed 1 \
               -b $batchsize \
               --gpu $gpu \
