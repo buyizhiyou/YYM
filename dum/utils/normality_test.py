@@ -19,7 +19,7 @@ from sklearn.decomposition import PCA
 from pingouin import multivariate_normality
 
 
-def energy_test(data, alpha=0.05):
+def energy_normality_test(data, alpha=0.05):
     # Step 1: Center the data
     n = len(data)
     mean_data = np.mean(data)
@@ -37,26 +37,23 @@ def energy_test(data, alpha=0.05):
 
     # # Step 5: Compare the test statistic with the expected energy
     # # We can use a Chi-squared distribution approximation for the energy statistic under H0.
-    # p_value = 1 - norm.cdf(np.sqrt(energy_stat / expected_energy))
+    p_value = 1 - norm.cdf(np.sqrt(energy_stat / expected_energy))
 
-    # print(f"P-value: {p_value:.4f}")
-    # print(f"energy-value: {p_value:.4f}")
-
-    return energy_stat
+    return p_value, energy_stat
 
 
 # 方法1：逐维正态性检测
 def univariate_normality_test(data):
     """逐维检测正态性"""
     results = []
-    stats =  []
+    stats = []
     for i in range(data.shape[1]):
-        stat, p_value = normaltest(data[:,i])  # D’Agostino’s K^2 Test
+        stat, p_value = normaltest(data[:, i])  # D’Agostino’s K^2 Test
         results.append(p_value)
         stats.append(stat)
     mean_p_value = np.mean(results)
     mean_stat = np.mean(stats)
-    
+
     return mean_p_value, mean_stat
 
 
@@ -66,7 +63,7 @@ def pca_and_multivariate_normality_test(data, n_components=10):
     pca = PCA(n_components=n_components)
     reduced_data = pca.fit_transform(data)
     stat, p_value, normal = multivariate_normality(reduced_data, alpha=0.05)
-    
+
     return p_value, stat
 
 
@@ -74,7 +71,7 @@ def pca_and_multivariate_normality_test(data, n_components=10):
 def random_projection_normality_test(data, n_samples=100, n_features=10):
     """随机投影后检测正态性"""
     random_indices = np.random.choice(data.shape[1], n_features, replace=False)
-    sampled_data = data[:,random_indices]
+    sampled_data = data[:, random_indices]
 
     return univariate_normality_test(sampled_data)
 
@@ -86,12 +83,14 @@ def normality_score(all_data, labels, method="univariate", num_classes=10):
     for i in range(num_classes):
         data = all_data[labels == i]
 
-        if method=="pca":
+        if method == "pca":
             p_value, stats = pca_and_multivariate_normality_test(data)
-        elif method=="univariate":
+        elif method == "univariate":
             p_value, stats = univariate_normality_test(data)
-        elif method=="random":
-            p_value,stats = random_projection_normality_test(data)
+        elif method == "random":
+            p_value, stats = random_projection_normality_test(data)
+        elif method == "energy":
+            p_value, stats = energy_normality_test(data)
         else:
             print("wrong method for normality detection")
             exit()

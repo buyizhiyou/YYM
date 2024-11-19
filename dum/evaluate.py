@@ -116,7 +116,7 @@ if __name__ == "__main__":
         print("no model files in current config")
         exit()
     
-    model_files = ["/home/sq/YYM/dum/saved_models/run31/resnet50_sn_3.0_mod_seed_1/2024_11_18_10_42_16/resnet50_sn_3.0_mod_seed_1_best_gaussian_stats.model"]
+    # model_files = ["/home/sq/YYM/dum/saved_models/run31/resnet50_sn_3.0_mod_seed_1/2024_11_18_10_42_16/resnet50_sn_3.0_mod_seed_1_best_gaussian_stats.model"]
     for i, saved_model_name in enumerate(model_files):
         # saved_model_name = "/home/sq/YYM/dum/saved_models/run1/2024_03_07_21_49_57/vgg16_seed_1_best.model"
         print(f"Run {args.run},OOD dataset {args.ood_dataset} Evaluating for {i}/{len(model_files)}: {saved_model_name}")
@@ -148,7 +148,7 @@ if __name__ == "__main__":
                 batch_size=args.batch_size,
                 augment=args.data_aug,  #False
                 val_seed=(args.seed),
-                val_size=0.0, #这里0.1改为0.0，不确定会有什么影响
+                val_size=0.0, #这里0.1改为0.0
                 pin_memory=args.gpu,
             )
 

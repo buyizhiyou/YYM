@@ -75,7 +75,7 @@ else
        echo "###########  $evaltype is not in the evaltypes [gmm,kde,ensemble]"
 fi
 #check ooddataset
-ooddatasets=("tiny_imagenet" "mnist")
+ooddatasets=("tiny_imagenet" "mnist" "lsun" "svhn" "cifar100")
 #check model
 models=("vgg16" "resnet50" "wide_resnet","vit")
 if [[ " ${models[@]}" =~ "$model" ]]; then

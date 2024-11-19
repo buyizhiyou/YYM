@@ -126,14 +126,6 @@ if __name__ == "__main__":
         root=args.dataset_root,
         batch_size=args.train_batch_size,
     )
-    train_loader2, _ = cifar10.get_train_valid_loader(root=args.dataset_root,
-                                                                                   batch_size=32,
-                                                                                   augment=False,
-                                                                                   val_size=0.,
-                                                                                   val_seed=args.seed,
-                                                                                   pin_memory=args.gpu,
-                                                                                   contrastive=args.contrastive)
-    ood_test_loader = svhn.get_test_loader(32,root="./data/",sample_size=2000)
 
 
     # Creating summary writer in tensorboard
@@ -205,59 +197,8 @@ if __name__ == "__main__":
                 torch.save(net.state_dict(), save_path)
                 print("Model saved to ", save_path)
         else: #在最后50个epoch,acc已经基本平直,按照一定策略筛选出最符合多元高斯分布的模型
-            Xs = []
-            ys = []
-            for images, labels in train_loader2:
-                images = images.to(device)
-                _ = net(images)
-                embeddings = net.feature
-                Xs.append(embeddings.cpu().detach().numpy())
-                ys.append(labels.detach().numpy())
-            X = np.concatenate(Xs)
-            y = np.concatenate(ys)
-
-            _,stats_pca = normality_score(X,y,"pca")
-            if stats_pca < best_stats_pca:
-                best_stats_pca = stats_pca
-                save_path = save_loc + save_name + "_best_gaussian_stats_pca" + ".model"
-                torch.save(net.state_dict(), save_path)
-                print("best gaussian model saved to ", save_path)
-
-            _,stats_univariate = normality_score(X,y,"univariate")
-            if stats_univariate < best_stats_univariate:
-                best_stats_univariate = stats_univariate
-                save_path = save_loc + save_name + "_best_gaussian_stats_univariate" + ".model"
-                torch.save(net.state_dict(), save_path)
-                print("best gaussian model saved to ", save_path)   
-            
-            # distance_ratio = inter_intra_class_ratio(X,y)
-            # fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},inter_intra_distance_ratio:{distance_ratio:.3f}")
-            # fig.savefig(os.path.join(save_loc, f"distace_ratio_{epoch}.png"), dpi=300, bbox_inches='tight')
-            # if distance_ratio>best_distance_ratio:
-            #     best_distance_ratio = distance_ratio
-            #     save_path = save_loc + save_name + "_best_discrimitive" + ".model"
-            #     torch.save(net.state_dict(), save_path)
-            #     print("best discrimitive model saved to ", save_path)
-                          
-            # for images,_ in ood_test_loader:
-            #     labels = np.ones(images.shape[0])*10 #标记label=10为OOD样本
-            #     images = images.to(device)
-            #     _ = net(images)
-            #     embeddings = net.feature
-            #     Xs.append(embeddings.cpu().detach().numpy())
-            #     ys.append(labels)
-    
-            # X = np.concatenate(Xs)
-            # y = np.concatenate(ys)
-            # tsne = TSNE(n_components=2, init='pca', perplexity=50, random_state=0)
-            # X_tsne = tsne.fit_transform(X)
-
-            # fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},stats:{stats:.3f}")
-            # fig.savefig(os.path.join(save_loc, f"stats_{epoch}.jpg"), dpi=300, bbox_inches='tight')
-                
-
-
-
+            save_path = save_loc + save_name + f"_epoch_{epoch}" + ".model"
+            torch.save(net.state_dict(), save_path)
 
     writer.close()
     create_gif_from_images(save_loc)

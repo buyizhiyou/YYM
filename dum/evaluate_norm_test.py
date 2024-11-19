@@ -106,7 +106,7 @@ if __name__ == "__main__":
     topt = None
     save_name = model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive)
     model_name = model_load_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive) + "_best.model"
-    model_name_norm_test = model_load_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive) + "_best_gaussian_stats.model"
+    model_name_norm_test = model_load_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive) + "_best_gaussian_stats_univariate.model"
 
     model_files = sorted(glob.glob(f"{args.load_loc}/run{args.run}/{save_name}/*/{model_name}"))
     model_files_norm_test = sorted(glob.glob(f"{args.load_loc}/run{args.run}/{save_name}/*/{model_name_norm_test}"))
@@ -120,9 +120,9 @@ if __name__ == "__main__":
         train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(
             root=args.dataset_root,
             batch_size=args.batch_size,
-            augment=args.data_aug,  #False
-            val_seed=(args.seed),
-            val_size=0.1,
+            augment=False,  #False
+            val_seed=1,
+            val_size=0.0,
             pin_memory=args.gpu,
         )
         test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=512, size=32, pin_memory=args.gpu)
