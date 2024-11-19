@@ -14,20 +14,20 @@ import sys
 
 sys.path.append("../")
 
-from matplotlib import pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
 from geomloss import SamplesLoss
+from matplotlib import pyplot as plt
 
 import data_utils.ood_detection.cifar10 as cifar10
 import data_utils.ood_detection.cifar100 as cifar100
-import data_utils.ood_detection.lsun as lsun
-import data_utils.ood_detection.svhn as svhn
-import data_utils.ood_detection.mnist as mnist
-import data_utils.ood_detection.gauss as gauss
-import data_utils.ood_detection.fer2013 as fer2013
 import data_utils.ood_detection.dtd as dtd
+import data_utils.ood_detection.fer2013 as fer2013
+import data_utils.ood_detection.gauss as gauss
+import data_utils.ood_detection.lsun as lsun
+import data_utils.ood_detection.mnist as mnist
+import data_utils.ood_detection.svhn as svhn
 import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
 
 dataset_loader = {

@@ -15,12 +15,14 @@
 import math
 from collections import OrderedDict
 from functools import partial
-from typing import Any, Callable, List, NamedTuple, Optional, Dict
-import torch 
-from torchvision import models
-from torchvision.models.vision_transformer import Conv2dNormActivation,ConvStemConfig,Encoder
-from torchvision.models._api import Weights
+from typing import Any, Callable, Dict, List, NamedTuple, Optional
+
+import torch
 from torch import nn
+from torchvision import models
+from torchvision.models._api import Weights
+from torchvision.models.vision_transformer import (Conv2dNormActivation,
+                                                   ConvStemConfig, Encoder)
 
 
 def vit(spectral_normalization=True, mod=True, num_classes=10,temp=1.0):

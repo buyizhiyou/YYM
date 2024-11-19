@@ -15,15 +15,10 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from PIL import Image
+from scipy.spatial.distance import euclidean
 from sklearn import metrics
 
-
-import numpy as np
-from scipy.spatial.distance import euclidean
-
-
-import os
-from PIL import Image
 
 def create_gif_from_images(directory,duration=500):
     """

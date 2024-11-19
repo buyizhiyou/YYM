@@ -1,12 +1,10 @@
+import numpy as np
 import torch
+from KDEpy import NaiveKDE, TreeKDE
+from sklearn.model_selection import GridSearchCV, LeaveOneOut
+from sklearn.neighbors import KernelDensity
 from torch import nn
 from tqdm import tqdm
-from KDEpy import TreeKDE, NaiveKDE
-from sklearn.neighbors import KernelDensity
-from sklearn.model_selection import GridSearchCV
-from sklearn.model_selection import LeaveOneOut
-
-import numpy as np
 
 
 class KdeModel():

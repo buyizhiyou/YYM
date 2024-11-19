@@ -11,7 +11,7 @@ import sys
 
 sys.path.append("../")
 
-from .attack import PGD, FGSM, BIM, DeepFool, CW
+from .attack import BIM, CW, FGSM, PGD, DeepFool
 
 
 def fgsm_attack(model, images, labels, device=None, epsilon=0.05, normalized=True):

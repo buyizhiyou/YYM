@@ -2,9 +2,9 @@ import time
 from collections import OrderedDict
 
 import torch
-from torch.utils.data import DataLoader, TensorDataset
 import torch.nn as nn
 from torch import optim
+from torch.utils.data import DataLoader, TensorDataset
 
 
 def wrapper_method(func):

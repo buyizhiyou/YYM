@@ -1,53 +1,64 @@
-"""
-Script to evaluate a single model.
-"""
-import os
+#!/usr/bin/env python
+# -*- encoding: utf-8 -*-
+'''
+@File    :   evaluate_norm_test.py
+@Time    :   2024/11/19 20:13:52
+@Author  :   shiqing
+@Version :   Cinnamoroll V1
+'''
+
+import argparse
+import glob
 import json
 import math
-import torch
+import os
 import pickle as pkl
-import glob, re
-import argparse
+import re
+
+import torch
 import torch.backends.cudnn as cudnn
 
+import data_utils.ood_detection.caltech256 as caltech256
 # Import dataloaders
 import data_utils.ood_detection.cifar10 as cifar10
 import data_utils.ood_detection.cifar100 as cifar100
-import data_utils.ood_detection.lsun as lsun
-import data_utils.ood_detection.svhn as svhn
-import data_utils.ood_detection.mnist as mnist
-import data_utils.ood_detection.gauss as gauss
-import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
-import data_utils.ood_detection.fer2013 as fer2013
 import data_utils.ood_detection.dtd as dtd
-import data_utils.ood_detection.stl as stl
-import data_utils.ood_detection.caltech256 as caltech256
+import data_utils.ood_detection.fer2013 as fer2013
+import data_utils.ood_detection.gauss as gauss
+import data_utils.ood_detection.lsun as lsun
+import data_utils.ood_detection.mnist as mnist
 import data_utils.ood_detection.place365 as place365
-
+import data_utils.ood_detection.stl as stl
+import data_utils.ood_detection.svhn as svhn
+import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
+from metrics.calibration_metrics import expected_calibration_error
+# Import metrics to compute
+from metrics.classification_metrics import (test_classification_net,
+                                            test_classification_net_ensemble,
+                                            test_classification_net_logits)
+from metrics.ood_metrics import (get_roc_auc, get_roc_auc_ensemble,
+                                 get_roc_auc_logits)
+from metrics.uncertainty_confidence import (confidence, entropy, logsumexp,
+                                            maxval, sumexp)
 # Import network models
 from net.lenet import lenet
 from net.resnet import resnet18, resnet50
-# from net.resnet2 import resnet18, resnet50
-from net.wide_resnet import wrn
 from net.vgg import vgg16
 from net.vit import vit
-
-# Import metrics to compute
-from metrics.classification_metrics import (test_classification_net, test_classification_net_logits, test_classification_net_ensemble)
-from metrics.calibration_metrics import expected_calibration_error
-from metrics.uncertainty_confidence import entropy, logsumexp, confidence, sumexp, maxval
-from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ensemble
-
-# Import GMM utils
-from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate, gradient_norm_collect, gmm_evaluate_for_adv, gmm_evaluate_with_perturbation_for_adv, gmm_evaluate_with_perturbation, maxp_evaluate_with_perturbation
-from utils.kde_utils import kde_evaluate, kde_fit
-from utils.eval_utils import model_load_name
-from utils.train_utils import model_save_name
+from net.wide_resnet import wrn
 from utils.args import eval_args
-from utils.ensemble_utils import load_ensemble, ensemble_forward_pass
-
+from utils.ensemble_utils import ensemble_forward_pass, load_ensemble
+from utils.eval_utils import model_load_name
+# Import GMM utils
+from utils.gmm_utils import (get_embeddings, gmm_evaluate,
+                             gmm_evaluate_for_adv,
+                             gmm_evaluate_with_perturbation,
+                             gmm_evaluate_with_perturbation_for_adv, gmm_fit,
+                             gradient_norm_collect, maxp_evaluate,
+                             maxp_evaluate_with_perturbation)
 # Temperature scaling
 from utils.temperature_scaling import ModelWithTemperature
+from utils.train_utils import model_save_name
 
 # Dataset params
 dataset_num_classes = {"cifar10": 10, "cifar100": 100, "svhn": 10, "lsun": 10, "tiny_iamgenet": 200}

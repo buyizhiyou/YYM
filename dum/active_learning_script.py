@@ -1,45 +1,41 @@
 import datetime
 import json
-import torch
-import numpy as np
 import os
 import random
-import torch.backends.cudnn as cudnn
-from torchvision import datasets
-from torchvision import transforms
-from torch.utils.data import RandomSampler
-from tqdm import tqdm
 
+import numpy as np
+import torch
+import torch.backends.cudnn as cudnn
+from torch.utils.data import RandomSampler
+from torchvision import datasets, transforms
+from tqdm import tqdm
 
 # Import data utilities
 import data_utils.active_learning.active_learning as active_learning
-from data_utils.fast_mnist import create_MNIST_dataset
 import data_utils.ood_detection.cifar10 as cifar10
 import data_utils.ood_detection.cifar100 as cifar100
-import data_utils.ood_detection.lsun as lsun
-import data_utils.ood_detection.svhn as svhn
-import data_utils.ood_detection.mnist as mnist
 import data_utils.ood_detection.gauss as gauss
+import data_utils.ood_detection.lsun as lsun
+import data_utils.ood_detection.mnist as mnist
+import data_utils.ood_detection.svhn as svhn
 import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
-
+from data_utils.fast_mnist import create_MNIST_dataset
+from metrics.classification_metrics import (test_classification_net,
+                                            test_classification_net_ensemble)
+# Importing uncertainty metrics
+from metrics.uncertainty_confidence import (confidence, entropy, logsumexp,
+                                            maxval, sumexp)
 # Import network architectures
 from net.resnet import resnet18
 from net.vgg import vgg16
-
-# Import train and test utils
-from utils.train_utils import train_single_epoch, model_save_name
-
-# Importing uncertainty metrics
-from metrics.uncertainty_confidence import entropy, logsumexp, confidence, sumexp, maxval
-from metrics.classification_metrics import test_classification_net
-from metrics.classification_metrics import test_classification_net_ensemble
-
 # Importing args
 from utils.args import al_args
-
-# Importing GMM utilities
-from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, gmm_evaluate_with_perturbation
 from utils.ensemble_utils import ensemble_forward_pass
+# Importing GMM utilities
+from utils.gmm_utils import (get_embeddings, gmm_evaluate,
+                             gmm_evaluate_with_perturbation, gmm_fit)
+# Import train and test utils
+from utils.train_utils import model_save_name, train_single_epoch
 
 # Mapping model name to model function
 models = {"resnet18": resnet18, "vgg16": vgg16}

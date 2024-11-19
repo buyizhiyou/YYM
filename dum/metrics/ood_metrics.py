@@ -4,13 +4,16 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
-from sklearn import metrics
-
-from utils.ensemble_utils import ensemble_forward_pass,ensemble_forward_pass_adv
-from metrics.classification_metrics import get_logits_labels
-from metrics.uncertainty_confidence import entropy, logsumexp,confidence,maxval
-from sklearn.metrics import auc, precision_recall_curve, roc_curve
 from matplotlib import pyplot as plt
+from sklearn import metrics
+from sklearn.metrics import auc, precision_recall_curve, roc_curve
+
+from metrics.classification_metrics import get_logits_labels
+from metrics.uncertainty_confidence import (confidence, entropy, logsumexp,
+                                            maxval)
+from utils.ensemble_utils import (ensemble_forward_pass,
+                                  ensemble_forward_pass_adv)
+
 
 def plot_roc(preds, labels, title="Receiver operating characteristic"):
     """Plot an ROC curve based on unthresholded predictions and true binary labels.

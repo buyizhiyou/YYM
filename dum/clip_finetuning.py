@@ -1,14 +1,12 @@
 import json
-from PIL import Image
-
-from tqdm import tqdm
-
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
 
 import clip
-from transformers import CLIPProcessor, CLIPModel
+import torch
+import torch.nn as nn
+from PIL import Image
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+from transformers import CLIPModel, CLIPProcessor
 
 json_path = 'path to train_data.json'
 image_path = 'path to training dataset'

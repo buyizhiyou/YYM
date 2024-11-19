@@ -4,39 +4,40 @@
 
 # %%
 import os
+import pickle as pkl
+import re
 import sys
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-import numpy as np
-import pandas as pd
-from tqdm import tqdm
 from matplotlib import rc
-import re
-import pickle as pkl 
+from tqdm import tqdm
 
 sys.path.append("../")
 # Import dataloaders
 import data_utils.ood_detection.cifar10 as cifar10
 import data_utils.ood_detection.cifar100 as cifar100
 import data_utils.ood_detection.lsun as lsun
-import data_utils.ood_detection.svhn as svhn
 import data_utils.ood_detection.mnist as mnist
+import data_utils.ood_detection.svhn as svhn
 import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
-
+from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits
+from metrics.uncertainty_confidence import (confidence, entropy, logsumexp,
+                                            sumexp)
 # Network architectures
 from net.lenet import lenet
 from net.resnet import resnet50
 from net.vgg import vgg16
-from net.wide_resnet import wrn
 from net.vit import vit
-
-from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate, gmm_evaluate_with_perturbation, maxp_evaluate_with_perturbation
-from metrics.uncertainty_confidence import entropy, logsumexp, confidence, sumexp
-from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits
+from net.wide_resnet import wrn
+from utils.gmm_utils import (get_embeddings, gmm_evaluate,
+                             gmm_evaluate_with_perturbation, gmm_fit,
+                             maxp_evaluate, maxp_evaluate_with_perturbation)
 
 device = torch.device("cuda:1")
 # Dataset params

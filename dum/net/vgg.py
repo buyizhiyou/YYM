@@ -7,10 +7,11 @@ Reference:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from net.spectral_normalization.spectral_norm_conv_inplace import spectral_norm_conv
-from net.spectral_normalization.spectral_norm_fc import spectral_norm_fc
 
 from net.extra import ProjectionHead
+from net.spectral_normalization.spectral_norm_conv_inplace import \
+    spectral_norm_conv
+from net.spectral_normalization.spectral_norm_fc import spectral_norm_fc
 
 cfg_cifar = {
     "VGG11": [64, "M", 128, "M", 256, 256, "M", 512, 512, "M", 512, 512, "M"],

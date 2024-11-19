@@ -11,8 +11,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from net.spectral_normalization.spectral_norm_official import spectral_norm
+
 from net.extra import ProjectionHead
+from net.spectral_normalization.spectral_norm_official import spectral_norm
 
 
 class BasicBlock(nn.Module):

@@ -5,6 +5,7 @@ import torch
 from torchvision import transforms
 from torchvision.datasets import MNIST
 
+
 class FastMNIST(MNIST):
     def __init__(self,device, *args, **kwargs):
         super().__init__(*args, **kwargs)

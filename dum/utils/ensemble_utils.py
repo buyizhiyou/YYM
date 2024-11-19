@@ -1,21 +1,23 @@
 """
 Utilities for processing a deep ensemble.
 """
+import glob
+import warnings
+from functools import partial
+
 import torch
+import torch.backends.cudnn as cudnn
 from torch import nn
 from torch.nn import functional as F
-import torch.backends.cudnn as cudnn
-import glob
-from net.vgg import vgg16
+
+from metrics.uncertainty_confidence import (entropy_prob,
+                                            mutual_information_prob)
 from net.lenet import lenet
 from net.resnet import resnet18, resnet50
+from net.vgg import vgg16
 from net.wide_resnet import wrn
-
-from metrics.uncertainty_confidence import entropy_prob, mutual_information_prob
-from utils.attack_utils import fgsm_attack, bim_attack, deepfool_attack, pgd_attack, cw_attack
-import warnings
-
-from functools import partial
+from utils.attack_utils import (bim_attack, cw_attack, deepfool_attack,
+                                fgsm_attack, pgd_attack)
 
 models = {
     "lenet": lenet,

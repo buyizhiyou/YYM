@@ -9,8 +9,9 @@
 
 import torch
 import torch.nn as nn
-from torch.nn.utils import spectral_norm
 import torch.nn.functional as F
+from torch.nn.utils import spectral_norm
+
 
 class ProjectionHead(nn.Module):
 

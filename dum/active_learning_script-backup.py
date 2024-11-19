@@ -1,32 +1,28 @@
 import json
-import torch
-import numpy as np
-import torch.backends.cudnn as cudnn
 
+import numpy as np
+import torch
+import torch.backends.cudnn as cudnn
 # Import data utilities
 import torch.utils.data as data
+
 import data_utils.active_learning.active_learning as active_learning
 from data_utils.ambiguous_mnist.ambiguous_mnist_dataset import AmbiguousMNIST
 from data_utils.fast_mnist import create_MNIST_dataset
-
+from metrics.classification_metrics import (test_classification_net,
+                                            test_classification_net_ensemble)
+# Importing uncertainty metrics
+from metrics.uncertainty_confidence import confidence, entropy, logsumexp
 # Import network architectures
 from net.resnet import resnet50
 from net.vgg import vgg16
-
-# Import train and test utils
-from utils.train_utils import train_single_epoch, model_save_name
-
-# Importing uncertainty metrics
-from metrics.uncertainty_confidence import entropy, logsumexp, confidence
-from metrics.classification_metrics import test_classification_net
-from metrics.classification_metrics import test_classification_net_ensemble
-
 # Importing args
 from utils.args import al_args
-
+from utils.ensemble_utils import ensemble_forward_pass
 # Importing GMM utilities
 from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit
-from utils.ensemble_utils import ensemble_forward_pass
+# Import train and test utils
+from utils.train_utils import model_save_name, train_single_epoch
 
 # Mapping model name to model function
 models = {"resnet50": resnet50, "vgg16": vgg16}
@@ -72,7 +68,6 @@ if __name__ == "__main__":
     args = al_args().parse_args()
     print(args)
     import pdb;pdb.set_trace()
-
     # Checking if GPU is available
     cuda = torch.cuda.is_available()
 

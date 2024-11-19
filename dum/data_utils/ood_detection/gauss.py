@@ -5,13 +5,10 @@ Val set size: 5000
 Test set size: 10000
 """
 
-import torch
 import numpy as np
-from torch.utils.data import Subset
-
-from torchvision import datasets
-from torchvision import transforms
-from torch.utils.data import Dataset
+import torch
+from torch.utils.data import Dataset, Subset
+from torchvision import datasets, transforms
 
 
 class GaussDataset(Dataset):

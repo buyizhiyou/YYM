@@ -2,13 +2,15 @@
 # Adapted to match:
 # https://github.com/szagoruyko/wide-residual-networks/tree/master/pytorch
 
+import math
+
 import numpy as np
 import torch
-import math
 import torch.nn as nn
 import torch.nn.functional as F
 
-from net.spectral_normalization.spectral_norm_conv_inplace import spectral_norm_conv
+from net.spectral_normalization.spectral_norm_conv_inplace import \
+    spectral_norm_conv
 from net.spectral_normalization.spectral_norm_fc import spectral_norm_fc
 
 

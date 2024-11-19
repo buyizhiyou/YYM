@@ -3,13 +3,12 @@ This module contains utility code for evaluating a model.
 """
 
 import torch
-from metrics.uncertainty_confidence import entropy
-from metrics.classification_metrics import (
-    test_classification_net,
-    test_classification_net_ensemble,
-)
+
 from metrics.calibration_metrics import expected_calibration_error
+from metrics.classification_metrics import (test_classification_net,
+                                            test_classification_net_ensemble)
 from metrics.ood_metrics import get_roc_auc, get_roc_auc_ensemble
+from metrics.uncertainty_confidence import entropy
 
 
 def get_eval_stats(net, test_loader, ood_test_loader, device):

@@ -3,9 +3,7 @@ Fashion-MNIST used as an OOD dataset.
 """
 
 import torch
-
-from torchvision import datasets
-from torchvision import transforms
+from torchvision import datasets, transforms
 
 
 def get_loaders(batch_size, train=False, num_workers=4, pin_memory=True, **kwargs):

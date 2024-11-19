@@ -8,7 +8,7 @@ Based on: Regularisation of Neural Networks by Enforcing Lipschitz Continuity
     https://arxiv.org/abs/1804.04368
 """
 import torch
-from torch.nn.functional import normalize, conv_transpose2d, conv2d
+from torch.nn.functional import conv2d, conv_transpose2d, normalize
 
 
 class SpectralNormConv(object):

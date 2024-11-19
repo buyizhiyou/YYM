@@ -21,12 +21,10 @@ The training set consists of 28,709 examples. The public test set used for the l
 The final test set, which was used to determine the winner of the competition, consists of another 3,589 examples.
 """
 
-import torch
 import numpy as np
+import torch
 from torch.utils.data import Subset
-
-from torchvision import datasets
-from torchvision import transforms
+from torchvision import datasets, transforms
 
 
 def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_workers=4, pin_memory=False, contrastive=0,size=32, **kwargs):

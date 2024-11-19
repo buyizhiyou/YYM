@@ -3,14 +3,12 @@ Metrics to measure classification performance
 """
 
 import torch
+from sklearn.metrics import accuracy_score, confusion_matrix
 from torch import nn
 from torch.nn import functional as F
+from tqdm import tqdm
 
 from utils.ensemble_utils import ensemble_forward_pass
-
-from sklearn.metrics import accuracy_score
-from sklearn.metrics import confusion_matrix
-from tqdm import tqdm 
 
 
 def get_logits_labels(model, data_loader, device):

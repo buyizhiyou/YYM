@@ -3,17 +3,20 @@ This module contains methods for training models.
 """
 
 import os
-import yaml
 from enum import Enum
+
 import torch
-from torch.nn import functional as F
-from torch import nn
 import torch.distributed as dist
-from tqdm import tqdm
-from utils.eval_utils import accuracy
-from utils.simclr_utils import ContrastiveLearningViewTransform, get_simclr_pipeline_transform, info_nce_loss
-from utils.loss import supervisedContrastiveLoss, LabelSmoothing, CenterLoss
+import yaml
+from torch import nn
+from torch.nn import functional as F
 from torchvision.transforms import transforms
+from tqdm import tqdm
+
+from utils.eval_utils import accuracy
+from utils.loss import CenterLoss, LabelSmoothing, supervisedContrastiveLoss
+from utils.simclr_utils import (ContrastiveLearningViewTransform,
+                                get_simclr_pipeline_transform, info_nce_loss)
 
 
 def fgsm_attack(image, epsilon, data_grad):

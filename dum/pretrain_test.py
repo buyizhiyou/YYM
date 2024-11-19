@@ -9,28 +9,27 @@
 """
 Script to evaluate a single model. 
 """
-import os
+import gc
 import json
-from tqdm import tqdm
-import torch
-import torchvision
-import torch.backends.cudnn as cudnn
-import torch
+import os
+
 import clip
 import numpy as np
-import gc
-
+import torch
+import torch.backends.cudnn as cudnn
+import torchvision
 from torchvision import datasets
 from torchvision.transforms import Resize
+from tqdm import tqdm
 
+from metrics.ood_metrics import (get_roc_auc, get_roc_auc_ensemble,
+                                 get_roc_auc_logits)
 # Import metrics to compute
 from metrics.uncertainty_confidence import entropy, logsumexp
-from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ensemble
-
+from utils.args import eval_args
 # Import GMM utils
 from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit
 from utils.train_utils import model_save_name
-from utils.args import eval_args
 
 # Dataset params
 dataset_num_classes = {

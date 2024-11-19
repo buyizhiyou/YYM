@@ -10,8 +10,8 @@
 import numpy as np
 import torch
 from torch import nn
-from torchvision.transforms import transforms
 from torch.nn import functional as F
+from torchvision.transforms import transforms
 
 np.random.seed(0)
 

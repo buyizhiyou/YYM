@@ -7,13 +7,12 @@
 @Version :   Cinnamoroll V1
 '''
 
-import torch
 import os
-import numpy as np
-from torch.utils.data import Subset
 
-from torchvision import datasets
-from torchvision import transforms
+import numpy as np
+import torch
+from torch.utils.data import Subset
+from torchvision import datasets, transforms
 
 
 def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_workers=4, pin_memory=False, **kwargs):

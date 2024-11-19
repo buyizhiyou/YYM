@@ -1,4 +1,5 @@
 import torch
+
 from data_utils.ambiguous_mnist.ambiguous_mnist_dataset import AmbiguousMNIST
 
 

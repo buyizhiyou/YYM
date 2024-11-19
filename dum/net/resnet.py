@@ -8,12 +8,12 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from net.spectral_normalization.spectral_norm_conv_inplace import \
-    spectral_norm_conv
-from net.spectral_normalization.spectral_norm_fc import spectral_norm_fc
 from torch.nn.utils import spectral_norm
 
 from net.extra import ProjectionHead
+from net.spectral_normalization.spectral_norm_conv_inplace import \
+    spectral_norm_conv
+from net.spectral_normalization.spectral_norm_fc import spectral_norm_fc
 
 
 class AvgPoolShortCut(nn.Module):

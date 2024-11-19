@@ -1,10 +1,10 @@
-import torch
 import numpy as np
+import torch
 import torch.utils.data as data
 from torch.utils.data import Subset
 
-from data_utils.fast_mnist import create_MNIST_dataset
 from data_utils.ambiguous_mnist.ambiguous_mnist_dataset import AmbiguousMNIST
+from data_utils.fast_mnist import create_MNIST_dataset
 
 
 def get_train_valid_loader(root, batch_size, val_seed=1, val_size=0.1, **kwargs):

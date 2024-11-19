@@ -9,10 +9,10 @@
 """vit for cifar10 32x32"""
 
 import torch
-from torch import nn
 import torchsummary
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
+from torch import nn
 
 
 def pair(t):

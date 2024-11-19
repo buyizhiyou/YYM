@@ -18,12 +18,10 @@ The data is split in three equal parts, in train, validation and test, 40 images
 We provide the ground truth annotation for both key and joint attributes, as well as the 10 splits of the data we used for evaluation.
 """
 
-import torch
 import numpy as np
+import torch
 from torch.utils.data import Subset
-
-from torchvision import datasets
-from torchvision import transforms
+from torchvision import datasets, transforms
 
 
 def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_workers=4, pin_memory=False, contrastive=0,size=32, **kwargs):

@@ -9,10 +9,9 @@
 
 import torch
 import torch.nn as nn
+from pytorch_metric_learning import losses  # 这个库里实现了很多metric learning的loss
 from torch.autograd.function import Function
 from torch.nn import functional as F
-
-from pytorch_metric_learning import losses  #这个库里实现了很多metric learning的loss
 
 
 class LabelSmoothing(nn.Module):

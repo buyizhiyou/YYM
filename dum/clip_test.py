@@ -9,16 +9,15 @@
 """
 Script to evaluate a single model. 
 """
-import os
+import argparse
 import json
 import math
-import torch
-import argparse
-import torch.backends.cudnn as cudnn
-import torch
+import os
+
 import clip
 import numpy as np
-
+import torch
+import torch.backends.cudnn as cudnn
 from torchvision import datasets
 from torchvision.transforms import Resize
 
@@ -27,31 +26,28 @@ import data_utils.ood_detection.cifar10 as cifar10
 import data_utils.ood_detection.cifar100 as cifar100
 import data_utils.ood_detection.svhn as svhn
 import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
-
+from metrics.calibration_metrics import expected_calibration_error
+# Import metrics to compute
+from metrics.classification_metrics import (test_classification_net,
+                                            test_classification_net_ensemble,
+                                            test_classification_net_logits)
+from metrics.ood_metrics import (get_roc_auc, get_roc_auc_ensemble,
+                                 get_roc_auc_logits)
+from metrics.uncertainty_confidence import entropy, logsumexp
 # Import network models
 from net.lenet import lenet
 from net.resnet import resnet18, resnet50, resnet101, resnet110, resnet152
-from net.wide_resnet import wrn
 from net.vgg import vgg16
-
-# Import metrics to compute
-from metrics.classification_metrics import (test_classification_net,
-                                            test_classification_net_logits,
-                                            test_classification_net_ensemble)
-from metrics.calibration_metrics import expected_calibration_error
-from metrics.uncertainty_confidence import entropy, logsumexp
-from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ensemble
-
+from net.wide_resnet import wrn
+from utils.args import eval_args
+from utils.ensemble_utils import ensemble_forward_pass, load_ensemble
+from utils.eval_utils import model_load_name
 # Import GMM utils
 from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit
 from utils.kde_utils import kde_evaluate, kde_fit
-from utils.ensemble_utils import load_ensemble, ensemble_forward_pass
-from utils.eval_utils import model_load_name
-from utils.train_utils import model_save_name
-from utils.args import eval_args
-
 # Temperature scaling
 from utils.temperature_scaling import ModelWithTemperature
+from utils.train_utils import model_save_name
 
 # Dataset params
 dataset_num_classes = {

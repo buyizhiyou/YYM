@@ -8,32 +8,30 @@
 '''
 import argparse
 import datetime
-import time
 import json
 import os
+import time
 
-from matplotlib import pyplot as plt
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
+from matplotlib import pyplot as plt
 from sklearn.manifold import TSNE
-from tqdm import tqdm 
-
-from net.lenet import lenet
-from net.resnet import resnet18, resnet50  #自己实现的spectral norm
-# from net.resnet2 import resnet18, resnet50 #官方实现的spectral norm
-from net.vgg import vgg16  #自己实现的
-# from net.vgg2 import vgg16 #官方实现的
-from net.wide_resnet import wrn
-from net.vit import vit
-
+from tqdm import tqdm
 
 import data_utils.ood_detection.cifar10 as cifar10
 import data_utils.ood_detection.cifar100 as cifar100
 import data_utils.ood_detection.svhn as svhn
-
-from utils.plots_utils import plot_embedding_2d, inter_intra_class_ratio, create_gif_from_images
+from net.lenet import lenet
+from net.resnet import resnet18, resnet50  # 自己实现的spectral norm
+# from net.resnet2 import resnet18, resnet50 #官方实现的spectral norm
+from net.vgg import vgg16  # 自己实现的
+from net.vit import vit
+# from net.vgg2 import vgg16 #官方实现的
+from net.wide_resnet import wrn
 from utils.normality_test import normality_score
+from utils.plots_utils import (create_gif_from_images, inter_intra_class_ratio,
+                               plot_embedding_2d)
 
 models = {"lenet": lenet, "resnet18": resnet18, "resnet50": resnet50, "wide_resnet": wrn, "vgg16": vgg16, "vit": vit}
 train_loader, _ = cifar10.get_train_valid_loader(root="./data/", batch_size=32, augment=False, val_size=0., val_seed=1, pin_memory=0, contrastive=0)

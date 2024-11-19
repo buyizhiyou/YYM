@@ -7,16 +7,12 @@
 @Version :   Cinnamoroll V1
 '''
 
-import numpy as np
-from scipy.stats import chi2
-from scipy.stats import shapiro, normaltest
-from scipy.fft import fft, ifft
-from scipy.stats import norm
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import normaltest
-from sklearn.decomposition import PCA
 from pingouin import multivariate_normality
+from scipy.fft import fft, ifft
+from scipy.stats import chi2, norm, normaltest, shapiro
+from sklearn.decomposition import PCA
 
 
 def energy_normality_test(data, alpha=0.05):

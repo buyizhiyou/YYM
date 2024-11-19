@@ -1,5 +1,5 @@
-import torch
 import numpy as np
+import torch
 
 
 def iterate_data_msp(data_loader, model, device):

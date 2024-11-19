@@ -2,31 +2,29 @@
 Script for training deep ensemble models.
 """
 
-import os
-import datetime
-import torch
 import argparse
-from torch import optim
+import datetime
+import os
+
+import torch
 import torch.backends.cudnn as cudnn
+from torch import optim
+# Tensorboard utilities
+from torch.utils.tensorboard import SummaryWriter
 
 # Import dataloaders
 import data_utils.ood_detection.cifar10 as cifar10
 import data_utils.ood_detection.cifar100 as cifar100
 import data_utils.ood_detection.svhn as svhn
-
 # Import network models
 from net.resnet import resnet50
-from net.wide_resnet import wrn
 from net.vgg import vgg16
-
+from net.wide_resnet import wrn
 # Import train and validation utilities
 from utils.args import training_args
-from utils.train_utils import train_single_epoch, test_single_epoch, save_config_file
-from utils.train_utils import model_save_name
 from utils.eval_utils import get_eval_stats_ensemble
-
-# Tensorboard utilities
-from torch.utils.tensorboard import SummaryWriter
+from utils.train_utils import (model_save_name, save_config_file,
+                               test_single_epoch, train_single_epoch)
 
 dataset_num_classes = {"cifar10": 10, "cifar100": 100, "svhn": 10}
 
