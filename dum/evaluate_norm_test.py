@@ -115,20 +115,7 @@ if __name__ == "__main__":
         print("no model files in current config")
         exit()
 
-    saved_model_name = "./saved_models/run31/resnet50_sn_3.0_mod_seed_1/2024_11_18_10_38_29/resnet50_sn_3.0_mod_seed_1_best_gaussian_stats.model"
-    net = models[args.model](
-        spectral_normalization=args.sn,
-        mod=args.mod,
-        num_classes=num_classes,
-        temp=1.0,
-    )
-    if args.gpu:
-        net.to(device)
-        cudnn.benchmark = True
-    import pdb;pdb.set_trace()
-    net.load_state_dict(torch.load(str(saved_model_name), map_location=device), strict=True)
-    net.eval()
-    for i in range(3):
+    for i in range(len(model_files)):
         #load dataset
         train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(
             root=args.dataset_root,
@@ -164,7 +151,7 @@ if __name__ == "__main__":
             ) = test_classification_net(net, test_loader, device)
 
             cache_path = saved_model_name.replace('.model', '.cache')
-            load_cache = False
+            load_cache = True
             if load_cache and os.path.exists(cache_path):
                 print(f"load cache from {cache_path}")
                 with open(cache_path, 'rb') as file:

@@ -148,7 +148,7 @@ if __name__ == "__main__":
                 batch_size=args.batch_size,
                 augment=args.data_aug,  #False
                 val_seed=(args.seed),
-                val_size=0.1,
+                val_size=0.0, #这里0.1改为0.0，不确定会有什么影响
                 pin_memory=args.gpu,
             )
 
@@ -228,8 +228,8 @@ if __name__ == "__main__":
             if (args.evaltype == "gmm"):
                 # Evaluate a GMM model
                 print("GMM Model")
-                cache_path = re.sub(r"[^/]*_best.model", "cache", saved_model_name)
-                load_cache = False
+                cache_path = saved_model_name.replace('.model', '.cache')
+                load_cache = True
                 if load_cache and os.path.exists(cache_path):
                     print(f"load cache from {cache_path}")
                     with open(cache_path, 'rb') as file:

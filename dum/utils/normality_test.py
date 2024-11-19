@@ -49,13 +49,15 @@ def energy_test(data, alpha=0.05):
 def univariate_normality_test(data):
     """逐维检测正态性"""
     results = []
+    stats =  []
     for i in range(data.shape[1]):
-        stat, p_value = normaltest(data[:, i])  # D’Agostino’s K^2 Test
+        stat, p_value = normaltest(data[:,i])  # D’Agostino’s K^2 Test
         results.append(p_value)
-    # 平均P值和通过率
+        stats.append(stat)
     mean_p_value = np.mean(results)
-    pass_rate = np.mean(np.array(results) > 0.05)
-    return mean_p_value, pass_rate
+    mean_stat = np.mean(stats)
+    
+    return mean_p_value, mean_stat
 
 
 # 方法2：PCA降维后多元正态性检测
@@ -64,6 +66,7 @@ def pca_and_multivariate_normality_test(data, n_components=10):
     pca = PCA(n_components=n_components)
     reduced_data = pca.fit_transform(data)
     stat, p_value, normal = multivariate_normality(reduced_data, alpha=0.05)
+    
     return p_value, stat
 
 
@@ -71,18 +74,27 @@ def pca_and_multivariate_normality_test(data, n_components=10):
 def random_projection_normality_test(data, n_samples=100, n_features=10):
     """随机投影后检测正态性"""
     random_indices = np.random.choice(data.shape[1], n_features, replace=False)
-    sampled_data = data[:, random_indices]
+    sampled_data = data[:,random_indices]
+
     return univariate_normality_test(sampled_data)
 
 
-def normality_score(all_data, labels, num_classes=10):
+def normality_score(all_data, labels, method="univariate", num_classes=10):
     #p值越高，数据符合正态分布的可能性越高。正太性检验
     all_p_values = []
     all_stats = []  #统计量
     for i in range(num_classes):
         data = all_data[labels == i]
 
-        p_value, stats = pca_and_multivariate_normality_test(data)
+        if method=="pca":
+            p_value, stats = pca_and_multivariate_normality_test(data)
+        elif method=="univariate":
+            p_value, stats = univariate_normality_test(data)
+        elif method=="random":
+            p_value,stats = random_projection_normality_test(data)
+        else:
+            print("wrong method for normality detection")
+            exit()
 
         all_p_values.append(p_value)
         all_stats.append(stats)
