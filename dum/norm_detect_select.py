@@ -30,30 +30,29 @@ from net.vit import vit
 # from net.vgg2 import vgg16 #官方实现的
 from net.wide_resnet import wrn
 from utils.normality_test import normality_score
-from utils.plots_utils import (create_gif_from_images, inter_intra_class_ratio,
-                               plot_embedding_2d)
+from utils.plots_utils import (create_gif_from_images, inter_intra_class_ratio, plot_embedding_2d)
 
 models = {"lenet": lenet, "resnet18": resnet18, "resnet50": resnet50, "wide_resnet": wrn, "vgg16": vgg16, "vit": vit}
-train_loader, _ = cifar10.get_train_valid_loader(root="./data/", batch_size=32, augment=False, val_size=0., val_seed=1, pin_memory=0, contrastive=0)
-ood_test_loader = svhn.get_test_loader(32, root="./data/", sample_size=2000)
+train_loader, _ = cifar10.get_train_valid_loader(root="./data/", batch_size=1024, augment=False, val_size=0., val_seed=1, pin_memory=0, contrastive=0)
+ood_test_loader = svhn.get_test_loader(512, root="./data/", sample_size=2000)
 
-device= "cuda:1"
+device = "cuda:0"
 model = "vgg16"
 run = "run32"
+method = "univariate"
 net = models[model](
-                spectral_normalization=True,
-                mod=3.0,
-                num_classes=10,
-                temp=1.0,
-            )
+    spectral_normalization=True,
+    mod=3.0,
+    num_classes=10,
+    temp=1.0,
+)
 net.to(device)
 cudnn.benchmark = True
 dir = f"./saved_models/{run}/{model}_sn_3.0_mod_seed_1/"
-
-for time_str in os.listdir(dir):
-    import pdb;pdb.set_trace()
-    dir2 = os.path.join(dir,time_str)
-    model_save_name =  os.path.join(dir2,f"{model}_sn_3.0_mod_seed_1_best.model")
+sub_dirs = os.listdir(dir)
+for time_str in sub_dirs:
+    dir2 = os.path.join(dir, time_str)
+    model_save_name = os.path.join(dir2, f"{model}_sn_3.0_mod_seed_1_best.model")
     net.load_state_dict(torch.load(str(model_save_name), map_location=device), strict=True)
     net.eval()
 
@@ -68,10 +67,9 @@ for time_str in os.listdir(dir):
     X = np.concatenate(Xs)
     y = np.concatenate(ys)
 
-    _,best_stats_pca = normality_score(X,y,"pca")
-    _,best_stats_univariate = normality_score(X,y,"univariate")
-    for epoch in tqdm(range(300,400)):
-        model_save_name = os.path.join(dir2,f"{model}_sn_3.0_mod_seed_1_epoch_{epoch}.model")
+    _, best_stats = normality_score(X, y, method)
+    for epoch in tqdm(range(300, 400)):
+        model_save_name = os.path.join(dir2, f"{model}_sn_3.0_mod_seed_1_epoch_{epoch}.model")
 
         net.load_state_dict(torch.load(str(model_save_name), map_location=device), strict=True)
         net.eval()
@@ -87,21 +85,12 @@ for time_str in os.listdir(dir):
         X = np.concatenate(Xs)
         y = np.concatenate(ys)
 
-        _,stats_pca = normality_score(X,y,"pca")
-        if stats_pca < best_stats_pca:
-            best_stats_pca = stats_pca
-            save_path = os.path.join(dir2,f"{model}_sn_3.0_mod_seed_1_best_gaussian_stats_pca.model")
+        _, stats = normality_score(X, y, method)
+        if stats < best_stats:
+            best_stats = stats
+            save_path = os.path.join(dir2, f"{model}_sn_3.0_mod_seed_1_best_gaussian_stats_{method}.model")
             torch.save(net.state_dict(), save_path)
             print("best gaussian model saved to ", save_path)
-
-        _,stats_univariate = normality_score(X,y,"univariate")
-        if stats_univariate < best_stats_univariate:
-            best_stats_univariate = stats_univariate
-            save_path = os.path.join(dir2,f"{model}_sn_3.0_mod_seed_1_best_gaussian_stats_univariate.model")
-            torch.save(net.state_dict(), save_path)
-            torch.save(net.state_dict(), save_path)
-            print("best gaussian model saved to ", save_path)
-
 
         # for images,_ in ood_test_loader:
         #     labels = np.ones(images.shape[0])*10 #标记label=10为OOD样本

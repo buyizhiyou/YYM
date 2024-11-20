@@ -12,6 +12,7 @@ import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
+from tqdm import tqdm
 import warmup_scheduler
 from matplotlib import pyplot as plt
 from sklearn.manifold import TSNE
@@ -132,9 +133,8 @@ if __name__ == "__main__":
 
     best_acc = 0
     best_distance_ratio = 0
-    best_stats_univariate = 1e10
-    best_stats_pca = 1e10
-    for epoch in range(0, args.epoch):
+    best_stats= 1e10
+    for epoch in tqdm(range(0, args.epoch)):
         """
         1. 300epoch 原始单阶段训练crossEntropy
         2. 两阶段训练:前300epoch只训练supCon,后面150个epoch只训练fc层
@@ -162,7 +162,7 @@ if __name__ == "__main__":
 
         scheduler.step()
 
-        if epoch < 300:
+        if epoch < 250:
             if val_acc > best_acc:
                 best_acc = val_acc
                 save_path = save_loc + save_name + "_best" + ".model"
@@ -171,6 +171,27 @@ if __name__ == "__main__":
         else:  #在最后50个epoch,acc已经基本平直,按照一定策略筛选出最符合多元高斯分布的模型
             save_path = save_loc + save_name + f"_epoch_{epoch}" + ".model"
             torch.save(net.state_dict(), save_path)
+            
+            method="univariate"
+            Xs = []
+            ys = []
+            for images, labels in train_loader:
+                images = images.to(device)
+                _ = net(images)
+                embeddings = net.feature
+                Xs.append(embeddings.cpu().detach().numpy())
+                ys.append(labels.detach().numpy())
+            X = np.concatenate(Xs)
+            y = np.concatenate(ys)
+
+            _, stats = normality_score(X, y, method)
+            if stats < best_stats:
+                best_stats = stats
+                save_path =  save_loc + save_name + f"_best_gaussian_stats_{method}.model")
+                torch.save(net.state_dict(), save_path)
+                print("best gaussian model saved to ", save_path)
+
+
 
     writer.close()
     # create_gif_from_images(save_loc)
