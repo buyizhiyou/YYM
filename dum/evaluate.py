@@ -1,60 +1,53 @@
 """
 Script to evaluate a single model.
 """
-import argparse
-import glob
+import os
 import json
 import math
-import os
-import pickle as pkl
-import re
-
 import torch
+import pickle as pkl
+import glob, re
+import argparse
 import torch.backends.cudnn as cudnn
 
-import data_utils.ood_detection.caltech256 as caltech256
 # Import dataloaders
 import data_utils.ood_detection.cifar10 as cifar10
 import data_utils.ood_detection.cifar100 as cifar100
-import data_utils.ood_detection.dtd as dtd
-import data_utils.ood_detection.fer2013 as fer2013
-import data_utils.ood_detection.gauss as gauss
 import data_utils.ood_detection.lsun as lsun
-import data_utils.ood_detection.mnist as mnist
-import data_utils.ood_detection.place365 as place365
-import data_utils.ood_detection.stl as stl
 import data_utils.ood_detection.svhn as svhn
+import data_utils.ood_detection.mnist as mnist
+import data_utils.ood_detection.gauss as gauss
 import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
-from metrics.calibration_metrics import expected_calibration_error
-# Import metrics to compute
-from metrics.classification_metrics import (test_classification_net,
-                                            test_classification_net_ensemble,
-                                            test_classification_net_logits)
-from metrics.ood_metrics import (get_roc_auc, get_roc_auc_ensemble,
-                                 get_roc_auc_logits)
-from metrics.uncertainty_confidence import (confidence, entropy, logsumexp,
-                                            maxval, sumexp)
+import data_utils.ood_detection.fer2013 as fer2013
+import data_utils.ood_detection.dtd as dtd
+import data_utils.ood_detection.stl as stl
+import data_utils.ood_detection.caltech256 as caltech256
+import data_utils.ood_detection.place365 as place365
+
 # Import network models
 from net.lenet import lenet
 from net.resnet import resnet18, resnet50
-from net.vgg import vgg16
-from net.vit import vit
 # from net.resnet2 import resnet18, resnet50
 from net.wide_resnet import wrn
-from utils.args import eval_args
-from utils.ensemble_utils import ensemble_forward_pass, load_ensemble
-from utils.eval_utils import model_load_name
+from net.vgg import vgg16
+from net.vit import vit
+
+# Import metrics to compute
+from metrics.classification_metrics import (test_classification_net, test_classification_net_logits, test_classification_net_ensemble)
+from metrics.calibration_metrics import expected_calibration_error
+from metrics.uncertainty_confidence import entropy, logsumexp, confidence, sumexp, maxval
+from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ensemble
+
 # Import GMM utils
-from utils.gmm_utils import (get_embeddings, gmm_evaluate,
-                             gmm_evaluate_for_adv,
-                             gmm_evaluate_with_perturbation,
-                             gmm_evaluate_with_perturbation_for_adv, gmm_fit,
-                             gradient_norm_collect, maxp_evaluate,
-                             maxp_evaluate_with_perturbation)
+from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate, gradient_norm_collect, gmm_evaluate_for_adv, gmm_evaluate_with_perturbation_for_adv, gmm_evaluate_with_perturbation, maxp_evaluate_with_perturbation
 from utils.kde_utils import kde_evaluate, kde_fit
+from utils.eval_utils import model_load_name
+from utils.train_utils import model_save_name
+from utils.args import eval_args
+from utils.ensemble_utils import load_ensemble, ensemble_forward_pass
+
 # Temperature scaling
 from utils.temperature_scaling import ModelWithTemperature
-from utils.train_utils import model_save_name
 
 # Dataset params
 dataset_num_classes = {"cifar10": 10, "cifar100": 100, "svhn": 10, "lsun": 10, "tiny_iamgenet": 200}
@@ -75,6 +68,7 @@ dataset_loader = {
 
 # Mapping model name to model function
 models = {"lenet": lenet, "resnet18": resnet18, "resnet50": resnet50, "wide_resnet": wrn, "vgg16": vgg16, "vit": vit}
+
 model_to_num_dim = {"resnet18": 512, "resnet50": 2048, "resnet101": 2048, "resnet152": 2048, "wide_resnet": 640, "vgg16": 512, "vit": 768}
 
 torch.backends.cudnn.enabled = False
@@ -124,6 +118,7 @@ if __name__ == "__main__":
     
     # model_files = ["/home/sq/YYM/dum/saved_models/run31/resnet50_sn_3.0_mod_seed_1/2024_11_18_10_42_16/resnet50_sn_3.0_mod_seed_1_best_gaussian_stats.model"]
     for i, saved_model_name in enumerate(model_files):
+        # saved_model_name = "/home/sq/YYM/dum/saved_models/run1/2024_03_07_21_49_57/vgg16_seed_1_best.model"
         print(f"Run {args.run},OOD dataset {args.ood_dataset} Evaluating for {i}/{len(model_files)}: {saved_model_name}")
         if args.evaltype == "ensemble":
             val_loaders = []
@@ -153,7 +148,7 @@ if __name__ == "__main__":
                 batch_size=args.batch_size,
                 augment=args.data_aug,  #False
                 val_seed=(args.seed),
-                val_size=0.0, #这里0.1改为0.0
+                val_size=0.1,
                 pin_memory=args.gpu,
             )
 
@@ -233,8 +228,8 @@ if __name__ == "__main__":
             if (args.evaltype == "gmm"):
                 # Evaluate a GMM model
                 print("GMM Model")
-                cache_path = saved_model_name.replace('.model', '.cache')
-                load_cache = True
+                cache_path = saved_model_name.replace(".model",".cache")
+                load_cache = False
                 if load_cache and os.path.exists(cache_path):
                     print(f"load cache from {cache_path}")
                     with open(cache_path, 'rb') as file:
@@ -399,45 +394,76 @@ if __name__ == "__main__":
                 except RuntimeError as e:
                     print("Runtime Error caught: " + str(e))
                     continue
-            elif (args.evaltype == "kde"):
+            elif (args.evaltype == "kde"): 
                 # Evaluate a kde model
-                print("kde Model")
-                embeddings, labels = get_embeddings(
+                cache_path = saved_model_name.replace(".model",".cache")
+                load_cache = True
+                if load_cache and os.path.exists(cache_path):
+                    print(f"load cache from {cache_path}")
+                    with open(cache_path, 'rb') as file:
+                        cache = pkl.load(file)
+                        embeddings = cache["embeddings"].to(device)
+                        labels = cache["labels"].to(device)
+                        norm_threshold = cache["norm_threshold"]
+                else:
+                    embeddings, labels, norm_threshold = get_embeddings(
+                        net,
+                        train_loader,
+                        num_dim=model_to_num_dim[args.model],
+                        dtype=torch.double,
+                        device=device,
+                        storage_device=device,
+                    )
+                    cache = {"embeddings": embeddings.cpu(), "labels": labels.cpu(), "norm_threshold": norm_threshold}
+                    with open(cache_path, "wb") as f:
+                        pkl.dump(cache, f)
+
+        
+                gaussians_model, jitter_eps = gmm_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
+                logits, _, preds = gmm_evaluate(
                     net,
-                    train_loader,
-                    num_dim=model_to_num_dim[args.model],
-                    dtype=torch.double,
+                    gaussians_model,
+                    test_loader,
                     device=device,
+                    num_classes=num_classes,
                     storage_device=device,
                 )
 
-                try:
-                    kde_model = kde_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
-                    logits, labels = kde_evaluate(
-                        net,
-                        kde_model,
-                        test_loader,
-                        device=device,
-                        num_classes=num_classes,
-                        storage_device=device,
-                    )
+                ood_logits, _, _ = gmm_evaluate(
+                    net,
+                    gaussians_model,
+                    ood_test_loader,
+                    device=device,
+                    num_classes=num_classes,
+                    storage_device=device,
+                )
+                m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, maxval, device, conf=True)
+                print(f"m1_auroc:{m1_auroc:.4f},m1_aupr:{m1_auprc:.4f}")
 
-                    ood_logits, ood_labels = kde_evaluate(
-                        net,
-                        kde_model,
-                        ood_test_loader,
-                        device=device,
-                        num_classes=num_classes,
-                        storage_device=device,
-                    )
+                kde_model = kde_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
+                logits2, labels = kde_evaluate(
+                    net,
+                    kde_model,
+                    test_loader,
+                    device=device,
+                    num_classes=num_classes,
+                    storage_device=device,
+                )
 
-                    m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, logsumexp, device, conf=True)
-                    m1_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits, ood_logits, entropy, device, conf=True)
-                    acc = 0
-                    print(f"accu:{acc:.4f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
-                except RuntimeError as e:
-                    print("Runtime Error caught: " + str(e))
-                    continue
+                ood_logits2, ood_labels = kde_evaluate(
+                    net,
+                    kde_model,
+                    ood_test_loader,
+                    device=device,
+                    num_classes=num_classes,
+                    storage_device=device,
+                )
+
+                m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device, conf=True)
+                acc = 0
+                epsilon = 0
+                print(f"accu:{acc:.4f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
+
 
         epsilons.append(epsilon)
         accuracies.append(accuracy)

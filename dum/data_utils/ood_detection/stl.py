@@ -148,8 +148,7 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, **kwargs):
     # define transform
     torch.manual_seed(1)
     transform = transforms.Compose([
-        transforms.RandomCrop(32, padding=6),
-        # transforms.Resize((32, 32)),
+        transforms.Resize((32, 32)),
         transforms.ToTensor(),
         normalize,
     ])

@@ -10,8 +10,8 @@ import torch
 from torch.utils.data import Subset
 from torchvision import datasets, transforms
 
-from utils.simclr_utils import (ContrastiveLearningViewTransform,
-                                get_simclr_pipeline_transform)
+# from utils.simclr_utils import (ContrastiveLearningViewTransform,
+#                                 get_simclr_pipeline_transform)
 
 
 def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_workers=4, pin_memory=False, contrastive=0, size=32, **kwargs):
@@ -146,8 +146,8 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, size=32,sample_
     )
 
     # define transform
-
     # size = 224 ##vit模型:224 ,其他的模型设置为32
+    torch.manual_seed(1)
     transform = transforms.Compose([
         transforms.Resize((size, size)),
         transforms.ToTensor(),
@@ -174,9 +174,18 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, size=32,sample_
     data_loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
+        shuffle=False,
+        num_workers=1,
         pin_memory=pin_memory,
     )
 
     return data_loader
+
+
+
+if __name__ == '__main__':
+    dataloader = get_test_loader(32, root="../../data/")
+    for i in range(10):
+        import pdb;pdb.set_trace()
+        for data,_ in dataloader:
+            print(data.mean())

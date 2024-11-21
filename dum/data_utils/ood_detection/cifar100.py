@@ -133,7 +133,6 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False,size=32,sample_s
     # size = 224
     transform = transforms.Compose([
         transforms.Resize((size, size)),
-        transforms.RandomCrop(size, padding=4),
         transforms.ToTensor(),
         normalize,
     ])
@@ -168,3 +167,7 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False,size=32,sample_s
 
 if __name__ == '__main__':
     dataloader = get_test_loader(32, root="../../data/")
+    for i in range(10):
+        import pdb;pdb.set_trace()
+        for data,_ in dataloader:
+            print(data.mean())
