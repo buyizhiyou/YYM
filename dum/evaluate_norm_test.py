@@ -90,7 +90,6 @@ if __name__ == "__main__":
     args = eval_args().parse_args()
     # Checking if GPU is available
     cuda = torch.cuda.is_available()
-
     # Setting additional parameters
     print("Parsed args", args)
     print("Seed: ", args.seed)

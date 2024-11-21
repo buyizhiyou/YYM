@@ -42,7 +42,7 @@ run = "run32"
 method = "univariate"
 net = models[model](
     spectral_normalization=True,
-    mod=3.0,
+    mod=True,
     num_classes=10,
     temp=1.0,
 )

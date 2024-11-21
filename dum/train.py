@@ -187,7 +187,7 @@ if __name__ == "__main__":
             _, stats = normality_score(X, y, method)
             if stats < best_stats:
                 best_stats = stats
-                save_path =  save_loc + save_name + f"_best_gaussian_stats_{method}.model")
+                save_path =  save_loc + save_name + f"_best_gaussian_stats_{method}.model"
                 torch.save(net.state_dict(), save_path)
                 print("best gaussian model saved to ", save_path)
 
