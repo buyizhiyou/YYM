@@ -30,7 +30,7 @@ models = {
 
 def load_ensemble(ensemble_loc, model_name, device, num_classes=10, ensemble_len=5, num_epochs=350, seed=1, **kwargs):
     ensemble = []
-    cudnn.benchmark = True
+    
     files = glob.glob(f"{ensemble_loc}/{model_name}*.model")
     for i in range(ensemble_len):
         net = models[model_name](num_classes=num_classes, temp=1.0, **kwargs).to(device)

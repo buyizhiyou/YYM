@@ -36,10 +36,8 @@ from utils.eval_utils import get_eval_stats
 from utils.lars import LARC
 from utils.loss import CenterLoss, LabelSmoothing, supervisedContrastiveLoss
 from utils.normality_test import normality_score
-from utils.plots_utils import (create_gif_from_images, inter_intra_class_ratio,
-                               plot_embedding_2d)
-from utils.train_utils import (model_save_name, save_config_file,
-                               test_single_epoch, train_single_epoch)
+from utils.plots_utils import (create_gif_from_images, inter_intra_class_ratio, plot_embedding_2d)
+from utils.train_utils import (model_save_name, save_config_file, test_single_epoch, train_single_epoch, seed_torch)
 
 dataset_num_classes = {"cifar10": 10, "cifar100": 100, "svhn": 10, "dirty_mnist": 10}
 
@@ -54,25 +52,19 @@ models = {"lenet": lenet, "resnet18": resnet18, "resnet50": resnet50, "wide_resn
 
 # torch.backends.cudnn.benchmark = False
 if __name__ == "__main__":
-    torch.manual_seed(0)
-    # device = torch.device(f"cuda:{args.gpu}")
-
     args = training_args().parse_args()
-
     print("Parsed args", args)
     print("Seed: ", args.seed)
     torch.manual_seed(args.seed)
     cuda = torch.cuda.is_available() and args.gpu
     device = torch.device(f"cuda:{args.gpu}" if cuda else "cpu")
     print("CUDA set: " + str(cuda))
-
+    size = 32
     num_classes = dataset_num_classes[args.dataset]
 
     # Choosing the model to train
     net = models[args.model](spectral_normalization=args.sn, mod=args.mod, num_classes=num_classes).to(device)
-    if args.gpu:
-        net.to(device)
-        cudnn.benchmark = True
+    net.to(device)
 
     opt_params = net.parameters()
     # 设置optimier
@@ -102,25 +94,19 @@ if __name__ == "__main__":
     optimizer_centloss = torch.optim.SGD(criterion_center.parameters(), lr=0.5)
     scheduler_centerloss = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 200, 300], gamma=0.1, verbose=False)
 
+    #设置dataloader
     train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(root=args.dataset_root,
                                                                                    batch_size=args.train_batch_size,
                                                                                    augment=args.data_aug,
                                                                                    val_size=0.1,
                                                                                    val_seed=args.seed,
                                                                                    pin_memory=args.gpu,
-                                                                                   contrastive=args.contrastive)
+                                                                                   contrastive=args.contrastive,
+                                                                                   size=size)
+    test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=args.train_batch_size, size=size)
+    test_loader2 = cifar10.get_test_loader(root=args.dataset_root, batch_size=32, sample_size=100000, size=size)
+    ood_test_loader = svhn.get_test_loader(32, root="./data/", sample_size=2000, size=size)
 
-    test_loader = dataset_loader[args.dataset].get_test_loader(
-        root=args.dataset_root,
-        batch_size=args.train_batch_size,
-    )
-    test_loader2 = cifar10.get_test_loader(
-        root=args.dataset_root,
-        batch_size=32,
-        sample_size=100000,
-    )
-    ood_test_loader = svhn.get_test_loader(32, root="./data/", sample_size=2000)
-    
     # Creating summary writer in tensorboard
     curr_time = datetime.datetime.now()
     time_str = datetime.datetime.strftime(curr_time, "%Y_%m_%d_%H_%M_%S")
@@ -138,8 +124,6 @@ if __name__ == "__main__":
     save_config_file(save_loc, args)
 
     best_acc = 0
-    best_distance_ratio = 0
-    best_stats= 1e10
     for epoch in tqdm(range(0, args.epoch)):
         """
         1. 300epoch 原始单阶段训练crossEntropy
@@ -168,7 +152,7 @@ if __name__ == "__main__":
 
         scheduler.step()
 
-        if epoch < 250:
+        if epoch < 300:
             if val_acc > best_acc:
                 best_acc = val_acc
                 save_path = save_loc + save_name + "_best" + ".model"
@@ -204,7 +188,6 @@ if __name__ == "__main__":
 
             save_path = save_loc + save_name + f"_epoch_{epoch}" + ".model"
             torch.save(net.state_dict(), save_path)
-
 
     writer.close()
     # create_gif_from_images(save_loc)

@@ -158,7 +158,7 @@ if __name__ == "__main__":
             )
             if args.gpu:
                 net.to(device)
-                cudnn.benchmark = True
+                
             net.load_state_dict(torch.load(str(saved_model_name), map_location=device), strict=True)
             net.eval()
 

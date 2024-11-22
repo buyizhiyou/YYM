@@ -162,7 +162,7 @@ if __name__ == "__main__":
             )
             if args.gpu:
                 net.to(device)
-                cudnn.benchmark = True
+                
             net.load_state_dict(torch.load(str(saved_model_name), map_location=device), strict=True)
             net.eval()
 
@@ -362,6 +362,7 @@ if __name__ == "__main__":
                                 # ood_logits2 -= ood_logits
                                 m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, maxval, device,
                                                                                   conf=True)  #这里使用maxval是求最大logP，使用logsumexp是求平均logP
+                                #TODO:这里也是一个改进，我们使用maxval,而不是logsumexp
                             else:
                                 m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, None, device, conf=True)
 

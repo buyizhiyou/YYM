@@ -81,7 +81,7 @@ if __name__ == "__main__":
     if args.ambiguous:
         pretrained_net = models[args.trained_model_name](spectral_normalization=args.tsn, mod=args.tmod, mnist=True).to(device)
         pretrained_net = torch.nn.DataParallel(pretrained_net, device_ids=range(torch.cuda.device_count()))
-        cudnn.benchmark = True
+        
         pretrained_net.load_state_dict(torch.load(args.saved_model_path + args.saved_model_name))
 
     # Creating the datasets

@@ -47,7 +47,7 @@ net = models[model](
     temp=1.0,
 )
 net.to(device)
-cudnn.benchmark = True
+
 dir = f"./saved_models/{run}/{model}_sn_3.0_mod_seed_1/"
 sub_dirs = os.listdir(dir)
 for time_str in sub_dirs:

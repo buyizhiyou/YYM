@@ -54,7 +54,7 @@ from utils.gmm_utils import (get_embeddings, gmm_evaluate, gmm_evaluate_for_adv,
                              gmm_evaluate_with_perturbation_for_adv, gmm_fit, gradient_norm_collect, maxp_evaluate, maxp_evaluate_with_perturbation)
 # Temperature scaling
 from utils.temperature_scaling import ModelWithTemperature
-from utils.train_utils import model_save_name
+from utils.train_utils import model_save_name, seed_torch
 from utils.plots_utils import plot_embedding_2d, inter_intra_class_ratio, create_gif_from_images
 from utils.normality_test import normality_score
 
@@ -86,21 +86,18 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 if __name__ == "__main__":
     cuda = torch.cuda.is_available()
     num_classes = 10
-    # Setting additional parameters
-    torch.manual_seed(1)
+    seed_torch()
 
-    device = "cuda:1"
+    device = "cuda:0"
     model = "resnet50"
-    run = "run32"
+    run = "run35"
     method = "univariate"
 
     dir = f"./saved_models/{run}/{model}_sn_3.0_mod_seed_1/"
     sub_dirs = os.listdir(dir)[:1]
-
+    sub_dirs = ["2024_11_22_05_46_19"]
     for time_str in sub_dirs:
-
         res = {}
-
         dir2 = os.path.join(dir, time_str)
         model_save_name = os.path.join(dir2, f"{model}_sn_3.0_mod_seed_1_best.model")
         train_loader, val_loader = dataset_loader["cifar10"].get_train_valid_loader(
@@ -119,9 +116,14 @@ if __name__ == "__main__":
             val_size=0.0,
             pin_memory=1,
         )
-        test_loader = dataset_loader["cifar10"].get_test_loader(root="./data/", batch_size=512, size=32, pin_memory=1)
 
-        for epoch in tqdm(range(300, 350)):
+        test_loader2 = cifar10.get_test_loader(
+            root="./data/",
+            batch_size=32,
+            sample_size=1000,
+        )
+
+        for epoch in tqdm(range(300, 320)):
             model_save_name = os.path.join(dir2, f"{model}_sn_3.0_mod_seed_1_epoch_{epoch}.model")
             print(f"load {model_save_name}")
             net = models[model](
@@ -130,9 +132,7 @@ if __name__ == "__main__":
                 num_classes=num_classes,
                 temp=1.0,
             )
-            
             net.to(device)
-            cudnn.benchmark = True
             net.load_state_dict(torch.load(str(model_save_name), map_location=device), strict=True)
             net.eval()
             # (
@@ -165,19 +165,18 @@ if __name__ == "__main__":
                 with open(cache_path, "wb") as f:
                     pkl.dump(cache, f)
 
-
             gaussians_model, jitter_eps = gmm_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
             logits, labels, preds = gmm_evaluate(
                 net,
                 gaussians_model,
-                test_loader,
+                test_loader2,
                 device=device,
                 num_classes=num_classes,
                 storage_device=device,
             )
             Xs = []
             ys = []
-            for images, labels in train_loader2:
+            for images, labels in test_loader2:
                 images = images.to(device)
                 _ = net(images)
                 embeddings = net.feature
@@ -186,11 +185,10 @@ if __name__ == "__main__":
             X = np.concatenate(Xs)
             y = np.concatenate(ys)
 
-            # for ood in ["cifar100", "svhn", "lsun", "mnist", "tiny_imagenet"]:
             auroc = []
             auprc = []
-            for ood in [ "svhn", ]:
-                ood_test_loader = dataset_loader[ood].get_test_loader(root="./data/", batch_size=32, size=32, pin_memory=1)
+            for ood in ["svhn", "cifar100", "lsun", "mnist", "tiny_imagenet"]:
+                ood_test_loader = dataset_loader[ood].get_test_loader(32, root="./data/", sample_size=1000)
                 ood_logits, ood_labels, _ = gmm_evaluate(
                     net,
                     gaussians_model,
@@ -219,20 +217,20 @@ if __name__ == "__main__":
                 start = time.time()
                 tsne = TSNE(n_components=2, init='pca', perplexity=50, random_state=0)
                 X_tsne = tsne.fit_transform(X_all)
-                print(time.time()-start)
-                
+                print(time.time() - start)
 
                 fig = plot_embedding_2d(X_tsne, y_all, 10, f"epoch:{epoch},auroc:{m1_auroc:.3f},auprc:{m1_auprc:.3f}")
                 save_loc = f"./results/{run}/{model}_sn_3.0_mod_seed_1/{time_str}"
                 os.makedirs(save_loc, exist_ok=True)
-                fig.savefig(os.path.join(save_loc, f"{ood}_stats_{epoch}.jpg"), dpi=300, bbox_inches='tight')
+                fig.savefig(os.path.join(save_loc, f"{ood}_stats_{epoch}.jpg"), dpi=100, bbox_inches='tight')
 
                 auroc.append(m1_auroc)
                 auprc.append(m1_auprc)
+
             res[epoch] = {}
-            res[epoch]["auroc"]=auroc
-            res[epoch]["auprc"]=auprc
-            
+            res[epoch]["auroc"] = auroc
+            res[epoch]["auprc"] = auprc
+            print(f"epoch:{epoch},auroc:{auroc},auprc:{auprc}")
 
         save_loc = f"./results/{run}/{model}_sn_3.0_mod_seed_1/{time_str}"
         saved_name = "all_res.json"

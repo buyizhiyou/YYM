@@ -126,7 +126,7 @@ if __name__ == "__main__":
             if args.gpu:
                 net.cuda()
                 net = torch.nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
-                cudnn.benchmark = True
+                
             net.load_state_dict(torch.load(str(saved_model_name)))
             net.eval()
 
