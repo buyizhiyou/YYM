@@ -69,7 +69,7 @@ dataset_loader = {
 # Mapping model name to model function
 models = {"lenet": lenet, "resnet18": resnet18, "resnet50": resnet50, "wide_resnet": wrn, "vgg16": vgg16, "vit": vit}
 
-model_to_num_dim = {"resnet18": 512, "resnet50": 2048, "resnet101": 2048, "resnet152": 2048, "wide_resnet": 640, "vgg16": 512, "vit": 768}
+model_to_num_dim = {"resnet18": 512, "resnet50": 256, "resnet101": 2048, "resnet152": 2048, "wide_resnet": 640, "vgg16": 512, "vit": 768}
 
 torch.backends.cudnn.enabled = False
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
@@ -464,8 +464,7 @@ if __name__ == "__main__":
                 acc = 0
                 epsilon = 0
                 print(f"accu:{acc:.4f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
-
-
+         
         epsilons.append(epsilon)
         accuracies.append(accuracy)
         eces.append(0.0)

@@ -143,16 +143,15 @@ if __name__ == "__main__":
             label_smooth=args.ls,
         )
 
-        if epoch % 3 == 0:
-            val_acc = test_single_epoch(epoch, net, val_loader, device)
-            writer.add_scalar("train_loss", train_loss, (epoch + 1))
-            writer.add_scalar("train_acc", train_acc, (epoch + 1))
-            writer.add_scalar("val_acc", val_acc, (epoch + 1))
-            writer.add_scalar('learning_rate', scheduler.get_last_lr()[0], global_step=(epoch + 1))
+        val_acc = test_single_epoch(epoch, net, val_loader, device)
+        writer.add_scalar("train_loss", train_loss, (epoch + 1))
+        writer.add_scalar("train_acc", train_acc, (epoch + 1))
+        writer.add_scalar("val_acc", val_acc, (epoch + 1))
+        writer.add_scalar('learning_rate', scheduler.get_last_lr()[0], global_step=(epoch + 1))
 
         scheduler.step()
 
-        if epoch < 300:
+        if epoch < 250:
             if val_acc > best_acc:
                 best_acc = val_acc
                 save_path = save_loc + save_name + "_best" + ".model"

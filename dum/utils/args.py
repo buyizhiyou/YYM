@@ -247,7 +247,7 @@ def eval_args():
         "--evaltype",
         type=str,
         default="gmm",
-        choices=["softmax", "ensemble", "gmm", "kde"],
+        choices=["softmax", "ensemble", "gmm", "kde","mix"],
     )
     parser.add_argument("--dataset-root", type=str, default=dataset_root, dest="dataset_root", help="path of a dataset (useful for ambiguous mnist)")
     parser.add_argument(

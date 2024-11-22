@@ -86,7 +86,7 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, size=32, sample
     dataset = datasets.SVHN(
         root=os.path.join(data_dir, "svhn"),
         split="test",
-        download=True,
+        download=False,
         transform=transform,
     )
 

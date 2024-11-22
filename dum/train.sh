@@ -81,3 +81,6 @@ for i in {1..5}; do
               -sn
        sleep 5
 done
+
+
+#TODO：添加参数lr/size

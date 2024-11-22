@@ -68,7 +68,7 @@ if [[ -z "$gpu" ]]; then
 fi
 
 #check evaltype
-evaltypes=("gmm" "kde" "ensemble")
+evaltypes=("gmm" "kde" "ensemble" "mix")
 if [[ " ${evaltypes[@]}" =~ "$evaltype" ]]; then
        echo "###########  evaluate evaltype $evaltype"
 else

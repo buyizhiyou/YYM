@@ -95,7 +95,7 @@ if __name__ == "__main__":
 
     dir = f"./saved_models/{run}/{model}_sn_3.0_mod_seed_1/"
     sub_dirs = os.listdir(dir)[:1]
-    sub_dirs = ["2024_11_22_05_46_19"]
+    sub_dirs = ["2024_11_21_23_06_00"]
     for time_str in sub_dirs:
         res = {}
         dir2 = os.path.join(dir, time_str)
@@ -116,7 +116,11 @@ if __name__ == "__main__":
             val_size=0.0,
             pin_memory=1,
         )
-
+        test_loader = cifar10.get_test_loader(
+            root="./data/",
+            batch_size=512,
+            sample_size=10000000,
+        )
         test_loader2 = cifar10.get_test_loader(
             root="./data/",
             batch_size=32,
@@ -135,13 +139,13 @@ if __name__ == "__main__":
             net.to(device)
             net.load_state_dict(torch.load(str(model_save_name), map_location=device), strict=True)
             net.eval()
-            # (
-            #     conf_matrix,
-            #     accuracy,
-            #     labels_list,
-            #     predictions,
-            #     confidences,
-            # ) = test_classification_net(net, test_loader, device)
+            (
+                conf_matrix,
+                accuracy,
+                labels_list,
+                predictions,
+                confidences,
+            ) = test_classification_net(net, test_loader, device)
 
             cache_path = model_save_name.replace('.model', '.cache')
             load_cache = True
@@ -226,11 +230,13 @@ if __name__ == "__main__":
 
                 auroc.append(m1_auroc)
                 auprc.append(m1_auprc)
+                
+                break
 
             res[epoch] = {}
             res[epoch]["auroc"] = auroc
             res[epoch]["auprc"] = auprc
-            print(f"epoch:{epoch},auroc:{auroc},auprc:{auprc}")
+            print(f"epoch:{epoch},accuracy:{accuracy},auroc:{auroc},auprc:{auprc}")
 
         save_loc = f"./results/{run}/{model}_sn_3.0_mod_seed_1/{time_str}"
         saved_name = "all_res.json"

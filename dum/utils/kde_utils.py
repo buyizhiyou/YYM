@@ -51,14 +51,16 @@ def kde_evaluate(net, kde_model, loader, device, num_classes, storage_device):
 def kde_fit(embeddings, labels, num_classes):
     with torch.no_grad():
         # bandwidths = [0.01, 0.1, 1, 10]
-        # grid = GridSearchCV(KernelDensity(kernel='gaussian'), {
-        #                     'bandwidth': bandwidths}, verbose=1)
-        # grid.fit(embeddings.cpu().numpy())
-        # # The best estimated bandwidth density is used as the truth value
-        # best_KDEbandwidth = grid.best_params_['bandwidth']
-        best_KDEbandwidth = 0.1
-        # print(f"best bandwidth:{best_KDEbandwidth}")
+        bandwidths = np.linspace(0,1,num=10)
+        grid = GridSearchCV(KernelDensity(kernel='gaussian'), {
+                            'bandwidth': bandwidths}, verbose=1)
+        grid.fit(embeddings.cpu().numpy())
+        # The best estimated bandwidth density is used as the truth value
+        best_KDEbandwidth = grid.best_params_['bandwidth']
+
+        print(f"best bandwidth:{best_KDEbandwidth}")
         kernel = "gaussian"
+        # best_KDEbandwidth = 0.1
 
         # kdes = [NaiveKDE(kernel='gaussian', bw=1).fit(embeddings[labels == c].cpu().numpy()) for c in range(num_classes)]
         kdes = [KernelDensity(kernel=kernel, bandwidth=best_KDEbandwidth).fit(embeddings[labels == c].cpu().numpy()) for c in range(num_classes)]
