@@ -1,12 +1,3 @@
-#!/usr/bin/env python
-# -*- encoding: utf-8 -*-
-'''
-@File    :   tiny_imagenet.py
-@Time    :   2024/03/01 16:20:29
-@Author  :   shiqing
-@Version :   Cinnamoroll V1
-'''
-
 import os
 
 import numpy as np
@@ -16,31 +7,35 @@ from torchvision import datasets, transforms
 
 
 def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_workers=4, pin_memory=False, **kwargs):
+
     error_msg = "[!] val_size should be in the range [0, 1]."
     assert (val_size >= 0) and (val_size <= 1), error_msg
 
+    normalize = transforms.Normalize(
+        mean=[0.4914, 0.4822, 0.4465],
+        std=[0.2023, 0.1994, 0.2010],
+    )
+
+    # define transforms
+    valid_transform = transforms.Compose([
+        transforms.Resize((32, 32)),
+        transforms.ToTensor(),
+        normalize,
+    ])
+
+    # load the dataset
     data_dir = kwargs['root']
-    train_path = os.path.join(data_dir, "tiny-imagenet-200", "train")
-    val_path = os.path.join(data_dir, "tiny-imagenet-200", "val")
+    train_dataset = datasets.LSUN(
+        root=data_dir,
+        classes="train",
+        transform=valid_transform,
+    )
 
-    train_transform = transforms.Compose([
-        transforms.Resize((32, 32)),
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomGrayscale(),  # add
-        transforms.GaussianBlur(3),  # add
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),  # pytorch doc std
-    ])
-    val_transform = transforms.Compose([
-        transforms.Resize((32, 32)),
-        transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-    ])
-
-    train_dataset = datasets.ImageFolder(train_path, transform=train_transform)
-
-    val_dataset = datasets.ImageFolder(val_path, transform=val_transform)
+    valid_dataset = datasets.LSUN(
+        root=data_dir,
+        classes="val",
+        transform=valid_transform,
+    )
 
     num_train = len(train_dataset)
     indices = list(range(num_train))
@@ -50,16 +45,15 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_work
     np.random.shuffle(indices)
 
     train_idx, valid_idx = indices[split:], indices[:split]
-
     train_subset = Subset(train_dataset, train_idx)
-    valid_subset = Subset(train_dataset, valid_idx)
+    valid_subset = Subset(valid_dataset, valid_idx)
 
     train_loader = torch.utils.data.DataLoader(
         train_subset,
         batch_size=batch_size,
         num_workers=num_workers,
         pin_memory=pin_memory,
-        shuffle=False,
+        shuffle=True,
     )
     valid_loader = torch.utils.data.DataLoader(
         valid_subset,
@@ -72,19 +66,29 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_work
     return (train_loader, valid_loader)
 
 
-def get_test_loader(batch_size, num_workers=4, pin_memory=False,size=32,sample_size=1000,**kwargs):
-    data_dir = kwargs['root']
-    val_path = os.path.join(data_dir, "tiny-imagenet-200", "val")
+def get_test_loader(batch_size, num_workers=4, pin_memory=False, size=32,sample_size=1000,**kwargs):
 
+    normalize = transforms.Normalize(
+        mean=[0.4914, 0.4822, 0.4465],
+        std=[0.2023, 0.1994, 0.2010],
+    )
+
+    # define transform
     torch.manual_seed(1)
     # size = 224
-    val_transform = transforms.Compose([
+    transform = transforms.Compose([
         transforms.Resize((size, size)),
         transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        transforms.Lambda(lambda x: torch.mean(x, dim=0, keepdim=True).repeat(3, 1, 1)),  # 求均值并重复
+        normalize,
     ])
 
-    dataset = datasets.ImageFolder(val_path, transform=val_transform)
+    data_dir = kwargs['root']
+    dataset = datasets.LSUN(
+        root=os.path.join(data_dir, "lsun"),
+        classes="test",
+        transform=transform,
+    )
 
     num_train = len(dataset)
     if (num_train >= sample_size):
@@ -95,15 +99,15 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False,size=32,sample_s
         valid_idx = indices[:split]
         dataset = Subset(dataset, valid_idx)
         
-    val_loader = torch.utils.data.DataLoader(
+    data_loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
+        shuffle=False,
         num_workers=num_workers,
         pin_memory=pin_memory,
-        shuffle=False,
     )
 
-    return val_loader
+    return data_loader
 
 
 if __name__ == '__main__':

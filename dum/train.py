@@ -24,6 +24,7 @@ import data_utils.dirty_mnist as dirty_mnist
 import data_utils.ood_detection.cifar10 as cifar10
 import data_utils.ood_detection.cifar100 as cifar100
 import data_utils.ood_detection.svhn as svhn
+import data_utils.ood_detection.mnist as mnist
 from net.lenet import lenet
 from net.resnet import resnet18, resnet50  # 自己实现的spectral norm
 # from net.resnet2 import resnet18, resnet50 #官方实现的spectral norm
@@ -39,19 +40,16 @@ from utils.normality_test import normality_score
 from utils.plots_utils import (create_gif_from_images, inter_intra_class_ratio, plot_embedding_2d)
 from utils.train_utils import (model_save_name, save_config_file, test_single_epoch, train_single_epoch, seed_torch)
 
-dataset_num_classes = {"cifar10": 10, "cifar100": 100, "svhn": 10, "dirty_mnist": 10}
+dataset_num_classes = {"mnist": 10, "cifar10": 10, "cifar100": 100, "svhn": 10, "dirty_mnist": 10}
 
-dataset_loader = {
-    "cifar10": cifar10,
-    "cifar100": cifar100,
-    "svhn": svhn,
-    "dirty_mnist": dirty_mnist,
-}
+dataset_loader = {"cifar10": cifar10, "cifar100": cifar100, "svhn": svhn, "dirty_mnist": dirty_mnist, "mnist": mnist}
 
 models = {"lenet": lenet, "resnet18": resnet18, "resnet50": resnet50, "wide_resnet": wrn, "vgg16": vgg16, "vit": vit}
+model_to_num_dim = {"resnet18": 512, "resnet50": 2048, "resnet101": 2048, "resnet152": 2048, "wide_resnet": 640, "vgg16": 512, "vit": 768}
 
 # torch.backends.cudnn.benchmark = False
 if __name__ == "__main__":
+
     args = training_args().parse_args()
     print("Parsed args", args)
     print("Seed: ", args.seed)
@@ -59,7 +57,7 @@ if __name__ == "__main__":
     cuda = torch.cuda.is_available() and args.gpu
     device = torch.device(f"cuda:{args.gpu}" if cuda else "cpu")
     print("CUDA set: " + str(cuda))
-    size = 32
+    size = args.size
     num_classes = dataset_num_classes[args.dataset]
 
     # Choosing the model to train
@@ -82,7 +80,10 @@ if __name__ == "__main__":
     # 学习率schduler
     if args.scheduler == "step":
         #[0.3 * args.epoch, 0.6 * args.epoch, 0.9 * args.epoch]
-        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 150, 200, 230], gamma=0.1, verbose=False)
+        scheduler = optim.lr_scheduler.MultiStepLR(optimizer,
+                                                   milestones=[0.3 * args.epoch, 0.6 * args.epoch, 0.9 * args.epoch],
+                                                   gamma=0.1,
+                                                   verbose=False)
     elif args.scheduler == "cos":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=300, eta_min=1e-7, verbose=False)
 
@@ -90,7 +91,7 @@ if __name__ == "__main__":
     #TODO:这个schduler有Bug，无法step更新学习率
     # optimimizer = LARC(optimizer)
 
-    criterion_center = CenterLoss(num_classes=10, feat_dim=2048, device=device)
+    criterion_center = CenterLoss(num_classes=10, feat_dim=model_to_num_dim[args.model], device=device)
     optimizer_centloss = torch.optim.SGD(criterion_center.parameters(), lr=0.5)
     scheduler_centerloss = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 200, 300], gamma=0.1, verbose=False)
 
@@ -104,7 +105,7 @@ if __name__ == "__main__":
                                                                                    contrastive=args.contrastive,
                                                                                    size=size)
     test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=args.train_batch_size, size=size)
-    test_loader2 = cifar10.get_test_loader(root=args.dataset_root, batch_size=32, sample_size=100000, size=size)
+    test_loader2 = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=32, sample_size=100000, size=size)
     ood_test_loader = svhn.get_test_loader(32, root="./data/", sample_size=2000, size=size)
 
     # Creating summary writer in tensorboard
@@ -143,21 +144,24 @@ if __name__ == "__main__":
             label_smooth=args.ls,
         )
 
-        val_acc = test_single_epoch(epoch, net, val_loader, device)
-        writer.add_scalar("train_loss", train_loss, (epoch + 1))
-        writer.add_scalar("train_acc", train_acc, (epoch + 1))
-        writer.add_scalar("val_acc", val_acc, (epoch + 1))
-        writer.add_scalar('learning_rate', scheduler.get_last_lr()[0], global_step=(epoch + 1))
+        net.eval()  #注意这里，设置eval模式
+        if epoch%3==0:
+            val_acc = test_single_epoch(epoch, net, val_loader, device)
+            writer.add_scalar("train_loss", train_loss, (epoch + 1))
+            writer.add_scalar("train_acc", train_acc, (epoch + 1))
+            writer.add_scalar("val_acc", val_acc, (epoch + 1))
+            writer.add_scalar('learning_rate', scheduler.get_last_lr()[0], global_step=(epoch + 1))
 
         scheduler.step()
-
-        if epoch < 250:
+        # scheduler_centerloss.step()
+        
+        if epoch<290:
             if val_acc > best_acc:
                 best_acc = val_acc
                 save_path = save_loc + save_name + "_best" + ".model"
                 torch.save(net.state_dict(), save_path)
                 print("Model saved to ", save_path)
-        else:  #在最后50个epoch,acc已经基本平直,按照一定策略筛选出最符合多元高斯分布的模型
+        else:  #在最后10个epoch,acc已经基本平直
             Xs = []
             ys = []
             for images, labels in test_loader2:

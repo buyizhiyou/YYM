@@ -1,10 +1,3 @@
-"""
-Create train, valid, test iterators for CIFAR-10.
-Train set size: 45000
-Val set size: 5000
-Test set size: 10000
-"""
-
 import numpy as np
 import torch
 from torch.utils.data import Subset
@@ -48,14 +41,14 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_work
 
     # load the dataset
     data_dir = kwargs['root']
-    train_dataset = datasets.MNIST(
+    train_dataset = datasets.FashionMNIST(
         root=data_dir,
         train=True,
         download=False,
         transform=train_transform,
     )
 
-    valid_dataset = datasets.MNIST(
+    valid_dataset = datasets.FashionMNIST(
         root=data_dir,
         train=True,
         download=False,
@@ -110,10 +103,10 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, size=32,sample_
     ])
 
     data_dir = kwargs['root']
-    dataset = datasets.MNIST(
+    dataset = datasets.FashionMNIST(
         root=data_dir,
         train=False,
-        download=False,
+        download=True,
         transform=transform,
     )
 

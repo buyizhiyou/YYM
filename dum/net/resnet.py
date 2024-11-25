@@ -189,6 +189,7 @@ class ResNet(nn.Module):
             self.layer3 = self._make_layer(block, 16, 256, num_blocks[2], stride=2)
             self.layer4 = self._make_layer(block, 8, 512, num_blocks[3], stride=2)
 
+
         
         last_dim = 2048
         self.fc_add = nn.Linear(512 * block.expansion, last_dim)  #添加一层线性层，为了dropout

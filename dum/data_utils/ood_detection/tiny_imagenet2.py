@@ -77,10 +77,10 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False,size=32,sample_s
     val_path = os.path.join(data_dir, "tiny-imagenet-200", "val")
 
     torch.manual_seed(1)
-    # size = 224
     val_transform = transforms.Compose([
         transforms.Resize((size, size)),
         transforms.ToTensor(),
+        transforms.Lambda(lambda x: torch.mean(x, dim=0, keepdim=True).repeat(3, 1, 1)),  # 求均值并重复
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ])
 

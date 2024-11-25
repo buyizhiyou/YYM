@@ -70,7 +70,7 @@ def train_single_epoch(
     std = [0.2023, 0.1994, 0.2010]
     std = torch.tensor(std).to(device)
     mean = torch.tensor(mean).to(device)
-    weight_center = 0.1   
+    weight_center = 10   
 
 
     if contrastive:
@@ -203,9 +203,9 @@ def train_single_epoch(
                 param.grad.data *= (1. / weight_center)
             optimizer_centloss.step()
 
-        train_loss += loss.item()
-        train_loss1 += loss1.item()
-        train_loss2 += loss2.item()
+        train_loss += loss.item() * len(data)
+        train_loss1 += loss1.item() * len(data)
+        train_loss2 += loss2.item() * len(data)
         num_samples += len(data)
 
     tqdm.write("====> Epoch: {} Average loss1: {:.4f} Average loss2: {:.4f}  Average loss: {:.4f}\t Average Acc:{:.4f}".format(

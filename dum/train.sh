@@ -2,9 +2,9 @@
 
 echo "###########  Evaluate with sn and mod;
 ###########  Usage:
-###########   ./train.sh --gpu  0 --run 17 --batchsize 512 --epochs 400 --model  resnet50 --contrastive 0 --adv 0"
+###########   ./train.sh --gpu  0 --run 17 --batchsize 512 --epochs 400 --model  resnet50 --contrastive 0 --adv 0  --size 32 --lr 0.1 "
 # 解析命令行参数
-options=$(getopt -o g:r:b:e:m:c:a --long gpu:,run:,batchsize:,epochs:,model:,contrastive:,adv:, -- "$@")
+options=$(getopt -o g:r:b:e:m:c:a:s:l --long gpu:,run:,batchsize:,epochs:,model:,contrastive:,adv:,size:,lr:, -- "$@")
 eval set -- "$options"
 
 # 提取选项和参数
@@ -45,6 +45,16 @@ while true; do
               adv=$1
               shift
               ;;
+       -s | --size)
+              shift
+              size=$1
+              shift
+              ;;
+       -l | --lr)
+              shift
+              lr=$1
+              shift
+              ;;
        --)
               shift
               break
@@ -71,7 +81,8 @@ for i in {1..5}; do
               --gpu $gpu \
               --run $run \
               --data-aug \
-              --lr 0.1\
+              --lr $lr \
+              --size $size \
               -b $batchsize \
               --epochs $epochs --dataset cifar10 \
               --model $model \

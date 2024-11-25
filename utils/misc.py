@@ -22,7 +22,7 @@ class argsdict(dict):
     __delattr__ = dict.__delitem__
 
 
-def seed_torch(seed: int = 2021):
+def seed_torch(seed: int = 1):
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
     np.random.seed(seed)

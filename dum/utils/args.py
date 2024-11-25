@@ -45,7 +45,11 @@ def training_args():
         default=0,  #0:不需要对抗训练
         help="advasarial training")
     parser.add_argument("--ls", type=bool, default=False, help="using label smoothing")
-
+    parser.add_argument(
+        "--size",
+        type=int,
+        help="add image size",
+    )
     parser.add_argument(
         "--run",
         type=int,
@@ -239,6 +243,11 @@ def eval_args():
         default="fgsm",
         help="add perturbation",
     )
+    parser.add_argument(
+        "--size",
+        type=int,
+        help="add image size",
+    )
     parser.add_argument("--adv", type=int, default=0, help="advasarial training")
     parser.add_argument("--ls", type=bool, default=False, help="using label smoothing")
     parser.add_argument("--mcdropout", type=bool, default=False, help="using mc dropout")
@@ -332,6 +341,7 @@ def al_args():
     train_batch_size = 64
     test_batch_size = 512
     scoring_batch_size = 128
+
 
     parser = argparse.ArgumentParser(description="Active Learning Experiments")
     parser.add_argument("--seed", type=int, dest="seed", required=True, help="Seed to use")

@@ -11,12 +11,12 @@ import argparse
 import torch.backends.cudnn as cudnn
 
 # Import dataloaders
-import data_utils.ood_detection.cifar10 as cifar10
-import data_utils.ood_detection.cifar100 as cifar100
-import data_utils.ood_detection.lsun as lsun
-import data_utils.ood_detection.svhn as svhn
+import data_utils.ood_detection.cifar10_2 as cifar10_2
+import data_utils.ood_detection.cifar100_2 as cifar100_2
+import data_utils.ood_detection.lsun2 as lsun2
+import data_utils.ood_detection.svhn2 as svhn2
 import data_utils.ood_detection.mnist as mnist
-import data_utils.ood_detection.gauss as gauss
+import data_utils.ood_detection.fashionmnist as fashionmnist
 import data_utils.ood_detection.tiny_imagenet as tiny_imagenet
 import data_utils.ood_detection.fer2013 as fer2013
 import data_utils.ood_detection.dtd as dtd
@@ -50,15 +50,16 @@ from utils.ensemble_utils import load_ensemble, ensemble_forward_pass
 from utils.temperature_scaling import ModelWithTemperature
 
 # Dataset params
-dataset_num_classes = {"mnist":10,"cifar10": 10, "cifar100": 100, "svhn": 10, "lsun": 10, "tiny_iamgenet": 200}
+dataset_num_classes = {"mnist": 10, "cifar10": 10, "cifar100": 100, "svhn": 10, "lsun": 10, "tiny_iamgenet": 200}
 
 dataset_loader = {
-    "cifar10": cifar10,
-    "cifar100": cifar100,
-    "svhn": svhn,
+    "cifar10": cifar10_2,
+    "cifar100": cifar100_2,
+    "svhn": svhn2,
+    "fashionmnist": fashionmnist,
     "fer2013": fer2013,
     "mnist": mnist,
-    "lsun": lsun,
+    "lsun": lsun2,
     "dtd": dtd,
     "stl": stl,
     "place365": place365,
@@ -87,6 +88,7 @@ if __name__ == "__main__":
     device = torch.device(f"cuda:{args.gpu}" if cuda else "cpu")
 
     # Taking input for the dataset
+    args.dataset = "mnist"
     num_classes = dataset_num_classes[args.dataset]
 
     # Evaluating the models
@@ -231,7 +233,7 @@ if __name__ == "__main__":
             #     t_confidences,
             # ) = test_classification_net(temp_net, test_loader, device)
             # t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
-
+ 
             if (args.evaltype == "gmm"):
                 # Evaluate a GMM model
                 print("GMM Model")
@@ -301,7 +303,7 @@ if __name__ == "__main__":
                     # print(f"m1_auroc_adv:{m1_auprc_adv},m1_auprc_adv:{m1_auprc_adv},m2_auroc_adv:{m2_auroc_adv},m2_auprc_adv:{m2_auprc_adv}")
 
                     m2_res = []
-                    for epsilon in [0.0001,0.001, 0.002,0.003,0.005,0.005,0.006,0.007,0.008,0.009,0.01]:
+                    for epsilon in [0.001, 0.003, 0.005, 0.007, 0.009, 0.01]:
                         for temp in [1]:
                             if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
                                 print(f"add noise:{args.perturbation}")

@@ -1,7 +1,7 @@
 #! /bin/bash
 echo "###########  Evaluate with sn and mod;
 ###########  Usage:
-###########   ./evaluate.sh --gpu  0 --run 36 --batchsize 512 --evaltype gmm --ooddataset svhn --model resnet50  --perturbation fgsm --contrastive 0 --adv 0 --size 32"
+###########   ./evaluate-mnist.sh --gpu  0 --run 36 --batchsize 512 --evaltype gmm --ooddataset svhn --model resnet50  --perturbation fgsm --contrastive 0 --adv 0 --size 32"
 
 # 解析命令行参数
 options=$(getopt -o g:r:b:t:d:m:c:a:s --long gpu:,run:,batchsize:,evaltype:,ooddataset:,model:,perturbation:,contrastive:,adv:,size:,  -- "$@")
@@ -80,7 +80,7 @@ else
        echo "###########  $evaltype is not in the evaltypes [gmm,kde,ensemble]"
 fi
 #check ooddataset
-ooddatasets=("tiny_imagenet" "mnist" "lsun" "svhn" "cifar100")
+ooddatasets=("cifar10" "lsun" "svhn" "cifar100")
 #check model
 models=("vgg16" "resnet50" "wide_resnet","vit")
 if [[ " ${models[@]}" =~ "$model" ]]; then
@@ -91,7 +91,7 @@ fi
 
 if [[ "$ooddataset" = "all" ]]; then
        for ood in ${ooddatasets[@]}; do
-              python evaluate.py \
+              python evaluate-mnist.py \
                      --seed 1 \
                      -b $batchsize \
                      --gpu $gpu \
@@ -109,7 +109,7 @@ if [[ "$ooddataset" = "all" ]]; then
                      -sn
        done
 else
-       python evaluate.py \
+       python evaluate-mnist.py \
               --seed 1 \
               -b $batchsize \
               --gpu $gpu \

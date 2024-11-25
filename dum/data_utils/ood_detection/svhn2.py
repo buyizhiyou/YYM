@@ -1,9 +1,4 @@
-"""
-Create train, valid, test iterators for CIFAR-10.
-Train set size: 45000
-Val set size: 5000
-Test set size: 10000
-"""
+import os
 
 import numpy as np
 import torch
@@ -11,7 +6,7 @@ from torch.utils.data import Subset
 from torchvision import datasets, transforms
 
 
-def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_workers=4, pin_memory=False, contrastive=0, **kwargs):
+def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.1, num_workers=4, pin_memory=False, size=32, **kwargs):
 
     error_msg = "[!] val_size should be in the range [0, 1]."
     assert (val_size >= 0) and (val_size <= 1), error_msg
@@ -23,42 +18,23 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_work
 
     # define transforms
     valid_transform = transforms.Compose([
-        transforms.Resize((32, 32)),
         transforms.ToTensor(),
-        transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
         normalize,
     ])
 
-    if augment:
-        train_transform = transforms.Compose([
-            transforms.Resize((32, 32)),
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
-            normalize,
-        ])
-    else:
-        train_transform = transforms.Compose([
-            transforms.Resize((32, 32)),
-            transforms.ToTensor(),
-            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
-            normalize,
-        ])
-
     # load the dataset
     data_dir = kwargs['root']
-    train_dataset = datasets.MNIST(
+    train_dataset = datasets.SVHN(
         root=data_dir,
-        train=True,
-        download=False,
-        transform=train_transform,
+        split="train",
+        download=True,
+        transform=valid_transform,
     )
 
-    valid_dataset = datasets.MNIST(
+    valid_dataset = datasets.SVHN(
         root=data_dir,
-        train=True,
-        download=False,
+        split="train",
+        download=True,
         transform=valid_transform,
     )
 
@@ -70,7 +46,6 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_work
     np.random.shuffle(indices)
 
     train_idx, valid_idx = indices[split:], indices[:split]
-
     train_subset = Subset(train_dataset, train_idx)
     valid_subset = Subset(valid_dataset, valid_idx)
 
@@ -79,7 +54,7 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_work
         batch_size=batch_size,
         num_workers=num_workers,
         pin_memory=pin_memory,
-        shuffle=False,
+        shuffle=True,
     )
     valid_loader = torch.utils.data.DataLoader(
         valid_subset,
@@ -92,27 +67,26 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_work
     return (train_loader, valid_loader)
 
 
-def get_test_loader(batch_size, num_workers=4, pin_memory=False, size=32,sample_size=1000,**kwargs):
+def get_test_loader(batch_size, num_workers=4, pin_memory=False, size=32, sample_size=1000, **kwargs):
 
     normalize = transforms.Normalize(
         mean=[0.4914, 0.4822, 0.4465],
         std=[0.2023, 0.1994, 0.2010],
     )
-
-    # define transform
     # size = 224
+    # define transform
     torch.manual_seed(1)
     transform = transforms.Compose([
         transforms.Resize((size, size)),
         transforms.ToTensor(),
-        transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+        transforms.Lambda(lambda x: torch.mean(x, dim=0, keepdim=True).repeat(3, 1, 1)),  # 求均值并重复
         normalize,
     ])
 
     data_dir = kwargs['root']
-    dataset = datasets.MNIST(
-        root=data_dir,
-        train=False,
+    dataset = datasets.SVHN(
+        root=os.path.join(data_dir, "svhn"),
+        split="test",
         download=False,
         transform=transform,
     )
@@ -125,12 +99,12 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, size=32,sample_
         np.random.shuffle(indices)
         valid_idx = indices[:split]
         dataset = Subset(dataset, valid_idx)
-        
+
     data_loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=1,
+        num_workers=num_workers,
         pin_memory=pin_memory,
     )
 
@@ -138,7 +112,9 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, size=32,sample_
 
 
 if __name__ == '__main__':
-    dataloader = get_test_loader(32, root="../../data")
-    for x,y in dataloader:
-        import pdb;pdb.set_trace()
-        print(x[0].std())
+    dataloader = get_test_loader(32, root="../../data/")
+    for i in range(10):
+        import pdb
+        pdb.set_trace()
+        for data, _ in dataloader:
+            print(data.mean())
