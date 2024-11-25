@@ -26,7 +26,8 @@ import data_utils.ood_detection.place365 as place365
 
 # Import network models
 from net.lenet import lenet
-from net.resnet import resnet18, resnet50
+# from net.resnet import resnet18, resnet50
+from net.resnet3 import resnet18, resnet50  #add one fc
 # from net.resnet2 import resnet18, resnet50
 from net.wide_resnet import wrn
 from net.vgg import vgg16
@@ -233,7 +234,7 @@ if __name__ == "__main__":
             #     t_confidences,
             # ) = test_classification_net(temp_net, test_loader, device)
             # t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
- 
+
             if (args.evaltype == "gmm"):
                 # Evaluate a GMM model
                 print("GMM Model")
@@ -303,7 +304,8 @@ if __name__ == "__main__":
                     # print(f"m1_auroc_adv:{m1_auprc_adv},m1_auprc_adv:{m1_auprc_adv},m2_auroc_adv:{m2_auroc_adv},m2_auprc_adv:{m2_auprc_adv}")
 
                     m2_res = []
-                    for epsilon in [0.001, 0.003, 0.005, 0.007, 0.009, 0.01]:
+                    # for epsilon in [0.001, 0.003, 0.005, 0.007, 0.009, 0.01]:
+                    for epsilon in [0.01]:
                         for temp in [1]:
                             if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
                                 print(f"add noise:{args.perturbation}")
@@ -376,7 +378,7 @@ if __name__ == "__main__":
                                 m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, None, device, conf=True)
 
                             print(
-                                f"noise-:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}"
+                                f"accu:{accuracy}noise-:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}"
                             )
                             m2_res.append([m2_auroc, m2_auprc, epsilon])
                     m2_auroc, m2_auprc, epsilon = sorted(m2_res)[-1]  #从小到大排序，并且取最大的

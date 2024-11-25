@@ -222,8 +222,8 @@ class ResNet(nn.Module):
         out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
 
-        out = self.fc_add(out)
-        out = self.drop(self.activation(out))
+        # out = self.fc_add(out)
+        # out = self.drop(self.activation(out))
 
         self.embedding = self.projection_head(out)  # 映射到对比loss的embedding空间
         self.feature = out
