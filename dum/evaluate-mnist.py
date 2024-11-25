@@ -26,8 +26,8 @@ import data_utils.ood_detection.place365 as place365
 
 # Import network models
 from net.lenet import lenet
-# from net.resnet import resnet18, resnet50
-from net.resnet3 import resnet18, resnet50  #add one fc
+from net.resnet import resnet18, resnet50
+# from net.resnet3 import resnet18, resnet50  #add one fc
 # from net.resnet2 import resnet18, resnet50
 from net.wide_resnet import wrn
 from net.vgg import vgg16
@@ -304,8 +304,8 @@ if __name__ == "__main__":
                     # print(f"m1_auroc_adv:{m1_auprc_adv},m1_auprc_adv:{m1_auprc_adv},m2_auroc_adv:{m2_auroc_adv},m2_auprc_adv:{m2_auprc_adv}")
 
                     m2_res = []
-                    # for epsilon in [0.001, 0.003, 0.005, 0.007, 0.009, 0.01]:
-                    for epsilon in [0.01]:
+                    for epsilon in [0.001, 0.003, 0.005, 0.007, 0.009, 0.01]:
+                    # for epsilon in [0.01]:
                         for temp in [1]:
                             if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
                                 print(f"add noise:{args.perturbation}")

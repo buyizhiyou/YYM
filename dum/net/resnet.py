@@ -191,7 +191,7 @@ class ResNet(nn.Module):
 
 
         
-        last_dim = 2048
+        last_dim = 512 * block.expansion  #如果想做调节最后一层维度的实验，只要这个参数就好
         self.fc_add = nn.Linear(512 * block.expansion, last_dim)  #添加一层线性层，为了dropout
         self.drop = nn.Dropout()
         self.fc = nn.Linear(last_dim, num_classes, bias=True)  #remove bias for last fc
