@@ -1,3 +1,22 @@
+#!/usr/bin/env python
+# -*- encoding: utf-8 -*-
+'''
+@File    :   fashionmnist.py
+@Time    :   2024/11/28 10:55:13
+@Author  :   shiqing
+@Version :   Cinnamoroll V1
+'''
+
+'''
+数据集概况：
+类别数：10个类别，每个类别代表一种类型的时尚商品。
+图像总数：共70,000张图像，其中包含训练集和测试集。
+训练集：60,000张图像
+测试集：10,000张图像
+图像尺寸：每张图像是28x28像素的灰度图像。
+图像类型：图像为单通道的灰度图，尺寸统一为28x28像素，表示不同类别的服装、鞋类等。
+'''
+
 import numpy as np
 import torch
 from torch.utils.data import Subset

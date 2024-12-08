@@ -26,8 +26,8 @@ import data_utils.ood_detection.place365 as place365
 
 # Import network models
 from net.lenet import lenet
-from net.resnet import resnet18, resnet50
-# from net.resnet2 import resnet18, resnet50
+from net.resnet import resnet18, resnet50 ##这是现在的resnet，额外的加一层fc,测试run37之后都要用这个
+# from net.resnet3 import resnet18, resnet50#这是以前的resnet，没有额外的加一层fc,测试run37之前都要用这个
 from net.wide_resnet import wrn
 from net.vgg import vgg16
 from net.vit import vit
@@ -50,7 +50,7 @@ from utils.ensemble_utils import load_ensemble, ensemble_forward_pass
 from utils.temperature_scaling import ModelWithTemperature
 
 # Dataset params
-dataset_num_classes = {"mnist":10,"cifar10": 10, "cifar100": 100, "svhn": 10, "lsun": 10, "tiny_iamgenet": 200}
+dataset_num_classes = {"mnist": 10, "cifar10": 10, "cifar100": 100, "svhn": 10, "lsun": 10, "tiny_iamgenet": 200}
 
 dataset_loader = {
     "cifar10": cifar10,
@@ -116,9 +116,7 @@ if __name__ == "__main__":
         print("no model files in current config")
         exit()
 
-    # model_files = ["/home/sq/YYM/dum/saved_models/run31/resnet50_sn_3.0_mod_seed_1/2024_11_18_10_42_16/resnet50_sn_3.0_mod_seed_1_best_gaussian_stats.model"]
     for i, saved_model_name in enumerate(model_files):
-        # saved_model_name = "/home/sq/YYM/dum/saved_models/run1/2024_03_07_21_49_57/vgg16_seed_1_best.model"
         print(f"Run {args.run},OOD dataset {args.ood_dataset} Evaluating for {i}/{len(model_files)}: {saved_model_name}")
         if args.evaltype == "ensemble":
             val_loaders = []
@@ -129,7 +127,7 @@ if __name__ == "__main__":
                     size=size,
                     augment=args.data_aug,
                     val_seed=(args.seed + (5 * i) + j),
-                    val_size=0.1,
+                    val_size=0.1,  #这里0.1改为0，使用全部训练数据
                     pin_memory=args.gpu,
                 )
                 val_loaders.append(val_loader)
@@ -150,10 +148,9 @@ if __name__ == "__main__":
                 size=size,
                 augment=args.data_aug,  #False
                 val_seed=(args.seed),
-                val_size=0.1,
+                val_size=0.1,  #这里0.1改为0，使用全部训练数据
                 pin_memory=args.gpu,
             )
-
             #load model
             print(f"load {saved_model_name}")
             net = models[args.model](
@@ -162,10 +159,7 @@ if __name__ == "__main__":
                 num_classes=num_classes,
                 temp=1.0,
             )
-
-            if args.gpu:
-                net.to(device)
-
+            net.to(device)
             net.load_state_dict(torch.load(str(saved_model_name), map_location=device), strict=True)
             net.eval()
 
@@ -207,7 +201,7 @@ if __name__ == "__main__":
             # ) = test_classification_net_ensemble(t_ensemble, test_loader, device)
             # t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
         else:
-            test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=512, size=size, pin_memory=args.gpu)
+            test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=512, size=size ,pin_memory=args.gpu)
             ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root, batch_size=512, size=size, pin_memory=args.gpu)
             (
                 conf_matrix,
@@ -277,7 +271,6 @@ if __name__ == "__main__":
                         storage_device=device,
                     )
                     m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, maxval, device, conf=True)
-                    print(f"m1_auroc:{m1_auroc:.4f},m1_aupr:{m1_auprc:.4f}")
 
                     #TODO:分析对抗样本
                     # logits_adv, _, _ = gmm_evaluate_for_adv(
@@ -301,19 +294,10 @@ if __name__ == "__main__":
                     # print(f"m1_auroc_adv:{m1_auprc_adv},m1_auprc_adv:{m1_auprc_adv},m2_auroc_adv:{m2_auroc_adv},m2_auprc_adv:{m2_auprc_adv}")
 
                     m2_res = []
-                    for epsilon in [0.0001,0.001, 0.002,0.003,0.005,0.005,0.006,0.007,0.008,0.009,0.01]:
+                    for epsilon in [0.0001, 0.001, 0.002, 0.003, 0.005, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01]:
                         for temp in [1]:
                             if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
                                 print(f"add noise:{args.perturbation}")
-                                test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root,
-                                                                                           batch_size=1,
-                                                                                           size=size,
-                                                                                           pin_memory=args.gpu)
-                                ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root,
-                                                                                                   batch_size=1,
-                                                                                                   size=size,
-                                                                                                   pin_memory=args.gpu)
-
                                 logits2, labels2, preds2, acc, acc_perturb = gmm_evaluate_with_perturbation(
                                     net,
                                     gaussians_model,
@@ -378,23 +362,6 @@ if __name__ == "__main__":
                             )
                             m2_res.append([m2_auroc, m2_auprc, epsilon])
                     m2_auroc, m2_auprc, epsilon = sorted(m2_res)[-1]  #从小到大排序，并且取最大的
-
-                    # logits3, _ = maxp_evaluate(
-                    #     net,
-                    #     test_loader,
-                    #     device=device,
-                    #     num_classes=num_classes,
-                    #     storage_device=device,
-                    # )
-                    # ood_logits3, _ = maxp_evaluate(
-                    #     net,
-                    #     ood_test_loader,
-                    #     device=device,
-                    #     num_classes=num_classes,
-                    #     storage_device=device,
-                    # )
-                    # m3_fpr95, m3_auroc, m3_auprc = get_roc_auc_logits(logits3, ood_logits3, confidence, device, conf=True)
-                    # print(f"m3_auroc:{m3_auroc:.4f},m3_aupr:{m3_auprc:.4f}")
 
                     print(
                         f"最优noise-:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"
@@ -467,9 +434,30 @@ if __name__ == "__main__":
                 )
 
                 m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, logsumexp, device, conf=True)
-                acc = 0
                 epsilon = 0
-                print(f"accu:{acc:.4f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
+                print(f"accu:{accuracy:.4f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")          
+            elif (args.evaltype == "softmax"):
+                logits, _ = maxp_evaluate(
+                    net,
+                    test_loader,
+                    device=device,
+                    num_classes=num_classes,
+                    storage_device=device,
+                )
+                ood_logits, _ = maxp_evaluate(
+                    net,
+                    ood_test_loader,
+                    device=device,
+                    num_classes=num_classes,
+                    storage_device=device,
+                )
+                _, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, confidence, device, conf=True)
+                print(f"m1_auroc:{m1_auroc:.4f},m1_aupr:{m1_auprc:.4f}")
+              
+                m2_auroc = m1_auroc
+                m2_auprc = m1_auprc
+                epsilon = 0
+                print(f"accu:{accuracy:.4f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
 
         epsilons.append(epsilon)
         accuracies.append(accuracy)

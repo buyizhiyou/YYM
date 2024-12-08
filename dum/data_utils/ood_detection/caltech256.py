@@ -1,25 +1,31 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 '''
-@File    :   fer2013.py
-@Time    :   2024/05/28 10:59:04
+@File    :   caltech256.py
+@Time    :   2024/11/28 10:52:33
 @Author  :   shiqing
 @Version :   Cinnamoroll V1
 '''
-"""
-The data consists of 48x48 pixel grayscale images of faces. The faces have been automatically registered
-so that the face is more or less centered and occupies about the same amount of space in each image. 
-The task is to categorize each face based on the emotion shown in the facial expression in to one of seven categories (0=Angry, 
-1=Disgust, 2=Fear, 3=Happy, 4=Sad, 5=Surprise, 6=Neutral).
 
-train.csv contains two columns, "emotion" and "pixels". The "emotion" column contains a numeric code ranging from 0 to 6, inclusive,
-for the emotion that is present in the image. The "pixels" column contains a string surrounded in quotes for each image.
-The contents of this string a space-separated pixel values in row major order. test.csv contains only the "pixels" column and
-your task is to predict the emotion column.
+'''
+Caltech 256 是一个常用的计算机视觉数据集，主要用于物体识别任务，特别是对图像分类模型的评估。该数据集由加州理工学院（Caltech）开发，目标是通过一组多样化的物体类别来测试图像分类算法的泛化能力。
+数据集概况：
+类别数：256个类别，每个类别都有多张图像。
+图像总数：约30,607张图像。
+图像尺寸：图像尺寸变化较大，通常是自然图像，包含不同大小、角度、背景和光照条件。
+图像内容：每个类别都包含特定的物体或场景，比如动物、交通工具、家用电器、植物、家具等。
+类别介绍：
+Caltech 256 数据集包含了256个物体类别，其中的一些示例类别包括：
+鸟类（如“鸽子”、“鹦鹉”等）
+动物（如“狗”、“猫”、“大象”等）
+交通工具（如“汽车”、“火车”、“自行车”等）
+家用物品（如“电视机”、“风扇”、“咖啡机”等）
+自然物体（如“树木”、“花朵”等）
+每个类别的样本数：
+每个类别大约有 80 至 827 张图像（具体数量不同），所以每个类别的图像数量是相对不均匀的。
+数据集的多样性非常丰富，包括了物体的不同视角、不同背景以及不同的拍摄条件。
+'''
 
-The training set consists of 28,709 examples. The public test set used for the leaderboard consists of 3,589 examples. 
-The final test set, which was used to determine the winner of the competition, consists of another 3,589 examples.
-"""
 
 import numpy as np
 import torch

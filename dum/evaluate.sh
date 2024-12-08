@@ -73,7 +73,7 @@ if [[ -z "$gpu" ]]; then
 fi
 
 #check evaltype
-evaltypes=("gmm" "kde" "ensemble" "mix")
+evaltypes=("gmm" "kde" "ensemble" "softmax")
 if [[ " ${evaltypes[@]}" =~ "$evaltype" ]]; then
        echo "###########  evaluate evaltype $evaltype"
 else
@@ -82,7 +82,7 @@ fi
 #check ooddataset
 ooddatasets=("tiny_imagenet" "mnist" "lsun" "svhn" "cifar100")
 #check model
-models=("vgg16" "resnet50" "wide_resnet","vit")
+models=("vgg16" "resnet50" "resnet18" "wide_resnet","vit")
 if [[ " ${models[@]}" =~ "$model" ]]; then
        echo "###########  evaluate model $model"
 else

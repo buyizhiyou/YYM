@@ -78,6 +78,7 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, size=32, sample
     torch.manual_seed(1)
     transform = transforms.Compose([
         transforms.Resize((size, size)),
+        transforms.RandomCrop(size, padding=4),
         transforms.ToTensor(),
         normalize,
     ])

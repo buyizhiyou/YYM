@@ -1,25 +1,46 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 '''
-@File    :   fer2013.py
-@Time    :   2024/05/28 10:59:04
+@File    :   place365.py
+@Time    :   2024/11/28 10:53:58
 @Author  :   shiqing
 @Version :   Cinnamoroll V1
 '''
-"""
-The data consists of 48x48 pixel grayscale images of faces. The faces have been automatically registered
-so that the face is more or less centered and occupies about the same amount of space in each image. 
-The task is to categorize each face based on the emotion shown in the facial expression in to one of seven categories (0=Angry, 
-1=Disgust, 2=Fear, 3=Happy, 4=Sad, 5=Surprise, 6=Neutral).
 
-train.csv contains two columns, "emotion" and "pixels". The "emotion" column contains a numeric code ranging from 0 to 6, inclusive,
-for the emotion that is present in the image. The "pixels" column contains a string surrounded in quotes for each image.
-The contents of this string a space-separated pixel values in row major order. test.csv contains only the "pixels" column and
-your task is to predict the emotion column.
 
-The training set consists of 28,709 examples. The public test set used for the leaderboard consists of 3,589 examples. 
-The final test set, which was used to determine the winner of the competition, consists of another 3,589 examples.
-"""
+'''
+Place365 是一个用于场景分类的图像数据集，旨在帮助计算机视觉领域的研究人员开发和评估用于场景理解、图像分类和深度学习模型的算法。它是由哈佛大学和麻省理工学院（MIT）共同开发的，并广泛应用于测试图像分类模型，尤其是场景分类模型。
+
+数据集概况：
+类别数：365个场景类别。
+图像总数：约1.8百万张图像。
+图像来源：数据集中的图像来自于多种常见的图像来源，涵盖了日常生活中可能遇到的多种场景，比如城市街道、室内房间、自然风景等。
+图像尺寸：每张图像的尺寸各异，通常为多种分辨率，且图像中包含了不同的光照条件、视角和拍摄距离。
+
+类别介绍：
+Place365 包含了 365 个场景类别，具体包括但不限于：
+室内场景：如厨房、浴室、办公室、卧室、图书馆等。
+城市景观：如街道、广场、城市天际线等。
+自然景观：如森林、沙漠、湖泊、山脉等。
+特定场景：如机场、博物馆、购物中心等。
+
+数据集特点：
+多样性：Place365 数据集的场景类别涵盖了广泛的日常生活场景，包含室内和室外各种不同的环境，极大地提高了数据集的多样性。
+大规模数据：拥有超过 1.8 百万张图像，这使得 Place365 成为一个大规模的场景分类数据集，适合用于训练和评估深度学习模型。
+高质量标注：每个图像都有对应的场景标签，标注准确，图像覆盖了各种环境和条件，适合场景分类任务。
+挑战性：由于存在不同的场景在视觉上可能存在相似性（如一些室内场景可能非常相似），因此这对分类模型提出了较高的要求。
+
+数据集的使用：
+Place365 数据集常用于以下领域：
+场景分类：主要用于测试和评估基于深度学习的图像分类模型，特别是卷积神经网络（CNN）等。
+视觉理解与智能系统：适用于各种智能系统的训练，例如自动驾驶、机器人视觉、AR/VR 环境下的图像识别等。
+迁移学习：由于其规模庞大和多样性，Place365 也常被用于迁移学习任务，作为预训练数据集来提升其他视觉任务的性能。
+
+数据集特点：
+类别不均衡：不同类别之间的样本数可能有所差异，部分场景类别可能包含更多图像，而其他类别则相对较少，这可能会影响训练模型的效果，尤其是在小样本类别上。
+场景背景干扰：图像中的背景或拍摄条件可能对识别产生干扰，特别是一些类别之间视觉上的相似性较高（例如不同类型的城市景观），需要模型具备更强的区分能力。
+现实环境中的挑战：图像的质量和光照条件存在差异，图像可能包括各种动态元素（如交通工具、行人等），这增加了分类任务的复杂性。
+'''
 
 import numpy as np
 import torch
