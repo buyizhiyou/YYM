@@ -201,8 +201,8 @@ if __name__ == "__main__":
             # ) = test_classification_net_ensemble(t_ensemble, test_loader, device)
             # t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
         else:
-            test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=512, size=size ,pin_memory=args.gpu)
-            ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root, batch_size=512, size=size, pin_memory=args.gpu)
+            test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root, batch_size=args.batch_size, size=size ,pin_memory=args.gpu)
+            ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root, batch_size=args.batch_size, size=size, pin_memory=args.gpu)
             (
                 conf_matrix,
                 accuracy,
@@ -297,6 +297,15 @@ if __name__ == "__main__":
                     for epsilon in [0.0001, 0.001, 0.002, 0.003, 0.005, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01]:
                         for temp in [1]:
                             if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
+                                test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root,
+                                                                                           batch_size=1,
+                                                                                           size=size,
+                                                                                           pin_memory=args.gpu)
+                                ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root,
+                                                                                                   batch_size=1,
+                                                                                                   size=size,
+                                                                                                   pin_memory=args.gpu)
+
                                 print(f"add noise:{args.perturbation}")
                                 logits2, labels2, preds2, acc, acc_perturb = gmm_evaluate_with_perturbation(
                                     net,

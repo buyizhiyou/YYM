@@ -70,7 +70,7 @@ def train_single_epoch(
     std = [0.2023, 0.1994, 0.2010]
     std = torch.tensor(std).to(device)
     mean = torch.tensor(mean).to(device)
-    weight_center = 10   
+    weight_center = 20   
 
 
     if contrastive:
@@ -154,12 +154,13 @@ def train_single_epoch(
             acc += acc1.item() * len(data)
         elif contrastive == 3:
             logits = model(data)
+            # import pdb;pdb.set_trace()
             # embeddings = activation['embedding']
             embeddings = model.feature
             loss1 = loss_func(logits, labels)
             loss2 = criterion_center(labels, embeddings)
             loss = loss1 + weight_center * loss2
-
+            # print(loss1,loss2)
             acc1, _ = accuracy(logits, labels, (1, 5))
             acc += acc1.item() * len(data)
         elif adv == 1:

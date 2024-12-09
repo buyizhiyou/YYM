@@ -130,7 +130,7 @@ if __name__ == "__main__":
         1. 300epoch 原始单阶段训练crossEntropy
         2. 两阶段训练:前300epoch只训练supCon,后面150个epoch只训练fc层
         """
-        print("Starting epoch", epoch)
+        # print("Starting epoch", epoch)
         train_loss, train_acc = train_single_epoch(
             epoch,
             net,
