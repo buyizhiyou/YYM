@@ -9,6 +9,7 @@ import pickle as pkl
 import glob, re
 import argparse
 import torch.backends.cudnn as cudnn
+from torch.nn import functional as F
 
 # Import dataloaders
 import data_utils.ood_detection.cifar10 as cifar10
@@ -36,7 +37,7 @@ from net.vit import vit
 from metrics.classification_metrics import (test_classification_net, test_classification_net_logits, test_classification_net_ensemble)
 from metrics.calibration_metrics import expected_calibration_error
 from metrics.uncertainty_confidence import entropy, logsumexp, confidence, sumexp, maxval
-from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ensemble
+from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ensemble,auroc,auprc
 
 # Import GMM utils
 from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate, gradient_norm_collect, gmm_evaluate_for_adv, gmm_evaluate_with_perturbation_for_adv, gmm_evaluate_with_perturbation, maxp_evaluate_with_perturbation
@@ -102,6 +103,8 @@ if __name__ == "__main__":
     m2_aurocs = []
     m2_auprcs = []
     epsilons = []
+    ece = 0
+    t_ece = 1
 
     topt = None
     save_name = model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive)
@@ -210,7 +213,7 @@ if __name__ == "__main__":
                 predictions,
                 confidences,
             ) = test_classification_net(net, test_loader, device)
-            # ece = expected_calibration_error(confidences, predictions, labels_list, num_bins=15)
+            ece = expected_calibration_error(confidences, predictions, labels_list, num_bins=15)
 
             # #校准
             # temp_net = ModelWithTemperature(net, device)
@@ -272,29 +275,19 @@ if __name__ == "__main__":
                     )
                     m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, maxval, device, conf=True)
 
-                    #TODO:分析对抗样本
-                    # logits_adv, _, _ = gmm_evaluate_for_adv(
-                    #     net,
-                    #     gaussians_model,
-                    #     test_loader,
-                    #     device=device,
-                    #     num_classes=num_classes,
-                    #     storage_device=device,
-                    # )
-                    # logits_adv2, _, _ = gmm_evaluate_with_perturbation_for_adv(
-                    #     net,
-                    #     gaussians_model,
-                    #     test_loader,
-                    #     device=device,
-                    #     num_classes=num_classes,
-                    #     storage_device=device,
-                    # )
-                    # _, m1_auroc_adv, m1_auprc_adv = get_roc_auc_logits(logits, logits_adv, logsumexp, device, conf=True)
-                    # _, m2_auroc_adv, m2_auprc_adv = get_roc_auc_logits(logits, logits_adv2, logsumexp, device, conf=True)
-                    # print(f"m1_auroc_adv:{m1_auprc_adv},m1_auprc_adv:{m1_auprc_adv},m2_auroc_adv:{m2_auroc_adv},m2_auprc_adv:{m2_auprc_adv}")
+                   
 
                     m2_res = []
-                    for epsilon in [0.0001, 0.001, 0.002, 0.003, 0.005, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01]:
+                    if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
+                        eps = [0.0001, 0.001, 0.002, 0.003, 0.005, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01]
+                    elif args.perturbation=="misclassified":
+                        eps = [0.00001,0.00002,0.00003,0.00004,0.00005,0.0001]
+                    elif args.perturbation == "adv":
+                        eps = [0.0001, 0.001, 0.002, 0.003, 0.005, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01]
+                    else:
+                        eps = [0.0001]
+                        
+                    for epsilon in eps:
                         for temp in [1]:
                             if args.perturbation in ["cw", "bim", "fgsm", "pgd"]:
                                 test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root,
@@ -333,8 +326,23 @@ if __name__ == "__main__":
                                     temperature=temp,
                                     inf=inf,
                                 )
-                            elif args.perturbation == "gradnorm":  #使用gradient norm
+                                m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, maxval, device,
+                                                                                  conf=True)  #这里使用maxval是求最大logP，使用logsumexp是求平均logP
+                                #TODO:这里也是一个改进，我们使用maxval,而不是logsumexp
+                                
+                                print(
+                                    f"noise-:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}"
+                                )
+                            elif args.perturbation == "gradnorm1":  #使用gradient norm
                                 print("using gradient norm")
+                                test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root,
+                                                                                           batch_size=1,
+                                                                                           size=size,
+                                                                                           pin_memory=args.gpu)
+                                ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root,
+                                                                                                   batch_size=1,
+                                                                                                   size=size,
+                                                                                                   pin_memory=args.gpu)
                                 logits2 = gradient_norm_collect(
                                     net,
                                     gaussians_model,
@@ -342,6 +350,7 @@ if __name__ == "__main__":
                                     device=device,
                                     storage_device=device,
                                     norm=1,
+                                    type=1,
                                 )
                                 ood_logits2 = gradient_norm_collect(
                                     net,
@@ -350,30 +359,118 @@ if __name__ == "__main__":
                                     device=device,
                                     storage_device=device,
                                     norm=1,
+                                    type=1
                                 )
+                                m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, None, device, conf=True)
+                                
+                                print(
+                                    f"ddu:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};gradNorm:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}"
+                                )
+                            elif args.perturbation == "gradnorm2":  #使用gradient norm
+                                print("using gradient norm")
+                                test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root,
+                                                                                           batch_size=1,
+                                                                                           size=size,
+                                                                                           pin_memory=args.gpu)
+                                ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root,
+                                                                                                   batch_size=1,
+                                                                                                   size=size,
+                                                                                                   pin_memory=args.gpu)
+                                logits2 = gradient_norm_collect(
+                                    net,
+                                    gaussians_model,
+                                    test_loader,
+                                    device=device,
+                                    storage_device=device,
+                                    norm=1,
+                                    type=2
+                                )
+                                ood_logits2 = gradient_norm_collect(
+                                    net,
+                                    gaussians_model,
+                                    ood_test_loader,
+                                    device=device,
+                                    storage_device=device,
+                                    norm=1,
+                                    type=2
+                                )
+                                m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, None, device, conf=True)
+                                
+                                print(
+                                    f"ddu:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};gradNorm:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}"
+                                )
+                            elif args.perturbation == "misclassified": #识别误分类
+                                # test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root,
+                                #                                                            batch_size=32,
+                                #                                                            size=size,
+                                #                                                            pin_memory=args.gpu)
+                                logits2, labels2, outs2, acc, acc_perturb = gmm_evaluate_with_perturbation(
+                                    net,
+                                    gaussians_model,
+                                    test_loader,
+                                    device=device,
+                                    num_classes=num_classes,
+                                    storage_device=device,
+                                    norm_threshold=norm_threshold,
+                                    perturbation=args.perturbation,
+                                    epsilon=epsilon,
+                                    temperature=temp,
+                                )
+                                confidences2, preds2=  torch.max(F.softmax(outs2, dim=1),dim=1)
+                      
+                                t_ece = expected_calibration_error(confidences2.cpu().numpy(), preds2.cpu().numpy(), labels2.cpu().numpy(), num_bins=15)
+                                #logits,labels,preds
+                                mis = (preds==labels).to(torch.int).cpu().numpy()
+                                mis2 = (preds2==labels2).to(torch.int).cpu().numpy()
+                                uncertainty = maxval(logits).cpu().numpy()
+                                uncertainty2 = maxval(logits2).cpu().numpy()#对比logsumexp
+                                m1_auroc = auroc(uncertainty,mis)
+                                m1_auprc = auprc(uncertainty,mis)
+                                m2_auroc = auroc(uncertainty2,mis2)
+                                m2_auprc = auprc(uncertainty2,mis2)
+                                print(f"m1_auroc_mis:{m1_auroc},m1_auprc_mis:{m1_auprc},m2_auroc_mis:{m2_auroc},m2_auprc_mis:{m2_auprc}")            
+                            elif args.perturbation == "adv":
+                                 #TODO:分析对抗样本
+                                logits_adv, _, _ = gmm_evaluate_for_adv(
+                                    net,
+                                    gaussians_model,
+                                    test_loader,
+                                    device=device,
+                                    num_classes=num_classes,
+                                    storage_device=device,
+                                )
+                                logits_adv2, _, _ = gmm_evaluate_with_perturbation_for_adv(
+                                    net,
+                                    gaussians_model,
+                                    test_loader,
+                                    device=device,
+                                    num_classes=num_classes,
+                                    storage_device=device,
+                                )
+                                _, m1_auroc, m1_auprc = get_roc_auc_logits(logits, logits_adv, logsumexp, device, conf=True)
+                                _, m2_auroc, m2_auprc= get_roc_auc_logits(logits, logits_adv2, logsumexp, device, conf=True)
+                                print(f"m1_auroc_adv:{m1_auprc},m1_auprc_adv:{m1_auprc},m2_auroc_adv:{m2_auroc},m2_auprc_adv:{m2_auprc}")
                             elif args.perturbation == "none":  #不使用扰动
                                 logits2 = logits
                                 ood_logits2 = ood_logits
-                            else:
-                                raise ValueError("perturbation is invalid...")
-
-                            if args.perturbation in ["cw", "bim", "fgsm", "pgd", "none"]:
-                                # logits2 -= logits
-                                # ood_logits2 -= ood_logits
                                 m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, maxval, device,
                                                                                   conf=True)  #这里使用maxval是求最大logP，使用logsumexp是求平均logP
                                 #TODO:这里也是一个改进，我们使用maxval,而不是logsumexp
+                                
+                                print(
+                                    f"none,m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}"
+                                )
                             else:
-                                m2_fpr95, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, None, device, conf=True)
+                                raise ValueError("perturbation is invalid...")
 
-                            print(
-                                f"noise-:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}"
-                            )
-                            m2_res.append([m2_auroc, m2_auprc, epsilon])
-                    m2_auroc, m2_auprc, epsilon = sorted(m2_res)[-1]  #从小到大排序，并且取最大的
 
+                            m2_res.append([m2_auroc, m2_auprc, -t_ece, epsilon])
+                    # m2_auroc, m2_auprc,t_ece,  epsilon = sorted(m2_res)[-1]  #从小到大排序，并且取最大的
+                    m2_auroc, m2_auprc,t_ece,  _  = result = [max(col) for col in zip(*m2_res)]
+
+                    
                     print(
-                        f"最优noise-:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"
+                        f"最优:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}"
                     )
                 except RuntimeError as e:
                     print("Runtime Error caught: " + str(e))
@@ -470,10 +567,9 @@ if __name__ == "__main__":
 
         epsilons.append(epsilon)
         accuracies.append(accuracy)
-        eces.append(0.0)
-        t_eces.append(0.0)
-        # eces.append(ece)
-        # t_eces.append(t_ece)
+        eces.append(ece)
+        t_eces.append(abs(t_ece))
+
         m1_aurocs.append(m1_auroc)
         m1_auprcs.append(m1_auprc)
         m2_aurocs.append(m2_auroc)

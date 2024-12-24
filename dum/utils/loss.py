@@ -139,10 +139,8 @@ class CenterLoss(nn.Module):
         return loss
 
 
-    def forward_bk2(self,labels,x, delta=1e-6):
+    def forward(self,labels,x, delta=1e-6):
         #https://ar5iv.labs.arxiv.org/html/1707.07391
-
-        
         batch_size = x.size(0)
         num_classes =self.centers.size(0)
 
@@ -164,8 +162,7 @@ class CenterLoss(nn.Module):
         
         return loss
     
-    def forward(self,labels,x, delta=1e-6):
-        #https://ar5iv.labs.arxiv.org/html/1707.07391
+    def forward222(self,labels,x, delta=1e-6):
         
         #使用余弦距离,代替欧氏距离
         batch_size = x.size(0)

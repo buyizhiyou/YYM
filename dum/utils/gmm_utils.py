@@ -144,7 +144,7 @@ def gmm_evaluate_with_perturbation(
     num_samples = len(loader.dataset)
     logits_N_C = torch.zeros((num_samples, num_classes), dtype=torch.float, device=storage_device)
     labels_N = torch.zeros(num_samples, dtype=torch.int, device=storage_device)
-    preds_N = torch.zeros(num_samples, dtype=torch.int, device=storage_device)
+    outs_N = torch.zeros((num_samples,10), dtype=torch.float, device=storage_device)
     std = torch.tensor(std).to(device)
     mean = torch.tensor(mean).to(device)
     loss_func = nn.CrossEntropyLoss()
@@ -226,10 +226,11 @@ def gmm_evaluate_with_perturbation(
         end = start + len(images)
         logits_N_C[start:end].copy_(logit_B_C.cpu().detach(), non_blocking=True)
         labels_N[start:end].copy_(label.cpu().detach(), non_blocking=True)
-        preds_N[start:end].copy_(pred.cpu().detach(), non_blocking=True)
+        outs_N[start:end].copy_(out.cpu().detach(), non_blocking=True) #这里使用out代替preds，因为out可以计算推出preds
         start = end
 
-    return logits_N_C.to(device), labels_N.to(device), preds_N.to(device), sum(accs) / len(accs), sum(accs_pertubration) / len(accs_pertubration)
+    return logits_N_C.to(device), labels_N.to(device), outs_N.to(device), sum(accs) / len(accs), sum(accs_pertubration) / len(accs_pertubration)
+
 
 
 def gmm_evaluate_for_adv(net, gaussians_model, loader, device, num_classes, storage_device, perturbation="fgsm"):
@@ -403,7 +404,7 @@ def gmm_evaluate_with_perturbation_for_adv(
     return logits_N_C.to(device), labels_N.to(device), preds_N.to(device), sum(accs) / len(accs), sum(accs_pertubration) / len(accs_pertubration)
 
 
-def gradient_norm_collect(net, gaussians_model, loader, device, storage_device, temperature=1, norm=1):
+def gradient_norm_collect(net, gaussians_model, loader, device, storage_device, temperature=1, norm=1,type=1):
     num_samples = len(loader.dataset)
     logits_N_C = torch.zeros(num_samples, dtype=torch.float, device=storage_device)
 
@@ -418,14 +419,15 @@ def gradient_norm_collect(net, gaussians_model, loader, device, storage_device, 
         out = net(images)
         _, pred = torch.max(out, 1)
 
-        #1. 第一种形式loss
-        # embedding = net.feature
-        # log_probs = gaussians_model.log_prob(embedding[:, None, :])
-        # max_log_probs = log_probs.max(1, keepdim=True)[0]  # get the index of the max log-probability
-        # loss = max_log_probs.sum()
-
-        # #2. 第二种形式loss
-        loss = -loss_func(out / temperature, pred)
+      
+        if type==1:  #1. 第一种形式loss
+            embedding = net.feature
+            log_probs = gaussians_model.log_prob(embedding[:, None, :])
+            max_log_probs = log_probs.max(1, keepdim=True)[0]  # get the index of the max log-probability
+            loss = max_log_probs.sum()
+        else:
+            # #2. 第二种形式loss
+            loss = -loss_func(out / temperature, pred)
 
         net.zero_grad()
         loss.backward()

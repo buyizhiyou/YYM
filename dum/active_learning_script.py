@@ -36,6 +36,7 @@ from utils.gmm_utils import (get_embeddings, gmm_evaluate,
                              gmm_evaluate_with_perturbation, gmm_fit)
 # Import train and test utils
 from utils.train_utils import model_save_name, train_single_epoch
+from utils.loss import CenterLoss
 
 # Mapping model name to model function
 models = {"resnet18": resnet18, "vgg16": vgg16}
@@ -209,6 +210,8 @@ if __name__ == "__main__":
                     # model = model_fn(spectral_normalization=args.sn, mod=args.mod, mnist=(args.dataset == "mnist")).to(device=device)
                     model = model_fn(spectral_normalization=args.sn, mod=args.mod).to(device=device)
                     optimizer = torch.optim.Adam(model.parameters(), weight_decay=weight_decay)
+                    criterion_center = CenterLoss(num_classes=10, feat_dim=512, device=device)
+                    optimizer_centloss = torch.optim.SGD(criterion_center.parameters(), lr=0.5)
                     model.train()
 
                 # Train
@@ -224,9 +227,9 @@ if __name__ == "__main__":
                 for epoch in tqdm(range(args.epochs)):
                     if args.al_type == "ensemble":
                         for (model, optimizer) in zip(model_ensemble, optimizers):
-                            loss,acc = train_single_epoch(epoch, model, train_loader, optimizer, device)
+                            loss,acc = train_single_epoch(epoch, model, train_loader, optimizer,None,optimizer_centloss ,device)
                     else:
-                        loss,acc = train_single_epoch(epoch, model, train_loader, optimizer, device)
+                        loss,acc = train_single_epoch(epoch, model, train_loader, optimizer,None,optimizer_centloss, device)
                         # pass
 
                     _, val_accuracy, _, _, _ = (test_classification_net_ensemble(model_ensemble, val_loader, device=device)

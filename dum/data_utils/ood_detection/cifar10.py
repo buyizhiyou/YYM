@@ -76,7 +76,7 @@ def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_work
     indices = list(range(num_train))
     split = int(np.floor(val_size * num_train))
 
-    np.random.seed(val_seed)
+    # np.random.seed(val_seed)
     np.random.shuffle(indices)
 
     train_idx, valid_idx = indices[split:], indices[:split]  #...14347, 38403, 49563, 16500, 49787, 19719, 47381]
