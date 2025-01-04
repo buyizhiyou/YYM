@@ -25,7 +25,7 @@ class KdeModel():
         return np.sum(self.weights * np.exp(self.log_prob(x)))
 
 
-def kde_evaluate(net, kde_model, loader, device, num_classes, storage_device):
+def kde_evaluate(net, kde_model, pca, loader, device, num_classes, storage_device):
 
     num_samples = len(loader.dataset)
     logits_N_C = torch.empty((num_samples, num_classes), dtype=torch.float, device=storage_device)
@@ -33,11 +33,15 @@ def kde_evaluate(net, kde_model, loader, device, num_classes, storage_device):
 
     with torch.no_grad():
         start = 0
-        for data, label in tqdm(loader,dynamic_ncols=True):
+        for data, label in tqdm(loader, dynamic_ncols=True):
             data = data.to(device)
             label = label.to(device)
             net(data)
             features = net.feature
+            if pca:
+                X = features.cpu().numpy()
+                X_pca = pca.transform(X)
+                features = torch.tensor(X_pca).to(device)
             logit_B_C = kde_model.log_prob(features.cpu().numpy())
 
             end = start + len(data)
@@ -50,17 +54,15 @@ def kde_evaluate(net, kde_model, loader, device, num_classes, storage_device):
 
 def kde_fit(embeddings, labels, num_classes):
     with torch.no_grad():
-        # bandwidths = [0.01, 0.1, 1, 10]
-        bandwidths = np.linspace(0,1,num=10)
-        grid = GridSearchCV(KernelDensity(kernel='gaussian'), {
-                            'bandwidth': bandwidths}, verbose=1)
-        grid.fit(embeddings.cpu().numpy())
-        # The best estimated bandwidth density is used as the truth value
-        best_KDEbandwidth = grid.best_params_['bandwidth']
+        # bandwidths = np.linspace(0,1,num=10)
+        # grid = GridSearchCV(KernelDensity(kernel='gaussian'), {
+        # 'bandwidth': bandwidths}, verbose=1)
+        # grid.fit(embeddings.cpu().numpy())
+        # best_KDEbandwidth = grid.best_params_['bandwidth']
 
-        print(f"best bandwidth:{best_KDEbandwidth}")
+        # print(f"best bandwidth:{best_KDEbandwidth}")
         kernel = "gaussian"
-        # best_KDEbandwidth = 0.1
+        best_KDEbandwidth = 0.1
 
         # kdes = [NaiveKDE(kernel='gaussian', bw=1).fit(embeddings[labels == c].cpu().numpy()) for c in range(num_classes)]
         kdes = [KernelDensity(kernel=kernel, bandwidth=best_KDEbandwidth).fit(embeddings[labels == c].cpu().numpy()) for c in range(num_classes)]

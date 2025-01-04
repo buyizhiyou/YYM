@@ -70,7 +70,7 @@ def train_single_epoch(
     std = [0.2023, 0.1994, 0.2010]
     std = torch.tensor(std).to(device)
     mean = torch.tensor(mean).to(device)
-    weight_center = 20   
+    weight_center = 20    #TODO:后续在这里调整系数，逐步增大 weight_center = epoch*50/300
 
 
     if contrastive:
@@ -152,7 +152,7 @@ def train_single_epoch(
 
             acc1, _ = accuracy(logits2, labels2, (1, 5))
             acc += acc1.item() * len(data)
-        elif contrastive == 3:
+        elif contrastive == 3: #centerloss或者修正的centerloss
             logits = model(data)
             embeddings = model.feature
             loss1 = loss_func(logits, labels)
@@ -161,7 +161,7 @@ def train_single_epoch(
             acc1, _ = accuracy(logits, labels, (1, 5))
             acc += acc1.item() * len(data)
         elif adv == 1:
-            """对抗训练"""
+            """对抗训练"""   #没啥用，抛弃
             if batch_idx % 20 == 0:
                 data.requires_grad = True  #data.required_grad区分,用required_grad梯度为None
                 logits = model(data)

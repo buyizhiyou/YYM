@@ -47,13 +47,14 @@ dataset_loader = {"cifar10": cifar10, "cifar100": cifar100, "svhn": svhn, "dirty
 models = {"lenet": lenet, "resnet18": resnet18, "resnet50": resnet50, "wide_resnet": wrn, "vgg16": vgg16, "vit": vit}
 model_to_num_dim = {"resnet18": 512, "resnet50": 2048, "resnet101": 2048, "resnet152": 2048, "wide_resnet": 640, "vgg16": 512, "vit": 768}
 
-# torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.benchmark = True
+
 if __name__ == "__main__":
 
     args = training_args().parse_args()
     print("Parsed args", args)
     print("Seed: ", args.seed)
-    torch.manual_seed(args.seed)
+    # torch.manual_seed(args.seed)
     cuda = torch.cuda.is_available() and args.gpu
     device = torch.device(f"cuda:{args.gpu}" if cuda else "cpu")
     print("CUDA set: " + str(cuda))

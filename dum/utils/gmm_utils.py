@@ -88,7 +88,7 @@ def gmm_forward(net, gaussians_model, data_B_X):
     return log_probs_B_Y
 
 
-def gmm_evaluate(net, gaussians_model, loader, device, num_classes, storage_device):
+def gmm_evaluate(net, gaussians_model,pca, loader, device, num_classes, storage_device):
 
     num_samples = len(loader.dataset)
     logits_N_C = torch.zeros((num_samples, num_classes), dtype=torch.float, device=storage_device)
@@ -104,8 +104,14 @@ def gmm_evaluate(net, gaussians_model, loader, device, num_classes, storage_devi
             logits = net(data)
             _, pred = torch.max(logits, 1)
             features_B_Z = net.feature
-            logit_B_C = gaussians_model.log_prob(features_B_Z[:, None, :])  # torch.Size([128, 10]),每个类别一个多元高斯模型
 
+            if pca :
+                X = features_B_Z.cpu().numpy()
+                X_pca = pca.transform(X)
+                features_B_Z = torch.tensor(X_pca).to(device)
+
+            logit_B_C = gaussians_model.log_prob(features_B_Z[:, None, :])  # torch.Size([128, 10]),每个类别一个多元高斯模型
+    
             end = start + len(data)
             logits_N_C[start:end].copy_(logit_B_C, non_blocking=True)
             labels_N[start:end].copy_(label, non_blocking=True)
@@ -197,7 +203,8 @@ def gmm_evaluate_with_perturbation(
         # 2. fgsm
         embedding = net.feature
         log_probs = gaussians_model.log_prob(embedding[:, None, :])
-        max_log_probs = log_probs.max(1, keepdim=True)[0]  # get the index of the max log-probability
+
+        max_log_probs = log_probs.max(1, keepdim=True)[0]  # get max log-probability
         loss = max_log_probs.sum()  #这个loss效果好一些
         # loss = loss_func(logits / temperature, pred)
         net.zero_grad()
@@ -206,15 +213,247 @@ def gmm_evaluate_with_perturbation(
         # gradient = (gradient - gradient.min() / (gradient.max() - gradient.min()) - 0.5) * 2#TODO:验证和下面哪一种效果好
         gradient = gradient.sign()
         #TODO:验证要不要/std
-        # import pdb;pdb.set_trace()
+
+        gradient.index_copy_(1, torch.LongTensor([0]).to(device), gradient.index_select(1, torch.LongTensor([0]).to(device)) / std[0])
+        gradient.index_copy_(1, torch.LongTensor([1]).to(device), gradient.index_select(1, torch.LongTensor([1]).to(device)) / std[1])
+        gradient.index_copy_(1, torch.LongTensor([2]).to(device), gradient.index_select(1, torch.LongTensor([2]).to(device)) / std[2])
+        perturbed_images_normalized = torch.add(images, gradient, alpha=epsilon)
+        # perturbed_images_normalized = torch.subtract(images, gradient, alpha=epsilon)
+
+        out = net(perturbed_images_normalized)
+        acc = accuracy(out, label)[0].item()
+        accs_pertubration.append(acc)
+        features_B_Z = net.feature
+
+        if torch.nonzero(torch.isnan(features_B_Z) == True).sum() > 0:  ##如果含有nan
+            logit_B_C = torch.ones_like(logits) * float("-inf")
+        else:
+            logit_B_C = gaussians_model.log_prob(features_B_Z[:, None, :])
+
+        logit_B_C = logit_B_C.cpu().detach()
+        end = start + len(images)
+        logits_N_C[start:end].copy_(logit_B_C.cpu().detach(), non_blocking=True)
+        labels_N[start:end].copy_(label.cpu().detach(), non_blocking=True)
+        outs_N[start:end].copy_(out.cpu().detach(), non_blocking=True) #这里使用out代替preds，因为out可以计算推出preds
+        start = end
+
+    return logits_N_C.to(device), labels_N.to(device), outs_N.to(device), sum(accs) / len(accs), sum(accs_pertubration) / len(accs_pertubration)
+
+
+def gmm_evaluate_with_perturbation3(
+    net,
+    gaussians_model,
+    loader,
+    device,
+    num_classes,
+    storage_device,
+    norm_threshold=0.1,
+    perturbation="fgsm",
+    epsilon=0.001,
+    temperature=1.0,
+    inf=-1.0e+20,
+    mean=[0.4914, 0.4822, 0.4465],
+    std=[0.2023, 0.1994, 0.2010],
+):
+    '''
+    改成-梯度
+    '''
+    num_samples = len(loader.dataset)
+    logits_N_C = torch.zeros((num_samples, num_classes), dtype=torch.float, device=storage_device)
+    labels_N = torch.zeros(num_samples, dtype=torch.int, device=storage_device)
+    outs_N = torch.zeros((num_samples,10), dtype=torch.float, device=storage_device)
+    std = torch.tensor(std).to(device)
+    mean = torch.tensor(mean).to(device)
+    loss_func = nn.CrossEntropyLoss()
+    start = 0
+    accs = []
+    accs_pertubration = []
+    total = 0
+
+    # if perturbation == "fgsm":
+    #     perturb = fgsm_attack
+    # elif perturbation == "bim":
+    #     perturb = bim_attack
+    # elif perturbation == "cw":
+    #     perturb = cw_attack
+    # elif perturbation == "pgd":
+    #     perturb = pgd_attack
+
+    fc_grad = []
+
+    def bp_hook(module, grad_input, grad_output):
+        # 获取中间层梯度信息
+        b_grad = grad_input[0]
+        w_grad = grad_input[2]
+        input_grad = grad_input[1]
+        fc_grad.append(torch.norm(input_grad, p=1))  #1-norm
+        # fc_grad.append(w_grad)
+
+    # handler = net.fc.register_backward_hook(bp_hook)
+    # handler.remove()
+    #/2024_04_23_02_33_15/vgg16_sn_3.0_mod_seed_1_best.model svhn:m1_auroc1:0.9334,m1_auprc:0.9503
+    for images, label in tqdm(loader, dynamic_ncols=True):
+        images = images.to(device)
+        label = label.to(device)
+        images.requires_grad = True  #images.required_grad区分,用required_grad梯度为None
+        logits = net(images)
+        acc = accuracy(logits, label)[0].item()
+        accs.append(acc)
+        _, pred = torch.max(logits, 1)
+
+        # 1.加扰动
+        # loss = loss_func(logits / temperature, pred)
+        # net.zero_grad()
+        # loss.backward()
+        # gradient = images.grad.data
+        # norms = torch.norm(gradient, p=1).item()
+        # coeff = torch.exp(torch.tensor(max(gamma * (norms - norm_threshold), 0))) - 1  #gamma=30/10/15
+        # gradient = (gradient - gradient.min() / (gradient.max() - gradient.min()) - 0.5) * 2
+        # perturbed_images_normalized = torch.add(images, gradient, alpha=-coeff)
+
+        # 2. fgsm
+        embedding = net.feature
+        log_probs = gaussians_model.log_prob(embedding[:, None, :])
+
+        max_log_probs = log_probs.max(1, keepdim=True)[0]  # get max log-probability
+        loss = max_log_probs.sum()  #这个loss效果好一些
+        # loss = loss_func(logits / temperature, pred)
+        net.zero_grad()
+        loss.backward()
+        gradient = images.grad.data
+        # gradient = (gradient - gradient.min() / (gradient.max() - gradient.min()) - 0.5) * 2#TODO:验证和下面哪一种效果好
+        gradient = gradient.sign()
+        #TODO:验证要不要/std
+
+        gradient.index_copy_(1, torch.LongTensor([0]).to(device), gradient.index_select(1, torch.LongTensor([0]).to(device)) / std[0])
+        gradient.index_copy_(1, torch.LongTensor([1]).to(device), gradient.index_select(1, torch.LongTensor([1]).to(device)) / std[1])
+        gradient.index_copy_(1, torch.LongTensor([2]).to(device), gradient.index_select(1, torch.LongTensor([2]).to(device)) / std[2])
+        # perturbed_images_normalized = torch.add(images, gradient, alpha=epsilon)
+        perturbed_images_normalized = torch.subtract(images, gradient, alpha=epsilon)
+
+        out = net(perturbed_images_normalized)
+        acc = accuracy(out, label)[0].item()
+        accs_pertubration.append(acc)
+        features_B_Z = net.feature
+
+        if torch.nonzero(torch.isnan(features_B_Z) == True).sum() > 0:  ##如果含有nan
+            logit_B_C = torch.ones_like(logits) * float("-inf")
+        else:
+            logit_B_C = gaussians_model.log_prob(features_B_Z[:, None, :])
+
+        logit_B_C = logit_B_C.cpu().detach()
+        end = start + len(images)
+        logits_N_C[start:end].copy_(logit_B_C.cpu().detach(), non_blocking=True)
+        labels_N[start:end].copy_(label.cpu().detach(), non_blocking=True)
+        outs_N[start:end].copy_(out.cpu().detach(), non_blocking=True) #这里使用out代替preds，因为out可以计算推出preds
+        start = end
+
+    return logits_N_C.to(device), labels_N.to(device), outs_N.to(device), sum(accs) / len(accs), sum(accs_pertubration) / len(accs_pertubration)
+
+
+def gmm_evaluate_with_perturbation2(
+    net,
+    gaussians_model,
+    loader,
+    device,
+    num_classes,
+    storage_device,
+    norm_threshold=0.1,
+    perturbation="fgsm",
+    epsilon=0.001,
+    temperature=1.0,
+    inf=-1.0e+20,
+    mean=[0.4914, 0.4822, 0.4465],
+    std=[0.2023, 0.1994, 0.2010],
+):
+    '''
+    输入扰动加入两次
+    '''
+    num_samples = len(loader.dataset)
+    logits_N_C = torch.zeros((num_samples, num_classes), dtype=torch.float, device=storage_device)
+    labels_N = torch.zeros(num_samples, dtype=torch.int, device=storage_device)
+    outs_N = torch.zeros((num_samples,10), dtype=torch.float, device=storage_device)
+    std = torch.tensor(std).to(device)
+    mean = torch.tensor(mean).to(device)
+    loss_func = nn.CrossEntropyLoss()
+    start = 0
+    accs = []
+    accs_pertubration = []
+    total = 0
+
+    # if perturbation == "fgsm":
+    #     perturb = fgsm_attack
+    # elif perturbation == "bim":
+    #     perturb = bim_attack
+    # elif perturbation == "cw":
+    #     perturb = cw_attack
+    # elif perturbation == "pgd":
+    #     perturb = pgd_attack
+
+    fc_grad = []
+
+    def bp_hook(module, grad_input, grad_output):
+        # 获取中间层梯度信息
+        b_grad = grad_input[0]
+        w_grad = grad_input[2]
+        input_grad = grad_input[1]
+        fc_grad.append(torch.norm(input_grad, p=1))  #1-norm
+        # fc_grad.append(w_grad)
+
+    # handler = net.fc.register_backward_hook(bp_hook)
+    # handler.remove()
+    #/2024_04_23_02_33_15/vgg16_sn_3.0_mod_seed_1_best.model svhn:m1_auroc1:0.9334,m1_auprc:0.9503
+    for images, label in tqdm(loader, dynamic_ncols=True):
+        images = images.to(device)
+        label = label.to(device)
+        images.requires_grad = True  #images.required_grad区分,用required_grad梯度为None
+        
+        #第一次加入输入扰动
+        logits = net(images)
+        acc = accuracy(logits, label)[0].item()
+        accs.append(acc)
+
+        embedding = net.feature
+        log_probs = gaussians_model.log_prob(embedding[:, None, :])
+
+        max_log_probs = log_probs.max(1, keepdim=True)[0]  # get max log-probability
+        loss = max_log_probs.sum()  #这个loss效果好一些
+
+        net.zero_grad()
+        loss.backward()
+        gradient = images.grad.data
+        # gradient = (gradient - gradient.min() / (gradient.max() - gradient.min()) - 0.5) * 2#TODO:验证和下面哪一种效果好
+        gradient = gradient.sign()
         gradient.index_copy_(1, torch.LongTensor([0]).to(device), gradient.index_select(1, torch.LongTensor([0]).to(device)) / std[0])
         gradient.index_copy_(1, torch.LongTensor([1]).to(device), gradient.index_select(1, torch.LongTensor([1]).to(device)) / std[1])
         gradient.index_copy_(1, torch.LongTensor([2]).to(device), gradient.index_select(1, torch.LongTensor([2]).to(device)) / std[2])
         perturbed_images_normalized = torch.add(images, gradient, alpha=epsilon)
 
+        #第二次加入输入扰动
         out = net(perturbed_images_normalized)
         acc = accuracy(out, label)[0].item()
         accs_pertubration.append(acc)
+        
+        embedding = net.feature
+        log_probs = gaussians_model.log_prob(embedding[:, None, :])
+
+        max_log_probs = log_probs.max(1, keepdim=True)[0]  # get max log-probability
+        loss = max_log_probs.sum()  #这个loss效果好一些
+
+        net.zero_grad()
+        loss.backward()
+        gradient = images.grad.data
+        # gradient = (gradient - gradient.min() / (gradient.max() - gradient.min()) - 0.5) * 2#TODO:验证和下面哪一种效果好
+        gradient = gradient.sign()
+        gradient.index_copy_(1, torch.LongTensor([0]).to(device), gradient.index_select(1, torch.LongTensor([0]).to(device)) / std[0])
+        gradient.index_copy_(1, torch.LongTensor([1]).to(device), gradient.index_select(1, torch.LongTensor([1]).to(device)) / std[1])
+        gradient.index_copy_(1, torch.LongTensor([2]).to(device), gradient.index_select(1, torch.LongTensor([2]).to(device)) / std[2])
+        perturbed_images_normalized2 = torch.add(perturbed_images_normalized, gradient, alpha=epsilon)
+
+        out = net(perturbed_images_normalized2)
+        acc = accuracy(out, label)[0].item()
+        accs_pertubration.append(acc)
+        
         features_B_Z = net.feature
 
         if torch.nonzero(torch.isnan(features_B_Z) == True).sum() > 0:  ##如果含有nan
@@ -511,6 +750,9 @@ def gmm_get_logits(gmm, embeddings):
 
 
 def gmm_fit(embeddings, labels, num_classes):
+    '''
+    在这段代码中，每个类别构建了一个高斯分布，共num_classes个。例如，如果 num_classes=10，则 gmm 包含 10 个独立的多元正态分布。
+    '''
     with torch.no_grad():
         # 对每个类别，求均值，协方差
         classwise_mean_features = torch.stack([torch.mean(embeddings[labels == c], dim=0) for c in range(num_classes)])
