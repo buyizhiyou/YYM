@@ -127,8 +127,10 @@ if __name__ == "__main__":
                 model,
                 train_loaders[i],
                 optimizers[i],
+                None,
+                None,
                 device,
-                loss_mean=args.loss_mean,
+                # loss_mean=args.loss_mean,
             )
             schedulers[i].step()
 

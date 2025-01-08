@@ -70,8 +70,8 @@ def train_single_epoch(
     std = [0.2023, 0.1994, 0.2010]
     std = torch.tensor(std).to(device)
     mean = torch.tensor(mean).to(device)
-    weight_center = 20    #TODO:后续在这里调整系数，逐步增大 weight_center = epoch*50/300
-
+    weight_center = 50    #TODO:后续在这里调整系数，逐步增大 
+    # weight_center = epoch*50/300
 
     if contrastive:
         activation = {}
@@ -114,7 +114,9 @@ def train_single_epoch(
         labels = labels.to(device)
         batch_size = data.shape[0]
         optimizer.zero_grad()
-        optimizer_centloss.zero_grad()
+        
+        if contrastive == 3:
+            optimizer_centloss.zero_grad()
 
         if contrastive == 1:
             """

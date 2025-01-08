@@ -45,7 +45,7 @@ from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ens
 from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate, gradient_norm_collect, gmm_evaluate_for_adv, gmm_evaluate_with_perturbation_for_adv, gmm_evaluate_with_perturbation, maxp_evaluate_with_perturbation
 from utils.kde_utils import kde_evaluate, kde_fit
 from utils.eval_utils import model_load_name
-from utils.train_utils import model_save_name
+from utils.train_utils import model_save_name,seed_torch
 from utils.args import eval_args
 from utils.ensemble_utils import load_ensemble, ensemble_forward_pass
 
@@ -75,6 +75,7 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 if __name__ == "__main__":
 
+    seed_torch()
     args = eval_args().parse_args()
     # Checking if GPU is available
     cuda = torch.cuda.is_available()
@@ -342,9 +343,7 @@ if __name__ == "__main__":
                                 print(
                                     f"noise-:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}"
                                 )
-                            elif args.perturbation in [
-                                    "fgsm2",
-                            ]:
+                            elif args.perturbation in ["fgsm2"]:
                                 '''
                                 扰动两次
                                 '''
@@ -438,7 +437,7 @@ if __name__ == "__main__":
                                 print(
                                     f"noise-:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}"
                                 )
-                            elif args.perturbation == "gradnorm1":  #使用gradient norm
+                            elif args.perturbation == "gradnorm1":  #使用gradient norm,type=1:logP求梯度
                                 print("using gradient norm")
                                 test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root,
                                                                                            batch_size=1,
@@ -469,7 +468,7 @@ if __name__ == "__main__":
                                 print(
                                     f"ddu:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};gradNorm:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}"
                                 )
-                            elif args.perturbation == "gradnorm2":  #使用gradient norm
+                            elif args.perturbation == "gradnorm2":  #使用gradient norm，type=2,p(x)求梯度
                                 print("using gradient norm")
                                 test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root,
                                                                                            batch_size=1,
@@ -499,10 +498,6 @@ if __name__ == "__main__":
                                     f"ddu:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};gradNorm:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}"
                                 )
                             elif args.perturbation == "misclassified":  #识别误分类
-                                # test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root,
-                                #                                                            batch_size=32,
-                                #                                                            size=size,
-                                #                                                            pin_memory=args.gpu)
                                 logits2, labels2, outs2, acc, acc_perturb = gmm_evaluate_with_perturbation(
                                     net,
                                     gaussians_model,
@@ -541,7 +536,7 @@ if __name__ == "__main__":
                                     num_classes=num_classes,
                                     storage_device=device,
                                 )
-                                logits_adv2, _, _ = gmm_evaluate_with_perturbation_for_adv(
+                                logits_adv2, _, _, _, _ = gmm_evaluate_with_perturbation_for_adv(
                                     net,
                                     gaussians_model,
                                     test_loader,
@@ -549,9 +544,11 @@ if __name__ == "__main__":
                                     num_classes=num_classes,
                                     storage_device=device,
                                 )
-                                _, m1_auroc, m1_auprc = get_roc_auc_logits(logits, logits_adv, logsumexp, device, conf=True)
-                                _, m2_auroc, m2_auprc = get_roc_auc_logits(logits, logits_adv2, logsumexp, device, conf=True)
-                                print(f"m1_auroc_adv:{m1_auprc},m1_auprc_adv:{m1_auprc},m2_auroc_adv:{m2_auroc},m2_auprc_adv:{m2_auprc}")
+                                # _, m1_auroc, m1_auprc = get_roc_auc_logits(logits, logits_adv, logsumexp, device, conf=True)
+                                # _, m2_auroc, m2_auprc = get_roc_auc_logits(logits, logits_adv2, logsumexp, device, conf=True)
+                                _, m1_auroc, m1_auprc = get_roc_auc_logits(logits, logits_adv, maxval, device, conf=True)
+                                _, m2_auroc, m2_auprc = get_roc_auc_logits(logits, logits_adv2, maxval, device, conf=True)
+                                print(f"m1_auroc_adv:{m1_auprc},m1_auprc_adv:{m1_auprc};epsion:{epsilon},m2_auroc_adv:{m2_auroc},m2_auprc_adv:{m2_auprc}")
                             elif args.perturbation == "none":  #不使用扰动
                                 logits2 = logits
                                 ood_logits2 = ood_logits
