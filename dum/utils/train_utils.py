@@ -17,8 +17,7 @@ from tqdm import tqdm
 
 from utils.eval_utils import accuracy
 from utils.loss import CenterLoss, LabelSmoothing, supervisedContrastiveLoss
-from utils.simclr_utils import (ContrastiveLearningViewTransform,
-                                get_simclr_pipeline_transform, info_nce_loss)
+from utils.simclr_utils import (ContrastiveLearningViewTransform, get_simclr_pipeline_transform, info_nce_loss)
 
 
 def fgsm_attack(image, epsilon, data_grad):
@@ -50,8 +49,8 @@ def train_single_epoch(
     model,
     train_loader,
     optimizer,
-    criterion_center,
-    optimizer_centloss,
+    aux_loss,
+    optimizer_aux,
     device,
     contrastive=0,
     adv=0,
@@ -70,10 +69,14 @@ def train_single_epoch(
     std = [0.2023, 0.1994, 0.2010]
     std = torch.tensor(std).to(device)
     mean = torch.tensor(mean).to(device)
-    weight_center = 50    #TODO:后续在这里调整系数，逐步增大 
-    # weight_center = epoch*50/300
-
-    if contrastive:
+    if contrastive==3:
+        weight_center = 50  #TODO:后续在这里调整系数，逐步增大
+        # weight_center = epoch*50/300
+    elif contrastive==4:
+        weight_center = 1
+        
+        
+    if contrastive == 1 or contrastive == 2:
         activation = {}
 
         def get_activation1(name):
@@ -90,20 +93,15 @@ def train_single_epoch(
 
             return hook
 
-        if contrastive == 3:  #centerloss
-            # model.fc.register_forward_hook(get_activation1('embedding'))
-            pass
-            # centerloss = CenterLoss(10, model.fc.in_features)
-        else:  #ConLoss or supConLoss
-            model.projection_head.out.register_forward_hook(get_activation2('embedding'))
+        model.projection_head.out.register_forward_hook(get_activation2('embedding'))
 
     if label_smooth:  #使用label smoothing，使特征空间更紧密
-        loss_func = LabelSmoothing()
+        ce_loss = LabelSmoothing()
     else:
-        loss_func = nn.CrossEntropyLoss()
+        ce_loss = nn.CrossEntropyLoss()
 
-    # for batch_idx, (x, y) in enumerate(tqdm(train_loader, dynamic_ncols=True)):
-    for batch_idx, (x, y) in enumerate((train_loader)):
+    for batch_idx, (x, y) in enumerate(tqdm(train_loader, dynamic_ncols=True)):
+        # for batch_idx, (x, y) in enumerate((train_loader)):
         if (isinstance(x, list)):  #生成的多个视角的增强图片
             data = torch.cat(x, dim=0)
             labels = torch.cat([y, y], dim=0)
@@ -114,10 +112,13 @@ def train_single_epoch(
         labels = labels.to(device)
         batch_size = data.shape[0]
         optimizer.zero_grad()
-        
-        if contrastive == 3:
-            optimizer_centloss.zero_grad()
 
+        if contrastive == 3 or contrastive == 4:
+            optimizer_aux.zero_grad()
+            
+        if contrastive == 4:
+            aux_loss.enforce_cholesky_constraints()  #梯度更新参数后，确保cholesky矩阵仍然是对角元为正的下三角矩阵
+            
         if contrastive == 1:
             """
             类间对比loss
@@ -126,12 +127,12 @@ def train_single_epoch(
             logits = model(data).to(device2)
             labels = labels.to(device2)
             embeddings = activation['embedding'].to(device2)
-            loss1 = loss_func(logits, labels)
+            loss1 = ce_loss(logits, labels)
             loss2 = supervisedContrastiveLoss(embeddings, labels, device2, temperature=0.1)
             # if (epoch < 300):  #第一阶段，前300epoch只训练对比loss
             #     loss = loss2
             # else:  #第二阶段，对比loss+分类loss
-            #     loss1 = loss_func(logits, labels)
+            #     loss1 = ce_loss(logits, labels)
             #     loss = 100 * loss1 + loss2
             #     # loss = loss1
             # loss = loss1 - 0.01 * loss2  #这个好一些？？让同一类尽量分散
@@ -149,47 +150,30 @@ def train_single_epoch(
             if (epoch < 300):  #第一阶段，只训练对比loss
                 loss = loss2
             else:  #第二阶段，对比loss+分类loss
-                loss1 = loss_func(logits, labels)
+                loss1 = ce_loss(logits, labels)
                 loss = 100 * loss1 + loss2
 
             acc1, _ = accuracy(logits2, labels2, (1, 5))
             acc += acc1.item() * len(data)
-        elif contrastive == 3: #centerloss或者修正的centerloss
+        elif contrastive == 3:  #centerloss或者修正的centerloss
             logits = model(data)
             embeddings = model.feature
-            loss1 = loss_func(logits, labels)
-            loss2 = criterion_center(labels, embeddings)
+            loss1 = ce_loss(logits, labels)
+            loss2 = aux_loss(labels, embeddings)
             loss = loss1 + weight_center * loss2
             acc1, _ = accuracy(logits, labels, (1, 5))
             acc += acc1.item() * len(data)
-        elif adv == 1:
-            """对抗训练"""   #没啥用，抛弃
-            if batch_idx % 20 == 0:
-                data.requires_grad = True  #data.required_grad区分,用required_grad梯度为None
-                logits = model(data)
-                loss = loss_func(logits, labels)
-
-                model.zero_grad()
-                loss.backward()
-
-                # Collect ``datagrad``
-                data_grad = data.grad.data
-                data_denorm = data * std.view(1, -1, 1, 1) + mean.view(1, -1, 1, 1)
-                perturbed_data = fgsm_attack(data_denorm, 0.01, data_grad)
-                perturbed_data_normalized = (perturbed_data - mean.view(1, -1, 1, 1)) / std.view(1, -1, 1, 1)
-
-                data2 = torch.concat([data, perturbed_data_normalized])
-                labels2 = torch.concat([labels, labels])
-                logits2 = model(data2)
-            else:
-                logits2 = model(data)
-                labels2 = labels
-            loss = loss_func(logits2, labels2)
-            acc1, _ = accuracy(logits2, labels2, (1, 5))
+        elif contrastive == 4:  #GMMRegularizationLoss
+            logits = model(data)
+            embeddings = model.feature
+            loss1 = ce_loss(logits, labels)
+            loss2 = aux_loss(labels, embeddings)
+            loss = loss1 + weight_center * loss2
+            acc1, _ = accuracy(logits, labels, (1, 5))
             acc += acc1.item() * len(data)
         else:
             logits = model(data)
-            loss1 = loss_func(logits, labels)
+            loss1 = ce_loss(logits, labels)
             loss2 = torch.zeros(1)
             loss = loss1
 
@@ -198,10 +182,12 @@ def train_single_epoch(
 
         loss.backward()
         optimizer.step()
-        if contrastive==3:
-            for param in criterion_center.parameters():
+        if contrastive == 3 or contrastive == 4:
+            for param in aux_loss.parameters():
                 param.grad.data *= (1. / weight_center)
-            optimizer_centloss.step()
+            optimizer_aux.step()
+
+
 
         train_loss += loss.item() * len(data)
         train_loss1 += loss1.item() * len(data)

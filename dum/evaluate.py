@@ -5,6 +5,7 @@ import os
 import json
 import math
 import sys
+import time 
 import torch
 import pickle as pkl
 import glob, re
@@ -581,6 +582,7 @@ if __name__ == "__main__":
                                         pca = None
 
                                     gaussians_model, jitter_eps = gmm_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
+                                    start = time.time()
                                     logits2, labels2, preds2 = gmm_evaluate(
                                         net,
                                         gaussians_model,
@@ -590,7 +592,9 @@ if __name__ == "__main__":
                                         num_classes=num_classes,
                                         storage_device=device,
                                     )
-
+                                    end = time-time()
+                                    interval2 = end-start
+                                    
                                     ood_logits2, ood_labels2, _ = gmm_evaluate(
                                         net,
                                         gaussians_model,
@@ -602,8 +606,8 @@ if __name__ == "__main__":
                                     )
                                     _, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, maxval, device, conf=True)
                                     print(f"m1_auroc:{m1_auroc},m1_auprc:{m1_auprc};D={m},m2_auroc:{m2_auroc},m2_auprc:{m2_auprc}")
-                                    res.append([m2_auroc, m2_auprc, -t_ece, m])
-                                m2_auroc, m2_auprc, t_ece, epsilon = [max(col) for col in zip(*res)]
+                                    res.append([m2_auroc, m2_auprc, -t_ece, m]) 
+                                m2_auroc, m2_auprc, t_ece, epsilon = [max(col) for col in zip(*res)] #这里epsilon实际是m
                             elif args.perturbation == "pcakde":  #pca降wei
                                 res = []
                                 use_pca = True

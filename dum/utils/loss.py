@@ -13,6 +13,10 @@ from pytorch_metric_learning import losses  # 这个库里实现了很多metric 
 from torch.autograd.function import Function
 from torch.nn import functional as F
 
+import torch
+import torch.nn.functional as F
+from torch.distributions.multivariate_normal import MultivariateNormal
+
 
 class LabelSmoothing(nn.Module):
     """NLL loss with label smoothing.
@@ -20,7 +24,7 @@ class LabelSmoothing(nn.Module):
 
     def __init__(self, smoothing=0.01):
         """Constructor for the LabelSmoothing module.
-        :param smoothing: label smoothing factor
+        smoothing: label smoothing factor
         """
         super(LabelSmoothing, self).__init__()
         self.confidence = 1.0 - smoothing
@@ -80,18 +84,139 @@ class TripletLoss(nn.Module):
         y = torch.ones_like(dist_an)
         return self.ranking_loss(dist_an, dist_ap, y)
 
+
+class GMMRegularizationLoss(nn.Module):
+
+    def __init__(self, num_classes, feature_dim, device, lambda_compact=1.0, lambda_separate=1.0, lambda_gmm=1.0, epsilon=1e-5):
+        """
+        初始化 GMM 辅助损失的参数
+        num_classes: 类别数
+        feature_dim: 特征维度
+        lambda_compact: 类内紧密性损失的权重
+        lambda_separate: 类间可分性损失的权重
+        lambda_gmm: GMM 对数似然损失的权重
+        epsilon: 平滑项，防止数值不稳定
+        """
+        super(GMMRegularizationLoss, self).__init__()
+        self.num_classes = num_classes
+        self.feature_dim = feature_dim
+        self.lambda_compact = lambda_compact
+        self.lambda_separate = lambda_separate
+        self.lambda_gmm = lambda_gmm
+        self.epsilon = epsilon
+        self.device = device
+
+        # 初始化高斯分布的中心 (mu) 和协方差矩阵 (sigma)
+        self.mu = nn.Parameter(torch.randn(num_classes, feature_dim, device=device))  # 直接初始化在目标设备上
+        # self.sigma = nn.Parameter(torch.eye(feature_dim, device=device).repeat(num_classes, 1, 1))  # 同上
+        init_matrix = torch.randn(num_classes, feature_dim, feature_dim, device=device)
+        init_matrix = torch.tril(init_matrix)  # 强制为下三角矩阵
+        diag_indices = torch.arange(feature_dim)  # 对角线索引
+        init_matrix[:, diag_indices, diag_indices] = F.softplus(init_matrix[:, diag_indices, diag_indices])
+        self.cholesky_factors = nn.Parameter(init_matrix)# 为了保证协方差矩阵的正定性，这里学习cholesky分解的参数
+
+    def forward(self, labels, features):
+        """
+        计算总损失
+        features: 特征张量，形状为 [batch_size, feature_dim]
+        labels: 标签张量，形状为 [batch_size]
+        """
+        # 1. 计算类内紧密性损失 (compactness)
+        compact_loss = self.compute_compact_loss(features, labels)
+        # 2. 计算类间可分性损失 (separability)
+        separate_loss = self.compute_separate_loss()
+        # 3. 计算 GMM 对数似然损失
+        gmm_loss = self.compute_gmm_loss(features, labels)
+        # 总损失
+        # import pdb;pdb.set_trace()
+        total_loss =  compact_loss*separate_loss + 0.01*gmm_loss
+
+        return total_loss
+
+    def compute_compact_loss(self, features, labels):
+        """
+        计算类内紧密性损失
+        """
+        # 获取每个样本对应的类别中心
+        mu_y = self.mu[labels]  # 形状 [batch_size, feature_dim]
+        # 计算每个样本与类别中心的欧氏距离平方
+        distances = torch.sum((features - mu_y)**2, dim=1)  # [batch_size]
+        return distances.mean()
+
+    def compute_separate_loss(self):
+        """
+        计算类间可分性损失
+        """
+        # 计算每对类别中心之间的距离平方
+        mu_diff = self.mu.unsqueeze(1) - self.mu.unsqueeze(0)  # [num_classes, num_classes, feature_dim]
+        distances = torch.sum(mu_diff**2, dim=-1) + self.epsilon  # [num_classes, num_classes]
+        # 只考虑不同类别之间的距离
+        mask = torch.eye(self.num_classes, device=self.mu.device).bool()
+        inter_class_distances = distances[~mask].view(self.num_classes, self.num_classes - 1)
+        # 取倒数，距离越大，损失越小
+        separability = 1.0 / inter_class_distances
+        return separability.mean()
+
+    def compute_gmm_loss(self, features, labels):
+        """
+        计算 GMM 对数似然损失
+        """
+        batch_size = features.size(0)
+        log_likelihood = 0.0
+
+        
+        # 获取所有类别的均值和协方差矩阵
+        mu = self.mu[labels]  # shape: (batch_size, feature_dim)
+        L = self.cholesky_factors[labels]  # shape: (batch_size, feature_dim, feature_dim)
+
+        # 计算协方差矩阵
+        sigma = torch.matmul(L, L.transpose(-1, -2)) + self.epsilon * torch.eye(self.feature_dim, device=features.device)
+        
+        # 创建多元正态分布对象
+        mvn = MultivariateNormal(mu, covariance_matrix=sigma)
+        
+        # 批量计算对数似然
+        log_likelihood = mvn.log_prob(features)  # shape: (batch_size,)
+
+        return -log_likelihood.mean()
+
+    @torch.no_grad()
+    def enforce_cholesky_constraints(self):
+        """
+        在优化之后，修正 self.cholesky_factors 以确保其满足：
+        - 下三角结构
+        - 对角线元素为正
+        """
+        # for i inlog_likelihood range(self.num_classes):
+        #     L = self.cholesky_factors[i]
+            
+        #     # 修正对角线元素为正
+        #     diag_L = torch.diagonal(L)
+        #     diag_L.copy_(F.softplus(diag_L))
+            
+        #     # 保证矩阵为下三角
+        #     self.cholesky_factors[i].copy_(torch.tril(L))
+        # L = self.cholesky_factors  # shape: (num_classes, feature_dim, feature_dim)
+        # # 修正对角线元素为正（批量操作）
+        # diag_L = torch.diagonal(L, dim1=-2, dim2=-1)
+        # diag_L = F.softplus(diag_L)
+        # torch.diagonal(L, dim1=-2, dim2=-1).copy_(diag_L)
+        # # 保证矩阵为下三角（批量操作）
+        # self.cholesky_factors.copy_(torch.tril(L))
+        
+        L = self.cholesky_factors  # shape: (batch_size, feature_dim, feature_dim)
+        # # 保证协方差矩阵是正定的（修改L）
+        diag_L = torch.diagonal(L, dim1=-2, dim2=-1)
+        diag_L = F.softplus(diag_L)
+        L = torch.diag_embed(diag_L) + torch.triu(L, diagonal=1)
+        self.cholesky_factors.copy_(L)
+
+            
 class CenterLoss(nn.Module):
-    """Center loss.
-    
-    Reference:
-    Wen et al. A Discriminative Feature Learning Approach for Deep Face Recognition. ECCV 2016.
-    
-    Args:
-        num_classes (int): number of classes.
-        feat_dim (int): feature dimension.
+    """Center loss
     """
 
-    def __init__(self, num_classes, feat_dim,device):
+    def __init__(self, num_classes, feat_dim, device):
         super(CenterLoss, self).__init__()
         self.num_classes = num_classes
         self.feat_dim = feat_dim
@@ -102,11 +227,10 @@ class CenterLoss(nn.Module):
         """
         centerloss
         """
-        
+
         # center = self.centers[labels]
         # dist = (x-center).pow(2).sum(dim=-1)
         # loss = torch.clamp(dist, min=1e-12, max=1e+12).mean(dim=-1)
-
 
         # 下面的代码计算类内距离（与中心的距离）
         batch_size = x.size(0)
@@ -121,7 +245,7 @@ class CenterLoss(nn.Module):
 
         dist = distmat * mask.float()
         intra_class_distance = dist.clamp(min=1e-12, max=1e+12).sum() / batch_size
-        
+
         # # 下面的代码计算类间距离
         # num_classes = self.num_classes
         # center_dists = torch.cdist(self.centers, self.centers, p=2)  # 计算所有类别中心之间的欧氏距离
@@ -132,11 +256,10 @@ class CenterLoss(nn.Module):
         # inter_class_distance = center_dists.sum() / (num_classes * (num_classes - 1))
         # # print(f"Inra-class Distance (Average): {intra_class_distance.item()}",f"Inter-class Distance (Average): {inter_class_distance.item()}")
         # loss = intra_class_distance/(10*inter_class_distance+1e-12)
-        
-        loss = intra_class_distance
-        
-        return loss
 
+        loss = intra_class_distance
+
+        return loss
 
     def forward(self, labels, x, delta=1e-6):
         batch_size = x.size(0)
@@ -144,12 +267,12 @@ class CenterLoss(nn.Module):
 
         # 计算每个样本到其所属类别中心的距离 ||x_i - c_{y_i}||^2
         mask = F.one_hot(labels, num_classes).float()
-        dist_to_own_center = ((x - self.centers[labels]) ** 2).sum(dim=1)
+        dist_to_own_center = ((x - self.centers[labels])**2).sum(dim=1)
 
         # 计算类别中心之间的距离 ||c_{y_i} - c_j||^2
         expanded_own_centers = self.centers[labels].unsqueeze(1).expand(batch_size, num_classes, -1)  # (batch_size, num_classes, feature_dim)
         expanded_centers = self.centers.unsqueeze(0).expand(batch_size, num_classes, -1)  # (batch_size, num_classes, feature_dim)
-        dist_between_centers = ((expanded_own_centers - expanded_centers) ** 2).sum(dim=2)  # (batch_size, num_classes)
+        dist_between_centers = ((expanded_own_centers - expanded_centers)**2).sum(dim=2)  # (batch_size, num_classes)
 
         # 将正确类别的距离排除
         dist_between_other_centers = dist_between_centers * (1 - mask)
@@ -160,20 +283,19 @@ class CenterLoss(nn.Module):
 
         return loss
 
-
-    def forward333(self,labels,x, delta=1e-6):
+    def forward333(self, labels, x, delta=1e-6):
         #https://ar5iv.labs.arxiv.org/html/1707.07391
         batch_size = x.size(0)
-        num_classes =self.centers.size(0)
+        num_classes = self.centers.size(0)
 
         # 计算每个样本到其所属类别中心的距离 ||x_i - c_{y_i}||^2
         mask = F.one_hot(labels, num_classes).float()
-        dist_to_own_center = ((x -self.centers[labels]) ** 2).sum(dim=1)
+        dist_to_own_center = ((x - self.centers[labels])**2).sum(dim=1)
 
         # 计算每个样本到所有其他类别中心的距离 ||x_i - c_j||^2
         expanded_x = x.unsqueeze(1).expand(batch_size, num_classes, -1)  # (batch_size, num_classes, feature_dim)
-        expanded_centers =self.centers.unsqueeze(0).expand(batch_size, num_classes, -1)  # (batch_size, num_classes, feature_dim)
-        dist_to_all_centers = ((expanded_x - expanded_centers) ** 2).sum(dim=2)  # (batch_size, num_classes)
+        expanded_centers = self.centers.unsqueeze(0).expand(batch_size, num_classes, -1)  # (batch_size, num_classes, feature_dim)
+        dist_to_all_centers = ((expanded_x - expanded_centers)**2).sum(dim=2)  # (batch_size, num_classes)
 
         # 将正确类别的距离排除
         dist_to_other_centers = dist_to_all_centers * (1 - mask)
@@ -181,27 +303,27 @@ class CenterLoss(nn.Module):
 
         # 计算最终的对比损失
         loss = (dist_to_own_center / (sum_dist_to_other_centers + delta)).mean() * 0.5
-        
+
         return loss
-    
-    def forward222(self,labels,x, delta=1e-6):
+
+    def forward222(self, labels, x, delta=1e-6):
         '''
         使用余弦距离,代替欧氏距离
         '''
 
         batch_size = x.size(0)
-        num_classes =self.centers.size(0)
+        num_classes = self.centers.size(0)
 
         # 计算每个样本到其所属类别中心的距离 ||x_i - c_{y_i}||^2
         mask = F.one_hot(labels, num_classes).float()
         # dist_to_own_center = ((x -self.centers[labels]) ** 2).sum(dim=1)
-        dist_to_own_center = torch.exp(F.cosine_similarity(x,self.centers[labels]))
+        dist_to_own_center = torch.exp(F.cosine_similarity(x, self.centers[labels]))
 
         # 计算每个样本到所有其他类别中心的距离 ||x_i - c_j||^2
         expanded_x = x.unsqueeze(1).expand(batch_size, num_classes, -1)  # (batch_size, num_classes, feature_dim)
-        expanded_centers =self.centers.unsqueeze(0).expand(batch_size, num_classes, -1)  # (batch_size, num_classes, feature_dim)
+        expanded_centers = self.centers.unsqueeze(0).expand(batch_size, num_classes, -1)  # (batch_size, num_classes, feature_dim)
         # dist_to_all_centers = ((expanded_x - expanded_centers) ** 2).sum(dim=2)  # (batch_size, num_classes)
-        dist_to_all_centers = torch.exp(F.cosine_similarity(expanded_x,expanded_centers,dim=2))
+        dist_to_all_centers = torch.exp(F.cosine_similarity(expanded_x, expanded_centers, dim=2))
 
         # 将正确类别的距离排除
         dist_to_other_centers = dist_to_all_centers * (1 - mask)
@@ -209,7 +331,7 @@ class CenterLoss(nn.Module):
 
         # 计算最终的对比损失
         loss = -(dist_to_own_center / (sum_dist_to_other_centers + delta)).mean() * 0.5
-        
+
         return loss
 
 
@@ -231,7 +353,6 @@ class CenterLoss(nn.Module):
 #         batch_size_tensor = feat.new_empty(1).fill_(batch_size if self.size_average else 1)
 #         loss = self.centerlossfunc(feat, label, self.centers, batch_size_tensor)
 #         return loss
-
 
 # class CenterlossFunc(Function):
 #     @staticmethod

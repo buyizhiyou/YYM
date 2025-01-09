@@ -35,7 +35,7 @@ from net.wide_resnet import wrn
 from utils.args import training_args
 from utils.eval_utils import get_eval_stats
 from utils.lars import LARC
-from utils.loss import CenterLoss, LabelSmoothing, supervisedContrastiveLoss
+from utils.loss import CenterLoss, LabelSmoothing, supervisedContrastiveLoss,GMMRegularizationLoss
 from utils.normality_test import normality_score
 from utils.plots_utils import (create_gif_from_images, inter_intra_class_ratio, plot_embedding_2d)
 from utils.train_utils import (model_save_name, save_config_file, test_single_epoch, train_single_epoch, seed_torch)
@@ -92,9 +92,12 @@ if __name__ == "__main__":
     #TODO:这个schduler有Bug，无法step更新学习率
     # optimimizer = LARC(optimizer)
 
-    criterion_center = CenterLoss(num_classes=10, feat_dim=model_to_num_dim[args.model], device=device)
-    optimizer_centloss = torch.optim.SGD(criterion_center.parameters(), lr=0.5)
-    scheduler_centerloss = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 200, 300], gamma=0.1, verbose=False)
+    if args.contrastive==3:
+        aux_loss = CenterLoss(num_classes=10, feat_dim=model_to_num_dim[args.model], device=device)
+    elif args.contrastive==4:
+        aux_loss = GMMRegularizationLoss(num_classes=10, feature_dim=model_to_num_dim[args.model], device=device)
+    optimizer_auxloss = torch.optim.SGD(aux_loss.parameters(), lr=0.5)
+    scheduler_auxloss = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 200, 300], gamma=0.1, verbose=False)
 
     #设置dataloader
     train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(root=args.dataset_root,
@@ -137,8 +140,8 @@ if __name__ == "__main__":
             net,
             train_loader,
             optimizer,
-            criterion_center,
-            optimizer_centloss,
+            aux_loss,
+            optimizer_auxloss,
             device,
             args.contrastive,
             adv=args.adv,
@@ -154,7 +157,7 @@ if __name__ == "__main__":
             writer.add_scalar('learning_rate', scheduler.get_last_lr()[0], global_step=(epoch + 1))
 
         scheduler.step()
-        # scheduler_centerloss.step()
+        # scheduler_auxloss.step()
         
         if epoch<290:
             if val_acc > best_acc:
