@@ -92,7 +92,7 @@ if __name__ == "__main__":
     #TODO:这个schduler有Bug，无法step更新学习率
     # optimimizer = LARC(optimizer)
 
-    if args.contrastive==3:
+    if args.contrastive!=4:
         aux_loss = CenterLoss(num_classes=10, feat_dim=model_to_num_dim[args.model], device=device)
     elif args.contrastive==4:
         aux_loss = GMMRegularizationLoss(num_classes=10, feature_dim=model_to_num_dim[args.model], device=device)
