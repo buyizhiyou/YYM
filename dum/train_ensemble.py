@@ -60,6 +60,7 @@ if __name__ == "__main__":
     num_classes = dataset_num_classes[args.dataset]
 
     # Choosing the model to train
+    args.ensemble = 1  #调试
     net_ensemble = [
         models[args.model](
             spectral_normalization=args.sn,
@@ -76,7 +77,7 @@ if __name__ == "__main__":
 
     for i, model in enumerate(net_ensemble):
         opt_params = model.parameters()
-        if args.optimiser == "sgd":
+        if args.optimiser == "sgd": #默认是这个
             optimizer = optim.SGD(
                 opt_params,
                 lr=args.learning_rate,
@@ -88,7 +89,8 @@ if __name__ == "__main__":
             optimizer = optim.Adam(opt_params, lr=args.learning_rate, weight_decay=args.weight_decay)
         scheduler = optim.lr_scheduler.MultiStepLR(
             optimizer,
-            milestones=[args.first_milestone, args.second_milestone],
+            # milestones=[args.first_milestone, args.second_milestone],#150,250
+            milestones=[0.3 * args.epoch, 0.6 * args.epoch, 0.9 * args.epoch],
             gamma=0.1,
         )
         train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(root=args.dataset_root,
@@ -130,12 +132,16 @@ if __name__ == "__main__":
                 None,
                 None,
                 device,
-                # loss_mean=args.loss_mean,
             )
             schedulers[i].step()
 
+            model.eval()  #注意这里，设置eval模式
             if (epoch % 3 == 0):
                 val_acc = test_single_epoch(epoch, model, val_loaders[i], device)
+                writer.add_scalar("train_loss", train_loss, (epoch + 1))
+                writer.add_scalar("train_acc", train_acc, (epoch + 1))
+                writer.add_scalar("val_acc", val_acc, (epoch + 1))
+                writer.add_scalar('learning_rate', scheduler.get_last_lr()[0], global_step=(epoch + 1))
 
             if val_acc > best_acc[i]:
                 best_acc[i] = val_acc
@@ -143,6 +149,5 @@ if __name__ == "__main__":
                 torch.save(model.state_dict(), save_path)
                 print("Model saved to ", save_path)
 
-        writer.add_scalar(args.model + "_ensemble_" + "train_loss", train_loss, (epoch + 1))
 
     writer.close()

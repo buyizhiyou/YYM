@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
     # 学习率schduler
     if args.scheduler == "step":
-        #[0.3 * args.epoch, 0.6 * args.epoch, 0.9 * args.epoch]
+        ##150,250
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer,
                                                    milestones=[0.3 * args.epoch, 0.6 * args.epoch, 0.9 * args.epoch],
                                                    gamma=0.1,
@@ -165,6 +165,9 @@ if __name__ == "__main__":
                 save_path = save_loc + save_name + "_best" + ".model"
                 torch.save(net.state_dict(), save_path)
                 print("Model saved to ", save_path)
+                if args.contrastive==4 or args.contrastive==3: #对于centerloss 或者gmmloss还需要额外保存loss的参数
+                    save_path2 = save_loc + save_name + "_best" + "_gmm.model"
+                    torch.save(aux_loss.state_dict(), save_path2)
         else:  #在最后10个epoch,acc已经基本平直
             Xs = []
             ys = []

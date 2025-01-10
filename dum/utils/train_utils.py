@@ -73,7 +73,7 @@ def train_single_epoch(
         weight_center = 50  #TODO:后续在这里调整系数，逐步增大
         # weight_center = epoch*50/300
     elif contrastive==4:
-        weight_center = 1
+        weight_center = 0.01
         
         
     if contrastive == 1 or contrastive == 2:
@@ -115,9 +115,6 @@ def train_single_epoch(
 
         if contrastive == 3 or contrastive == 4:
             optimizer_aux.zero_grad()
-            
-        if contrastive == 4:
-            aux_loss.enforce_cholesky_constraints()  #梯度更新参数后，确保cholesky矩阵仍然是对角元为正的下三角矩阵
             
         if contrastive == 1:
             """
@@ -185,6 +182,8 @@ def train_single_epoch(
         if contrastive == 3 or contrastive == 4:
             for param in aux_loss.parameters():
                 param.grad.data *= (1. / weight_center)
+                
+            torch.nn.utils.clip_grad_norm_(aux_loss.parameters(), max_norm=1, norm_type=2)
             optimizer_aux.step()
 
 

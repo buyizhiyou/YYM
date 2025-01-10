@@ -757,6 +757,7 @@ def gmm_fit(embeddings, labels, num_classes):
         # 对每个类别，求均值，协方差
         classwise_mean_features = torch.stack([torch.mean(embeddings[labels == c], dim=0) for c in range(num_classes)])
         classwise_cov_features = torch.stack([torch.cov(embeddings[labels == c].T) for c in range(num_classes)])
+        # import pdb;pdb.set_trace()
     with torch.no_grad():
         for jitter_eps in JITTERS:
             try:  #协方差矩阵要求正定,但是样本协方差矩阵不一定正定,所以加上对角阵转化为正定的

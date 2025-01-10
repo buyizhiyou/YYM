@@ -58,7 +58,7 @@ if [ -z "$gpu" ]; then
 fi
 
 
-for i in {1..10}; do
+for i in {1..5}; do
        echo "训练第$i次"
        python train_ensemble.py \
               --seed 1 \

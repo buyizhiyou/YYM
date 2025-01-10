@@ -7,6 +7,7 @@
 @Version :   Cinnamoroll V1
 '''
 
+import sys
 import torch
 import torch.nn as nn
 from pytorch_metric_learning import losses  # 这个库里实现了很多metric learning的loss
@@ -84,7 +85,8 @@ class TripletLoss(nn.Module):
         y = torch.ones_like(dist_an)
         return self.ranking_loss(dist_an, dist_ap, y)
 
-
+DOUBLE_INFO = torch.finfo(torch.double)
+JITTERS = [0, DOUBLE_INFO.tiny] + [10**exp for exp in range(-30, 1, 1)]
 class GMMRegularizationLoss(nn.Module):
 
     def __init__(self, num_classes, feature_dim, device, lambda_compact=1.0, lambda_separate=1.0, lambda_gmm=1.0, epsilon=1e-5):
@@ -113,7 +115,7 @@ class GMMRegularizationLoss(nn.Module):
         init_matrix = torch.tril(init_matrix)  # 强制为下三角矩阵
         diag_indices = torch.arange(feature_dim)  # 对角线索引
         init_matrix[:, diag_indices, diag_indices] = F.softplus(init_matrix[:, diag_indices, diag_indices])
-        self.cholesky_factors = nn.Parameter(init_matrix)# 为了保证协方差矩阵的正定性，这里学习cholesky分解的参数
+        self.cholesky_factors = nn.Parameter(init_matrix)  # 为了保证协方差矩阵的正定性，这里学习cholesky分解的参数
 
     def forward(self, labels, features):
         """
@@ -127,9 +129,13 @@ class GMMRegularizationLoss(nn.Module):
         separate_loss = self.compute_separate_loss()
         # 3. 计算 GMM 对数似然损失
         gmm_loss = self.compute_gmm_loss(features, labels)
+        #4. 计算一个正则化项，强制 cholesky_factors 保持较小
+        # lambda_reg = 1 # 正则化的超参数
+        # reg_loss = lambda_reg * torch.norm(self.cholesky_factors, p='fro')
+
         # 总损失
-        # import pdb;pdb.set_trace()
-        total_loss =  compact_loss*separate_loss + 0.01*gmm_loss
+        # total_loss = compact_loss - separate_loss - gmm_loss + reg_loss
+        total_loss = compact_loss - separate_loss - gmm_loss
 
         return total_loss
 
@@ -153,65 +159,45 @@ class GMMRegularizationLoss(nn.Module):
         # 只考虑不同类别之间的距离
         mask = torch.eye(self.num_classes, device=self.mu.device).bool()
         inter_class_distances = distances[~mask].view(self.num_classes, self.num_classes - 1)
-        # 取倒数，距离越大，损失越小
-        separability = 1.0 / inter_class_distances
+        separability = inter_class_distances
+
         return separability.mean()
 
     def compute_gmm_loss(self, features, labels):
         """
         计算 GMM 对数似然损失
         """
-        batch_size = features.size(0)
-        log_likelihood = 0.0
-
-        
         # 获取所有类别的均值和协方差矩阵
-        mu = self.mu[labels]  # shape: (batch_size, feature_dim)
-        L = self.cholesky_factors[labels]  # shape: (batch_size, feature_dim, feature_dim)
+        mu = self.mu
+        L = self.cholesky_factors
+
 
         # 计算协方差矩阵
-        sigma = torch.matmul(L, L.transpose(-1, -2)) + self.epsilon * torch.eye(self.feature_dim, device=features.device)
-        
-        # 创建多元正态分布对象
-        mvn = MultivariateNormal(mu, covariance_matrix=sigma)
-        
+        sigma = torch.matmul(L, L.transpose(-1, -2))
+        for jitter_eps in JITTERS:
+            try:  #协方差矩阵要求正定,但是样本协方差矩阵不一定正定,所以加上对角阵转化为正定的
+                jitter = jitter_eps * torch.eye(
+                    self.feature_dim,
+                    device=self.device,
+                ).unsqueeze(0)
+                mvn = MultivariateNormal(mu, covariance_matrix=(sigma+jitter))
+            except:
+                continue
+
         # 批量计算对数似然
-        log_likelihood = mvn.log_prob(features)  # shape: (batch_size,)
+        features_expanded = features.unsqueeze(1)
+        try:
+            log_likelihood = mvn.log_prob(features_expanded) 
+        except:
+            import pdb;pdb.set_trace()
+            sys.exit()
 
-        return -log_likelihood.mean()
+        log_likelihood = torch.gather(log_likelihood, dim=1, index=labels.unsqueeze(1)).squeeze(1)  # shape: (batch_size,)
 
-    @torch.no_grad()
-    def enforce_cholesky_constraints(self):
-        """
-        在优化之后，修正 self.cholesky_factors 以确保其满足：
-        - 下三角结构
-        - 对角线元素为正
-        """
-        # for i inlog_likelihood range(self.num_classes):
-        #     L = self.cholesky_factors[i]
-            
-        #     # 修正对角线元素为正
-        #     diag_L = torch.diagonal(L)
-        #     diag_L.copy_(F.softplus(diag_L))
-            
-        #     # 保证矩阵为下三角
-        #     self.cholesky_factors[i].copy_(torch.tril(L))
-        # L = self.cholesky_factors  # shape: (num_classes, feature_dim, feature_dim)
-        # # 修正对角线元素为正（批量操作）
-        # diag_L = torch.diagonal(L, dim1=-2, dim2=-1)
-        # diag_L = F.softplus(diag_L)
-        # torch.diagonal(L, dim1=-2, dim2=-1).copy_(diag_L)
-        # # 保证矩阵为下三角（批量操作）
-        # self.cholesky_factors.copy_(torch.tril(L))
-        
-        L = self.cholesky_factors  # shape: (batch_size, feature_dim, feature_dim)
-        # # 保证协方差矩阵是正定的（修改L）
-        diag_L = torch.diagonal(L, dim1=-2, dim2=-1)
-        diag_L = F.softplus(diag_L)
-        L = torch.diag_embed(diag_L) + torch.triu(L, diagonal=1)
-        self.cholesky_factors.copy_(L)
 
-            
+        return log_likelihood.mean()
+
+
 class CenterLoss(nn.Module):
     """Center loss
     """

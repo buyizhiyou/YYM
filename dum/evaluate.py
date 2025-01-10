@@ -105,7 +105,7 @@ if __name__ == "__main__":
     m2_aurocs = []
     m2_auprcs = []
     epsilons = []
-    ece = 0
+    ece = 0.0
     t_ece = 1.0
 
     topt = None
@@ -205,6 +205,7 @@ if __name__ == "__main__":
             #     t_confidences,
             # ) = test_classification_net_ensemble(t_ensemble, test_loader, device)
             # t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
+            epsilon = 0.0
         else:
             test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root,
                                                                        batch_size=args.batch_size,
