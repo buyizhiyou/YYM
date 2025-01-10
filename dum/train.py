@@ -35,7 +35,7 @@ from net.wide_resnet import wrn
 from utils.args import training_args
 from utils.eval_utils import get_eval_stats
 from utils.lars import LARC
-from utils.loss import CenterLoss, LabelSmoothing, supervisedContrastiveLoss,GMMRegularizationLoss
+from utils.loss import CenterLoss, LabelSmoothing, supervisedContrastiveLoss, GMMRegularizationLoss
 from utils.normality_test import normality_score
 from utils.plots_utils import (create_gif_from_images, inter_intra_class_ratio, plot_embedding_2d)
 from utils.train_utils import (model_save_name, save_config_file, test_single_epoch, train_single_epoch, seed_torch)
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     args = training_args().parse_args()
     print("Parsed args", args)
     print("Seed: ", args.seed)
-    # torch.manual_seed(args.seed)
+    torch.manual_seed(args.seed)
     cuda = torch.cuda.is_available() and args.gpu
     device = torch.device(f"cuda:{args.gpu}" if cuda else "cpu")
     print("CUDA set: " + str(cuda))
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     num_classes = dataset_num_classes[args.dataset]
 
     # Choosing the model to train
-    net = models[args.model](spectral_normalization=args.sn, mod=args.mod, num_classes=num_classes).to(device)
+    net = models[args.model](spectral_normalization=args.sn, mod=args.mod, coeff=args.coeff, num_classes=num_classes).to(device)
     net.to(device)
 
     opt_params = net.parameters()
@@ -81,10 +81,12 @@ if __name__ == "__main__":
     # 学习率schduler
     if args.scheduler == "step":
         ##150,250
-        scheduler = optim.lr_scheduler.MultiStepLR(optimizer,
-                                                   milestones=[0.3 * args.epoch, 0.6 * args.epoch, 0.9 * args.epoch],
-                                                   gamma=0.1,
-                                                   verbose=False)
+        scheduler = optim.lr_scheduler.MultiStepLR(
+            optimizer,
+            milestones=[args.first_milestone, args.second_milestone],  #150,250
+            #    milestones=[0.3 * args.epoch, 0.6 * args.epoch, 0.9 * args.epoch],
+            gamma=0.1,
+            verbose=False)
     elif args.scheduler == "cos":
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=300, eta_min=1e-7, verbose=False)
 
@@ -92,12 +94,19 @@ if __name__ == "__main__":
     #TODO:这个schduler有Bug，无法step更新学习率
     # optimimizer = LARC(optimizer)
 
-    if args.contrastive!=4:
+    if args.contrastive == 3:
         aux_loss = CenterLoss(num_classes=10, feat_dim=model_to_num_dim[args.model], device=device)
-    elif args.contrastive==4:
+    elif args.contrastive == 4:
         aux_loss = GMMRegularizationLoss(num_classes=10, feature_dim=model_to_num_dim[args.model], device=device)
-    optimizer_auxloss = torch.optim.SGD(aux_loss.parameters(), lr=0.5)
-    scheduler_auxloss = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 200, 300], gamma=0.1, verbose=False)
+    else:
+        aux_loss = None 
+        
+    if args.contrastive==3 or args.contrastive==4:
+        optimizer_auxloss = torch.optim.SGD(aux_loss.parameters(), lr=0.5)
+        scheduler_auxloss = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 200, 300], gamma=0.1, verbose=False)
+    else:
+        optimizer_auxloss = None
+
 
     #设置dataloader
     train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(root=args.dataset_root,
@@ -134,7 +143,7 @@ if __name__ == "__main__":
         1. 300epoch 原始单阶段训练crossEntropy
         2. 两阶段训练:前300epoch只训练supCon,后面150个epoch只训练fc层
         """
-        # print("Starting epoch", epoch)
+        print("best accu", best_acc)
         train_loss, train_acc = train_single_epoch(
             epoch,
             net,
@@ -147,25 +156,25 @@ if __name__ == "__main__":
             adv=args.adv,
             label_smooth=args.ls,
         )
+        scheduler.step()
+        # scheduler_auxloss.step()
 
         net.eval()  #注意这里，设置eval模式
-        if epoch%3==0:
+        if epoch % 3 == 0:
             val_acc = test_single_epoch(epoch, net, val_loader, device)
             writer.add_scalar("train_loss", train_loss, (epoch + 1))
             writer.add_scalar("train_acc", train_acc, (epoch + 1))
             writer.add_scalar("val_acc", val_acc, (epoch + 1))
             writer.add_scalar('learning_rate', scheduler.get_last_lr()[0], global_step=(epoch + 1))
 
-        scheduler.step()
-        # scheduler_auxloss.step()
-        
-        if epoch<290:
+
+        if epoch < 290:
             if val_acc > best_acc:
                 best_acc = val_acc
                 save_path = save_loc + save_name + "_best" + ".model"
                 torch.save(net.state_dict(), save_path)
                 print("Model saved to ", save_path)
-                if args.contrastive==4 or args.contrastive==3: #对于centerloss 或者gmmloss还需要额外保存loss的参数
+                if args.contrastive == 4 or args.contrastive == 3:  #对于centerloss 或者gmmloss还需要额外保存loss的参数
                     save_path2 = save_loc + save_name + "_best" + "_gmm.model"
                     torch.save(aux_loss.state_dict(), save_path2)
         else:  #在最后10个epoch,acc已经基本平直

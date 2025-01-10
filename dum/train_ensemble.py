@@ -89,8 +89,8 @@ if __name__ == "__main__":
             optimizer = optim.Adam(opt_params, lr=args.learning_rate, weight_decay=args.weight_decay)
         scheduler = optim.lr_scheduler.MultiStepLR(
             optimizer,
-            # milestones=[args.first_milestone, args.second_milestone],#150,250
-            milestones=[0.3 * args.epoch, 0.6 * args.epoch, 0.9 * args.epoch],
+            milestones=[args.first_milestone, args.second_milestone],#150,250
+            # milestones=[0.3 * args.epoch, 0.6 * args.epoch, 0.9 * args.epoch],
             gamma=0.1,
         )
         train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(root=args.dataset_root,
@@ -122,6 +122,7 @@ if __name__ == "__main__":
 
     best_acc = [0] * (args.ensemble)
     for epoch in range(0, args.epoch):
+        print("best accu", best_acc)
         for i, model in enumerate(net_ensemble):
             print("Ensemble Model: " + str(i))
             train_loss, train_acc = train_single_epoch(
