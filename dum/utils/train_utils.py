@@ -73,7 +73,7 @@ def train_single_epoch(
         weight_center = 50  #TODO:后续在这里调整系数，逐步增大
         # weight_center = epoch*50/300
     elif contrastive==4:
-        weight_center = 0.01
+        weight_center = 0.001
         
         
     if contrastive == 1 or contrastive == 2:

@@ -168,7 +168,7 @@ if __name__ == "__main__":
             writer.add_scalar('learning_rate', scheduler.get_last_lr()[0], global_step=(epoch + 1))
 
 
-        if epoch < 290:
+        if epoch < (args.epoch-5):
             if val_acc > best_acc:
                 best_acc = val_acc
                 save_path = save_loc + save_name + "_best" + ".model"
