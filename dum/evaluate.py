@@ -323,7 +323,7 @@ if __name__ == "__main__":
 
                 m2_res = []
                 if args.perturbation in ["fgsm2", "fgsm"]:
-                    eps = [0.0001, 0.0005, 0.001, 0.002, 0.003, 0.005, 0.006, 0.007, 0.009, 0.01, 0.02, 0.05]
+                    eps = [0.0001, 0.0003, 0.0005, 0.0007, 0.001, 0.002, 0.003, 0.005, 0.006, 0.007, 0.009, 0.01]
                 elif args.perturbation in ["fgsm3"]:
                     eps = [0.00001, 0.00005, 0.0001, 0.0002, 0.0005, 0.0007, 0.001, 0.002, 0.003, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01]
                 elif args.perturbation == "misclassified":
@@ -591,7 +591,7 @@ if __name__ == "__main__":
                             use_pca = True
 
                             if args.model == "resnet50":
-                                pca_dimension = [64, 128, 256, 512, 1024]
+                                pca_dimension = list(range(128, model_to_num_dim[args.model], 128))
                             else:
                                 pca_dimension = list(range(128, model_to_num_dim[args.model], 32))
                             pca_storage = []
@@ -702,7 +702,7 @@ if __name__ == "__main__":
 
                         m2_res.append([m2_auroc, m2_auprc, -t_ece, epsilon])
 
-                if args.perturbation=="pca":
+                if args.perturbation == "pca":
                     pca_res[saved_model_name] = {}
                     pca_res[saved_model_name]['ori_interval'] = interval1
                     pca_res[saved_model_name]['ori_storage'] = storage

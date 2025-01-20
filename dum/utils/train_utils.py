@@ -69,11 +69,9 @@ def train_single_epoch(
     std = [0.2023, 0.1994, 0.2010]
     std = torch.tensor(std).to(device)
     mean = torch.tensor(mean).to(device)
-    if contrastive==3:
+    if contrastive==3 or contrastive==4:
         weight_center = 50  #TODO:后续在这里调整系数，逐步增大
         # weight_center = epoch*50/300
-    elif contrastive==4:
-        weight_center = 0.001
         
         
     if contrastive == 1 or contrastive == 2:
@@ -100,8 +98,8 @@ def train_single_epoch(
     else:
         ce_loss = nn.CrossEntropyLoss()
 
-    for batch_idx, (x, y) in enumerate(tqdm(train_loader, dynamic_ncols=True)):
-        # for batch_idx, (x, y) in enumerate((train_loader)):
+    # for batch_idx, (x, y) in enumerate(tqdm(train_loader, dynamic_ncols=True)):
+    for batch_idx, (x, y) in enumerate((train_loader)):
         if (isinstance(x, list)):  #生成的多个视角的增强图片
             data = torch.cat(x, dim=0)
             labels = torch.cat([y, y], dim=0)
@@ -152,15 +150,7 @@ def train_single_epoch(
 
             acc1, _ = accuracy(logits2, labels2, (1, 5))
             acc += acc1.item() * len(data)
-        elif contrastive == 3:  #centerloss或者修正的centerloss
-            logits = model(data)
-            embeddings = model.feature
-            loss1 = ce_loss(logits, labels)
-            loss2 = aux_loss(labels, embeddings)
-            loss = loss1 + weight_center * loss2
-            acc1, _ = accuracy(logits, labels, (1, 5))
-            acc += acc1.item() * len(data)
-        elif contrastive == 4:  #GMMRegularizationLoss
+        elif contrastive == 3 or contrastive==4:  #centerloss或者修正的centerloss
             logits = model(data)
             embeddings = model.feature
             loss1 = ce_loss(logits, labels)
@@ -183,7 +173,7 @@ def train_single_epoch(
             for param in aux_loss.parameters():
                 param.grad.data *= (1. / weight_center)
                 
-            torch.nn.utils.clip_grad_norm_(aux_loss.parameters(), max_norm=1, norm_type=2)
+            # torch.nn.utils.clip_grad_norm_(aux_loss.parameters(), max_norm=1, norm_type=2)#gmmloss需要
             optimizer_aux.step()
 
 

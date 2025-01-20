@@ -36,7 +36,7 @@ from net.wide_resnet import wrn
 from utils.args import training_args
 from utils.eval_utils import get_eval_stats
 from utils.lars import LARC
-from utils.loss import CenterLoss, LabelSmoothing, supervisedContrastiveLoss, GMMRegularizationLoss
+from utils.loss import CenterLoss, CenterLoss2, LabelSmoothing, supervisedContrastiveLoss, GMMRegularizationLoss
 from utils.normality_test import normality_score
 from utils.plots_utils import (create_gif_from_images, inter_intra_class_ratio, plot_embedding_2d)
 from utils.train_utils import (model_save_name, save_config_file, test_single_epoch, train_single_epoch, seed_torch)
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     if args.contrastive == 3:
         aux_loss = CenterLoss(num_classes=10, feat_dim=model_to_num_dim[args.model], device=device)
     elif args.contrastive == 4:
-        aux_loss = GMMRegularizationLoss(num_classes=10, feature_dim=model_to_num_dim[args.model], device=device)
+        aux_loss = CenterLoss2(num_classes=10, feat_dim=model_to_num_dim[args.model], device=device)
     else:
         aux_loss = None
 
