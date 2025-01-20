@@ -5,6 +5,7 @@ Script for training deep ensemble models.
 import argparse
 import datetime
 import os
+from pathlib import Path
 
 import torch
 import torch.backends.cudnn as cudnn
@@ -136,7 +137,6 @@ if __name__ == "__main__":
             )
             schedulers[i].step()
 
-            model.eval()  #注意这里，设置eval模式
             if (epoch % 3 == 0):
                 val_acc = test_single_epoch(epoch, model, val_loaders[i], device)
                 writer.add_scalar("train_loss", train_loss, (epoch + 1))
@@ -148,6 +148,7 @@ if __name__ == "__main__":
                 best_acc[i] = val_acc
                 save_path = save_loc + save_name + f"_{i}" + "_best" + ".model"
                 torch.save(model.state_dict(), save_path)
+                Path(os.path.join(save_loc,f"accuracy_{best_acc}")).touch()
                 print("Model saved to ", save_path)
 
 

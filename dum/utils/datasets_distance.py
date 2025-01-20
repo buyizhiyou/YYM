@@ -77,7 +77,7 @@ def mmd_distance(source, target, kernel_mul=2.0, kernel_num=5, fix_sigma=None):
 
 if __name__ == '__main__':
     test_loader = dataset_loader["cifar10"].get_test_loader(root="../data", batch_size=1024, pin_memory=True)
-    ood_name = ["dtd", "fer2013", "cifar100", "mnist", "lsun", "svhn", "tiny_imagenet", "gauss"]
+    ood_name = [ "cifar100", "mnist", "lsun", "svhn"]
     for data, _ in test_loader:
         data = data.reshape((data.shape[0], -1))
         break

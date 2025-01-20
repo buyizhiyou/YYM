@@ -139,7 +139,10 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, size=32,sample_
 
 
 if __name__ == '__main__':
-    dataloader = get_test_loader(32, root="../../data")
-    for x,y in dataloader:
-        import pdb;pdb.set_trace()
-        print(x[0].std())
+    # dataloader = get_test_loader(32, root="../../data")
+    test_loader = get_test_loader(root="../../data/", batch_size=32,sample_size=100)
+    for i in  range(10):
+        print(i)
+        for x,y in test_loader:
+            print(x.mean())
+        

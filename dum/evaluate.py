@@ -4,6 +4,7 @@ Script to evaluate a single model.
 import os
 import json
 import math
+import shutil
 import sys
 import time
 import torch
@@ -43,15 +44,15 @@ from metrics.uncertainty_confidence import entropy, logsumexp, confidence, sumex
 from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ensemble, auroc, auprc
 
 # Import GMM utils
-from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate, gradient_norm_collect, gmm_evaluate_for_adv, gmm_evaluate_with_perturbation_for_adv, gmm_evaluate_with_perturbation, maxp_evaluate_with_perturbation
+from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate, gradient_norm_collect, gmm_evaluate_for_adv, gmm_evaluate_with_perturbation_for_adv, gmm_evaluate_with_perturbation, maxp_evaluate_with_perturbation, gmm_evaluate_with_perturbation2, gmm_evaluate_with_perturbation3
 from utils.kde_utils import kde_evaluate, kde_fit
 from utils.eval_utils import model_load_name
 from utils.train_utils import model_save_name, seed_torch
 from utils.args import eval_args
 from utils.ensemble_utils import load_ensemble, ensemble_forward_pass
 
-# Temperature scaling
-from utils.temperature_scaling import ModelWithTemperature
+# # Temperature scaling
+# from utils.temperature_scaling import ModelWithTemperature
 
 # Dataset params
 dataset_num_classes = {"mnist": 10, "cifar10": 10, "cifar100": 100, "svhn": 10, "lsun": 10, "tiny_iamgenet": 200}
@@ -98,18 +99,16 @@ if __name__ == "__main__":
     # Pre temperature scaling
     eces = []
     t_eces = []
-    # m1_fpr95s = []
     m1_aurocs = []
     m1_auprcs = []
-    # m2_fpr95s = []
     m2_aurocs = []
     m2_auprcs = []
     epsilons = []
     ece = 0.0
     t_ece = 1.0
     norm_threshold = 0.0
+    pca_res = {}
 
-    topt = None
     save_name = model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive)
     model_name = model_load_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive) + "_best.model"
 
@@ -165,6 +164,7 @@ if __name__ == "__main__":
                 num_classes=num_classes,
                 temp=1.0,
             )
+
             net.to(device)
             net.load_state_dict(torch.load(str(saved_model_name), map_location=device), strict=True)
             net.eval()
@@ -225,7 +225,7 @@ if __name__ == "__main__":
             ) = test_classification_net(net, test_loader, device)
             ece = expected_calibration_error(confidences, predictions, labels_list, num_bins=15)
 
-            # #校准
+            # #校准，调整温度系数
             # temp_net = ModelWithTemperature(net, device)
             # temp_net.set_temperature(val_loader)
             # net.temp = temp_net.temperature
@@ -243,9 +243,10 @@ if __name__ == "__main__":
                 # Evaluate a GMM model
                 print("GMM Model")
                 cache_path = saved_model_name.replace(".model", ".cache")
-                param_path = saved_model_name.replace(".model", "_gmm.model")
-                if os.path.exists(param_path):
-                    params = torch.load(param_path)
+                param_path = saved_model_name.replace(".model", "_gmm2.model")
+                use_param = False
+                if use_param and os.path.exists(param_path):
+                    params = torch.load(param_path, map_location=device)
                     classwise_mean_features = params['mu'].to(device)
                     cholesky_factors = params['cholesky_factors'].to(device)
                     classwise_cov_features = torch.matmul(cholesky_factors, cholesky_factors.transpose(-1, -2)).to(device)
@@ -255,15 +256,16 @@ if __name__ == "__main__":
                         try:  #协方差矩阵要求正定,但是样本协方差矩阵不一定正定,所以加上对角阵转化为正定的
                             jitter = jitter_eps * torch.eye(
                                 model_to_num_dim[args.model],
-                                device = device,
+                                device=device,
                             ).unsqueeze(0)
                             gaussians_model = torch.distributions.MultivariateNormal(
                                 loc=classwise_mean_features,
-                                covariance_matrix=(classwise_cov_features+jitter),
+                                covariance_matrix=(classwise_cov_features + jitter),
                             )
-                            print("jitter",jitter_eps)
+                            print("jitter", jitter_eps)
                         except:
                             continue
+                        break
                 else:
                     load_cache = True
                     if load_cache and os.path.exists(cache_path):
@@ -288,7 +290,13 @@ if __name__ == "__main__":
 
                     gaussians_model, jitter_eps = gmm_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
 
+                save_path = "gmm_params.pth"
+                torch.save({'loc': gaussians_model.loc, 'covariance_matrix': gaussians_model.covariance_matrix}, save_path)
+                storage = os.path.getsize(save_path)
+                os.remove(save_path)
+
                 pca = None
+                start = time.time()
                 logits, labels, preds = gmm_evaluate(
                     net,
                     gaussians_model,
@@ -308,15 +316,18 @@ if __name__ == "__main__":
                     num_classes=num_classes,
                     storage_device=device,
                 )
+                interval1 = time.time() - start
+                if args.perturbation == 'pca':
+                    ece = interval1  #如果做pca的实验，ece暂存interval1
                 m1_fpr95, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, maxval, device, conf=True)
 
                 m2_res = []
                 if args.perturbation in ["fgsm2", "fgsm"]:
-                    eps = [0.0001, 0.001, 0.002, 0.003, 0.005, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01]
+                    eps = [0.0001, 0.0005, 0.001, 0.002, 0.003, 0.005, 0.006, 0.007, 0.009, 0.01, 0.02, 0.05]
                 elif args.perturbation in ["fgsm3"]:
-                    eps = [0.00001, 0.00005, 0.0001, 0.0002, 0.0005, 0.0007, 0.001, 0.002, 0.003, 0.005, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01]
+                    eps = [0.00001, 0.00005, 0.0001, 0.0002, 0.0005, 0.0007, 0.001, 0.002, 0.003, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01]
                 elif args.perturbation == "misclassified":
-                    eps = [0.00001, 0.00002, 0.00003, 0.00004, 0.00005, 0.0001]
+                    eps = [0.00001, 0.00002, 0.00003, 0.00004, 0.00005, 0.0001, 0.0002, 0.0003, 0.0004, 0.0005]
                 elif args.perturbation == "adv":
                     eps = [0.0001, 0.001, 0.002, 0.003, 0.005, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01]
                 else:
@@ -382,7 +393,7 @@ if __name__ == "__main__":
                                                                                                pin_memory=args.gpu)
 
                             print(f"add noise:{args.perturbation}")
-                            logits2, labels2, preds2, acc, acc_perturb = gmm_evaluate_with_perturbation(
+                            logits2, labels2, preds2, acc, acc_perturb = gmm_evaluate_with_perturbation2(
                                 net,
                                 gaussians_model,
                                 test_loader,
@@ -395,7 +406,7 @@ if __name__ == "__main__":
                                 temperature=temp,
                             )
                             inf = torch.min(logits2).item()
-                            ood_logits2, ood_labels2, _, _, _ = gmm_evaluate_with_perturbation(
+                            ood_logits2, ood_labels2, _, _, _ = gmm_evaluate_with_perturbation2(
                                 net,
                                 gaussians_model,
                                 ood_test_loader,
@@ -429,7 +440,7 @@ if __name__ == "__main__":
                                                                                                pin_memory=args.gpu)
 
                             print(f"add noise:{args.perturbation}")
-                            logits2, labels2, preds2, acc, acc_perturb = gmm_evaluate_with_perturbation(
+                            logits2, labels2, preds2, acc, acc_perturb = gmm_evaluate_with_perturbation3(
                                 net,
                                 gaussians_model,
                                 test_loader,
@@ -442,7 +453,7 @@ if __name__ == "__main__":
                                 temperature=temp,
                             )
                             inf = torch.min(logits2).item()
-                            ood_logits2, ood_labels2, _, _, _ = gmm_evaluate_with_perturbation(
+                            ood_logits2, ood_labels2, _, _, _ = gmm_evaluate_with_perturbation3(
                                 net,
                                 gaussians_model,
                                 ood_test_loader,
@@ -578,8 +589,16 @@ if __name__ == "__main__":
                         elif args.perturbation == "pca":  #pca降维
                             res = []
                             use_pca = True
-                            # for m in [64,128,256,512]:
-                            for m in range(250, 1024):
+
+                            if args.model == "resnet50":
+                                pca_dimension = [64, 128, 256, 512, 1024]
+                            else:
+                                pca_dimension = list(range(128, model_to_num_dim[args.model], 32))
+                            pca_storage = []
+                            pca_interval = []
+                            pca_auroc = []
+                            pca_auprc = []
+                            for m in pca_dimension:  #pca降到m维
                                 with open(cache_path, 'rb') as file:
                                     cache = pkl.load(file)
                                     embeddings = cache["embeddings"].to(device)
@@ -597,6 +616,11 @@ if __name__ == "__main__":
                                     pca = None
 
                                 gaussians_model, jitter_eps = gmm_fit(embeddings=embeddings, labels=labels, num_classes=num_classes)
+                                save_path = "gmm_params.pth"
+                                torch.save({'loc': gaussians_model.loc, 'covariance_matrix': gaussians_model.covariance_matrix}, save_path)
+                                storage2 = os.path.getsize(save_path)
+                                os.remove(save_path)
+
                                 start = time.time()
                                 logits2, labels2, preds2 = gmm_evaluate(
                                     net,
@@ -607,8 +631,6 @@ if __name__ == "__main__":
                                     num_classes=num_classes,
                                     storage_device=device,
                                 )
-                                end = time - time()
-                                interval2 = end - start
 
                                 ood_logits2, ood_labels2, _ = gmm_evaluate(
                                     net,
@@ -619,15 +641,21 @@ if __name__ == "__main__":
                                     num_classes=num_classes,
                                     storage_device=device,
                                 )
+
+                                interval2 = time.time() - start
                                 _, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, maxval, device, conf=True)
                                 print(f"m1_auroc:{m1_auroc},m1_auprc:{m1_auprc};D={m},m2_auroc:{m2_auroc},m2_auprc:{m2_auprc}")
                                 res.append([m2_auroc, m2_auprc, interval2, m])
+                                pca_interval.append(interval2)
+                                pca_storage.append(storage2)
+                                pca_auroc.append(m2_auroc)
+                                pca_auprc.append(m2_auprc)
+
                             m2_auroc, m2_auprc, t_ece, epsilon = [max(col) for col in zip(*res)]  #这里epsilon实际是m,t_ece是时间
                         elif args.perturbation == "pcakde":  #pca降维
                             res = []
                             use_pca = True
                             for m in [8, 16, 32, 64, 128, 256, 512]:
-                                # for m in [2]:
                                 with open(cache_path, 'rb') as file:
                                     cache = pkl.load(file)
                                     embeddings = cache["embeddings"].to(device)
@@ -635,7 +663,7 @@ if __name__ == "__main__":
                                     norm_threshold = cache["norm_threshold"]
 
                                 if use_pca:
-                                    pca = PCA(n_components=m, svd_solver='full')  # 将数据降到二维
+                                    pca = PCA(n_components=m, svd_solver='full')
                                     # pca = PCA(n_components='mle', svd_solver='full')
                                     X = embeddings.cpu()
                                     pca.fit(X)
@@ -666,7 +694,7 @@ if __name__ == "__main__":
                                 )
 
                                 _, m2_auroc, m2_auprc = get_roc_auc_logits(logits2, ood_logits2, maxval, device, conf=True)
-                                print(f"m1_auroc:{m1_auroc},m1_auprc:{m1_auprc};D={m},m2_auroc:{m2_auroc},m2_auprc:{m2_auprc}")
+                                print(f"KDE,m1_auroc:{m1_auroc},m1_auprc:{m1_auprc};D={m},m2_auroc:{m2_auroc},m2_auprc:{m2_auprc}")
                                 res.append([m2_auroc, m2_auprc, -t_ece, m])
                             m2_auroc, m2_auprc, t_ece, epsilon = [max(col) for col in zip(*res)]
                         else:
@@ -674,9 +702,19 @@ if __name__ == "__main__":
 
                         m2_res.append([m2_auroc, m2_auprc, -t_ece, epsilon])
 
-                # m2_auroc, m2_auprc,t_ece,  epsilon = sorted(m2_res)[-1]  #从小到大排序，并且取最大的
+                if args.perturbation=="pca":
+                    pca_res[saved_model_name] = {}
+                    pca_res[saved_model_name]['ori_interval'] = interval1
+                    pca_res[saved_model_name]['ori_storage'] = storage
+                    pca_res[saved_model_name]['ori_auroc'] = m1_auroc
+                    pca_res[saved_model_name]['ori_auprc'] = m1_auprc
+                    pca_res[saved_model_name]['dimension'] = pca_dimension
+                    pca_res[saved_model_name]['interval'] = pca_interval
+                    pca_res[saved_model_name]['storage'] = pca_storage
+                    pca_res[saved_model_name]['auroc'] = pca_auroc
+                    pca_res[saved_model_name]['auprc'] = pca_auprc
+                m2_auroc, m2_auprc, t_ece, epsilon = sorted(m2_res)[-1]  #从小到大排序，并且取最大的
                 m2_auroc, m2_auprc, t_ece, _ = [max(col) for col in zip(*m2_res)]
-
                 print(f"最优:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
             elif (args.evaltype == "kde"):
                 # Evaluate a kde model
@@ -706,6 +744,7 @@ if __name__ == "__main__":
                 logits, _, preds = gmm_evaluate(
                     net,
                     gaussians_model,
+                    None,
                     test_loader,
                     device=device,
                     num_classes=num_classes,
@@ -715,6 +754,7 @@ if __name__ == "__main__":
                 ood_logits, _, _ = gmm_evaluate(
                     net,
                     gaussians_model,
+                    None,
                     ood_test_loader,
                     device=device,
                     num_classes=num_classes,
@@ -727,6 +767,7 @@ if __name__ == "__main__":
                 logits2, labels = kde_evaluate(
                     net,
                     kde_model,
+                    None,
                     test_loader,
                     device=device,
                     num_classes=num_classes,
@@ -736,6 +777,7 @@ if __name__ == "__main__":
                 ood_logits2, ood_labels = kde_evaluate(
                     net,
                     kde_model,
+                    None,
                     ood_test_loader,
                     device=device,
                     num_classes=num_classes,
@@ -844,3 +886,7 @@ if __name__ == "__main__":
     with open(os.path.join(saved_dir, saved_name), "w") as f:
         json.dump(res_dict, f)
         print(f"save to {os.path.join(saved_dir,saved_name)}")
+
+    if args.perturbation == 'pca':
+        with open(os.path.join(saved_dir, saved_name.replace("pca", "pca_dimension")), "w") as f:
+            json.dump(pca_res, f)

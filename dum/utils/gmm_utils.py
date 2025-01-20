@@ -324,7 +324,6 @@ def gmm_evaluate_with_perturbation3(
         # gradient = (gradient - gradient.min() / (gradient.max() - gradient.min()) - 0.5) * 2#TODO:验证和下面哪一种效果好
         gradient = gradient.sign()
         #TODO:验证要不要/std
-
         gradient.index_copy_(1, torch.LongTensor([0]).to(device), gradient.index_select(1, torch.LongTensor([0]).to(device)) / std[0])
         gradient.index_copy_(1, torch.LongTensor([1]).to(device), gradient.index_select(1, torch.LongTensor([1]).to(device)) / std[1])
         gradient.index_copy_(1, torch.LongTensor([2]).to(device), gradient.index_select(1, torch.LongTensor([2]).to(device)) / std[2])

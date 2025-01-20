@@ -64,7 +64,7 @@ def inter_intra_class_ratio(features, labels):
     labels: 样本对应的类别标签，长度为 n_samples
 
     返回:
-    类间距离比类内距离的比值
+    类间距离比类内距离的比值，越高越好
     """
     # 获取唯一类别
     unique_classes = np.unique(labels)
@@ -100,30 +100,38 @@ def inter_intra_class_ratio(features, labels):
 
 
 def plot_embedding_2d(X, y, num_classes, title):
-    x_min, x_max = np.min(X, 0), np.max(X, 0)
-    # X = (X - x_min) / (x_max - x_min)
-    
-    fig, axes = plt.subplots(1,2, figsize=(20, 10))
+    """
+    绘制二维嵌入图，将每个类别的数据点用不同颜色显示。
+
+    Parameters:
+    X (ndarray): 输入数据，形状为 (N, 2)，N 是样本数，2 是二维特征。
+    y (ndarray): 类别标签，形状为 (N,)，每个元素是对应样本的类别标签。
+    num_classes (int): 类别数量。
+    title (str): 图形的标题。
+
+    Returns:
+    fig: matplotlib.figure.Figure 对象。
+    """
+    # 创建绘图
+    fig, ax = plt.subplots(figsize=(8, 8))
     fig.suptitle(title, fontsize=16)  # 设置整个图像的标题
 
-    
-    # plt.scatter(X[:,0], X[:,1], c = y, s = 5, cmap = plt.cm.Spectral)
-
+    # 使用 'tab20' 调色板，为每个类别分配不同的颜色
     cmap = plt.get_cmap('tab20')
-    colors = []
-    for i in range(13):
-        colors.append(np.array(cmap(i)).reshape(1,-1))
+    
+    # 绘制每个类别的数据点
+    for i in range(num_classes+1):
+        index = (y == i)  # 选择属于类别 i 的点
+        ax.scatter(X[index, 0], X[index, 1], s=30, c=[cmap(i)], label=f'Class {i}')
 
-    for i in range(num_classes):  # 对每类的数据画上特定颜色的点
-        index = (y == i)
-        axes[0].scatter(X[index, 0], X[index, 1], s=3, c=colors[i])
-    axes[0].legend([i for i in range(num_classes)])
-    for i in range(num_classes+1):  # 对每类的数据画上特定颜色的点
-        index = (y == i)
-        axes[1].scatter(X[index, 0], X[index, 1], s=3, c=colors[i])
-    axes[1].legend([i for i in range(num_classes+1)])
-    
-    
+    # 设置图例
+    ax.legend(title="Classes", loc='upper left', fontsize=8, markerscale=1.0)
+
+    # 设置x轴和y轴的范围
+    # ax.set_xlim(-100, 100)
+    # ax.set_ylim(-100, 100)
+
+    # 精美的布局
     plt.tight_layout()
 
     return fig

@@ -10,8 +10,9 @@ import torch
 from torch.utils.data import Subset
 from torchvision import datasets, transforms
 
-from utils.simclr_utils import (ContrastiveLearningViewTransform,
-                                get_simclr_pipeline_transform)
+
+# from utils.simclr_utils import (ContrastiveLearningViewTransform,
+                                # get_simclr_pipeline_transform)
 
 
 def get_train_valid_loader(batch_size, augment, val_seed, val_size=0.0, num_workers=4, pin_memory=False, contrastive=0, size=32, **kwargs):
@@ -151,8 +152,11 @@ def get_test_loader(batch_size, num_workers=4, pin_memory=False, size=32,sample_
 
 
 if __name__ == '__main__':
-    dataloader = get_test_loader(32, root="../../data/")
-    for i in range(10):
-        import pdb;pdb.set_trace()
-        for data,_ in dataloader:
-            print(data.mean())
+    # test_loader = get_test_loader(root="../../data/", batch_size=32,sample_size=100) #注意:如果放这里的话下面输出10次就不一致了，必须放在for里面
+    for i in  range(10):
+        print(i)
+        test_loader = get_test_loader(root="../../data/", batch_size=32,sample_size=100)
+        for x,y in test_loader:
+            print(x.mean())
+
+        

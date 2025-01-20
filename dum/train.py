@@ -6,6 +6,7 @@ import argparse
 import datetime
 import json
 import os
+from pathlib import Path
 import time
 
 import numpy as np
@@ -99,14 +100,13 @@ if __name__ == "__main__":
     elif args.contrastive == 4:
         aux_loss = GMMRegularizationLoss(num_classes=10, feature_dim=model_to_num_dim[args.model], device=device)
     else:
-        aux_loss = None 
-        
-    if args.contrastive==3 or args.contrastive==4:
+        aux_loss = None
+
+    if args.contrastive == 3 or args.contrastive == 4:
         optimizer_auxloss = torch.optim.SGD(aux_loss.parameters(), lr=0.5)
-        scheduler_auxloss = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 200, 300], gamma=0.1, verbose=False)
+        # scheduler_auxloss = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 200, 300], gamma=0.1, verbose=False)
     else:
         optimizer_auxloss = None
-
 
     #设置dataloader
     train_loader, val_loader = dataset_loader[args.dataset].get_train_valid_loader(root=args.dataset_root,
@@ -124,7 +124,7 @@ if __name__ == "__main__":
     # Creating summary writer in tensorboard
     curr_time = datetime.datetime.now()
     time_str = datetime.datetime.strftime(curr_time, "%Y_%m_%d_%H_%M_%S")
-    save_name = model_save_name(args.model, args.sn, args.mod, args.coeff, args.seed, args.contrastive)
+    save_name = model_save_name(args.model, args.sn, args.mod, args.seed, args.contrastive)
     print("Model save name", save_name)
 
     if args.ls:
@@ -159,7 +159,6 @@ if __name__ == "__main__":
         scheduler.step()
         # scheduler_auxloss.step()
 
-        net.eval()  #注意这里，设置eval模式
         if epoch % 3 == 0:
             val_acc = test_single_epoch(epoch, net, val_loader, device)
             writer.add_scalar("train_loss", train_loss, (epoch + 1))
@@ -167,16 +166,16 @@ if __name__ == "__main__":
             writer.add_scalar("val_acc", val_acc, (epoch + 1))
             writer.add_scalar('learning_rate', scheduler.get_last_lr()[0], global_step=(epoch + 1))
 
-
-        if epoch < (args.epoch-5):
+        if epoch < (args.epoch - 5):
             if val_acc > best_acc:
                 best_acc = val_acc
                 save_path = save_loc + save_name + "_best" + ".model"
                 torch.save(net.state_dict(), save_path)
+                Path(os.path.join(save_loc, f"accuracy_{best_acc}")).touch()
                 print("Model saved to ", save_path)
-                if args.contrastive == 4 or args.contrastive == 3:  #对于centerloss 或者gmmloss还需要额外保存loss的参数
-                    save_path2 = save_loc + save_name + "_best" + "_gmm.model"
-                    torch.save(aux_loss.state_dict(), save_path2)
+                # if args.contrastive == 4 or args.contrastive == 3:  #对于centerloss 或者gmmloss还需要额外保存loss的参数
+                #     save_path2 = save_loc + save_name + "_best" + "_gmm.model"
+                #     torch.save(aux_loss.state_dict(), save_path2)
         else:  #在最后10个epoch,acc已经基本平直
             Xs = []
             ys = []
@@ -205,8 +204,8 @@ if __name__ == "__main__":
             fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},stats:{0.0:.3f}")
             fig.savefig(os.path.join(save_loc, f"stats_{epoch}.jpg"), dpi=50, bbox_inches='tight')
 
-            save_path = save_loc + save_name + f"_epoch_{epoch}" + ".model"
-            torch.save(net.state_dict(), save_path)
+            # save_path = save_loc + save_name + f"_epoch_{epoch}" + ".model"
+            # torch.save(net.state_dict(), save_path)
 
     writer.close()
     # create_gif_from_images(save_loc)
