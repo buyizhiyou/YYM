@@ -269,28 +269,6 @@ class CenterLoss(nn.Module):
 
         return loss
 
-    def forward333(self, labels, x, delta=1e-6):
-        #https://ar5iv.labs.arxiv.org/html/1707.07391
-        batch_size = x.size(0)
-        num_classes = self.centers.size(0)
-
-        # 计算每个样本到其所属类别中心的距离 ||x_i - c_{y_i}||^2
-        mask = F.one_hot(labels, num_classes).float()
-        dist_to_own_center = ((x - self.centers[labels])**2).sum(dim=1)
-
-        # 计算每个样本到所有其他类别中心的距离 ||x_i - c_j||^2
-        expanded_x = x.unsqueeze(1).expand(batch_size, num_classes, -1)  # (batch_size, num_classes, feature_dim)
-        expanded_centers = self.centers.unsqueeze(0).expand(batch_size, num_classes, -1)  # (batch_size, num_classes, feature_dim)
-        dist_to_all_centers = ((expanded_x - expanded_centers)**2).sum(dim=2)  # (batch_size, num_classes)
-
-        # 将正确类别的距离排除
-        dist_to_other_centers = dist_to_all_centers * (1 - mask)
-        sum_dist_to_other_centers = dist_to_other_centers.sum(dim=1)
-
-        # 计算最终的对比损失
-        loss = (dist_to_own_center / (sum_dist_to_other_centers + delta)).mean() * 0.5
-
-        return loss
 
     def forward222(self, labels, x, delta=1e-6):
         '''

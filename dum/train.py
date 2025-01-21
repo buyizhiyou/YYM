@@ -124,7 +124,10 @@ if __name__ == "__main__":
     # Creating summary writer in tensorboard
     curr_time = datetime.datetime.now()
     time_str = datetime.datetime.strftime(curr_time, "%Y_%m_%d_%H_%M_%S")
-    save_name = model_save_name(args.model, args.sn, args.mod, args.seed, args.contrastive)
+    coeff = 3.0
+    save_name = model_save_name(args.model, args.sn, args.mod, coeff, args.seed, args.contrastive)
+    import pdb
+    pdb.set_trace()
     print("Model save name", save_name)
 
     if args.ls:
@@ -159,6 +162,7 @@ if __name__ == "__main__":
         scheduler.step()
         # scheduler_auxloss.step()
 
+        net.eval() #不可缺少
         if epoch % 3 == 0:
             val_acc = test_single_epoch(epoch, net, val_loader, device)
             writer.add_scalar("train_loss", train_loss, (epoch + 1))
@@ -201,7 +205,7 @@ if __name__ == "__main__":
             tsne = TSNE(n_components=2, init='pca', perplexity=50, random_state=0)
             X_tsne = tsne.fit_transform(X)
 
-            fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch},stats:{0.0:.3f}")
+            fig = plot_embedding_2d(X_tsne, y, 10, f"epoch:{epoch}")
             fig.savefig(os.path.join(save_loc, f"stats_{epoch}.jpg"), dpi=50, bbox_inches='tight')
 
             # save_path = save_loc + save_name + f"_epoch_{epoch}" + ".model"
