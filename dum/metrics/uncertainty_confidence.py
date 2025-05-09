@@ -36,6 +36,7 @@ def entropy_prob(probs):
     eps = 1e-12
     logp = torch.log(p + eps)
     plogp = p * logp
+
     entropy = -torch.sum(plogp, dim=1)
     return entropy
 
@@ -54,3 +55,9 @@ def mutual_information_prob(probs):
     # Computing mutual information
     mi = predictive_entropy - exp_entropies
     return mi
+
+
+if __name__ == '__main__':
+    a = torch.randn(256,10)
+    b = F.softmax(a,dim=1)
+    mutual_information_prob(b)

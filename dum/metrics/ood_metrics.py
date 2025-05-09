@@ -155,7 +155,7 @@ def get_roc_auc_logits(logits, ood_logits, uncertainty, device, conf=False):
 
     in_scores = uncertainties
     ood_scores = ood_uncertainties
-    scores = torch.cat((in_scores, ood_scores)).cpu().numpy()
+    scores = torch.cat((in_scores, ood_scores)).detach().cpu().numpy()
     scores = np.nan_to_num(scores)#处理nan
 
     fpr, tpr, thresholds = metrics.roc_curve(bin_labels, scores)

@@ -256,7 +256,7 @@ def eval_args():
         "--evaltype",
         type=str,
         default="gmm",
-        choices=["softmax", "ensemble", "gmm", "kde"],
+        choices=["softmax", "ensemble", "gmm", "kde","bnn"],
     )
     parser.add_argument("--dataset-root", type=str, default=dataset_root, dest="dataset_root", help="path of a dataset (useful for ambiguous mnist)")
     parser.add_argument(
@@ -463,7 +463,7 @@ def al_args():
         "--al-type",
         type=str,
         default=al_acquisition,
-        choices=["softmax", "ensemble", "gmm", "entropy","random"],
+        choices=["softmax", "ensemble", "gmm", "entropy","random","bnn"],
         dest="al_type",
         help="Type of model to use for AL.",
     )

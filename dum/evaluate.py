@@ -7,6 +7,7 @@ import math
 import shutil
 import sys
 import time
+import numpy as np
 import torch
 import pickle as pkl
 import glob, re
@@ -38,13 +39,14 @@ from net.vgg import vgg16
 from net.vit import vit
 
 # Import metrics to compute
-from metrics.classification_metrics import (test_classification_net, test_classification_net_logits, test_classification_net_ensemble)
+from metrics.classification_metrics import (test_classification_net, test_classification_net_logits, test_classification_net_ensemble,
+                                            test_classification_net_ensemble2)
 from metrics.calibration_metrics import expected_calibration_error
-from metrics.uncertainty_confidence import entropy, logsumexp, confidence, sumexp, maxval
+from metrics.uncertainty_confidence import entropy, mutual_information_prob, logsumexp, confidence, sumexp, maxval
 from metrics.ood_metrics import get_roc_auc, get_roc_auc_logits, get_roc_auc_ensemble, auroc, auprc
 
 # Import GMM utils
-from utils.gmm_utils import get_embeddings, gmm_evaluate, gmm_fit, maxp_evaluate, gradient_norm_collect, gmm_evaluate_for_adv, gmm_evaluate_with_perturbation_for_adv, gmm_evaluate_with_perturbation, maxp_evaluate_with_perturbation, gmm_evaluate_with_perturbation2, gmm_evaluate_with_perturbation3
+from utils.gmm_utils import get_embeddings, gmm_evaluate, net_ensemble_pred, net_ensemble_adv, gmm_evaluate2, gmm_fit, maxp_evaluate, maxp_evaluate_adv, bnn_evaluate2, bnn_evaluate, bnn_evaluate_adv, gradient_norm_collect, gmm_evaluate_for_adv, gmm_evaluate_with_perturbation_for_adv, gmm_evaluate_with_perturbation, maxp_evaluate_with_perturbation, gmm_evaluate_with_perturbation2, gmm_evaluate_with_perturbation3
 from utils.kde_utils import kde_evaluate, kde_fit
 from utils.eval_utils import model_load_name
 from utils.train_utils import model_save_name, seed_torch
@@ -105,6 +107,8 @@ if __name__ == "__main__":
     m2_auprcs = []
     epsilons = []
     ece = 0.0
+    epsilon = 0.0
+    accuracy = 0.0
     t_ece = 1.0
     norm_threshold = 0.0
     pca_res = {}
@@ -170,43 +174,60 @@ if __name__ == "__main__":
             net.eval()
 
         if args.evaltype == "ensemble":
-            test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root,
-                                                                       batch_size=args.batch_size,
-                                                                       size=size,
-                                                                       pin_memory=args.gpu)
-            ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root,
-                                                                               batch_size=args.batch_size,
-                                                                               size=size,
-                                                                               pin_memory=args.gpu)
-            (
-                conf_matrix,
-                accuracy,
-                labels_list,
-                predictions,
-                confidences,
-            ) = test_classification_net_ensemble(net_ensemble, test_loader, device)
-            print(f"{saved_model_name} accu:{accuracy}")
-            # ece = expected_calibration_error(confidences, predictions, labels_list, num_bins=15)
+            if args.perturbation == "none":  #ood
+                test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root,
+                                                                           batch_size=args.batch_size,
+                                                                           size=size,
+                                                                           pin_memory=args.gpu)
+                ood_test_loader = dataset_loader[args.ood_dataset].get_test_loader(root=args.dataset_root,
+                                                                                   batch_size=args.batch_size,
+                                                                                   size=size,
+                                                                                   pin_memory=args.gpu)
+                (
+                    conf_matrix,
+                    accuracy,
+                    labels_list,
+                    predictions,
+                    confidences,
+                ) = test_classification_net_ensemble(net_ensemble, test_loader, device)
+                print(f"{saved_model_name} accu:{accuracy}")
+                # ece = expected_calibration_error(confidences, predictions, labels_list, num_bins=15)
 
-            (_, _, _), (_, _, _), m1_auroc, m1_auprc = get_roc_auc_ensemble(net_ensemble, test_loader, ood_test_loader, "mutual_information", device)
-            (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc_ensemble(net_ensemble, test_loader, ood_test_loader, "entropy", device)
-            print(f"mutual_info:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f}; entropy:m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
-            # Temperature scale the ensemble
-            # t_ensemble = []
-            # for model, val_loader in zip(net_ensemble, val_loaders):
-            #     t_model = ModelWithTemperature(model, device)
-            #     t_model.set_temperature(val_loader)
-            #     t_ensemble.append(t_model)
+                (_, _, _), (_, _, _), m1_auroc, m1_auprc = get_roc_auc_ensemble(net_ensemble, test_loader, ood_test_loader, "mutual_information",
+                                                                                device)
+                (_, _, _), (_, _, _), m2_auroc, m2_auprc = get_roc_auc_ensemble(net_ensemble, test_loader, ood_test_loader, "entropy", device)
+                print(f"mutual_info:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f}; entropy:m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
+            elif args.perturbation == "misclassified":  #识别误分类
+                test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root,
+                                                                           batch_size=args.batch_size,
+                                                                           size=size,
+                                                                           pin_memory=args.gpu)
+                (conf_matrix, accuracy, labels2, preds2,
+                 confidences2), ents, mis, = test_classification_net_ensemble2(net_ensemble, test_loader, device)
 
-            # (
-            #     t_conf_matrix,
-            #     t_accuracy,
-            #     t_labels_list,
-            #     t_predictions,
-            #     t_confidences,
-            # ) = test_classification_net_ensemble(t_ensemble, test_loader, device)
-            # t_ece = expected_calibration_error(t_confidences, t_predictions, t_labels_list, num_bins=15)
-            epsilon = 0.0
+                t_ece = expected_calibration_error(confidences2, preds2, labels2, num_bins=15)
+
+                mis2 = (np.array(preds2) == np.array(labels2)).astype(np.int32)
+                uncertainty2 = -mis.cpu().numpy()
+                m1_auroc = auroc(uncertainty2, mis2)
+                m1_auprc = auprc(uncertainty2, mis2)
+                m2_auroc = auroc(uncertainty2, mis2)
+                m2_auprc = auprc(uncertainty2, mis2)
+                print(f"m1_auroc_mis:{m1_auroc},m1_auprc_mis:{m1_auprc},m2_auroc_mis:{m2_auroc},m2_auprc_mis:{m2_auprc}")
+
+            elif args.perturbation == "advfgsm" or args.perturbation == "advbim" or args.perturbation == "advpgd":#TODO:分析对抗样本
+                test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root,
+                                                                           batch_size=args.batch_size,
+                                                                           size=size,
+                                                                           pin_memory=args.gpu)
+                softmax_prob, predictive_entropy, mut_info = net_ensemble_pred(net_ensemble, test_loader, device, num_classes, device)
+                softmax_prob2, predictive_entropy2, mut_info2 = net_ensemble_adv(net_ensemble, test_loader, device, num_classes, device,
+                                                                                 args.perturbation)
+
+                _, m1_auroc, m1_auprc = get_roc_auc_logits(mut_info, mut_info2, None, device, conf=True)
+                m2_auroc = m1_auprc
+                m2_auprc = m1_auprc
+                print(f"m1_auroc_adv:{m1_auprc},m1_auprc_adv:{m1_auprc};epsion:{epsilon},m2_auroc_adv:{m2_auroc},m2_auprc_adv:{m2_auprc}")
         else:
             test_loader = dataset_loader[args.dataset].get_test_loader(root=args.dataset_root,
                                                                        batch_size=args.batch_size,
@@ -229,7 +250,6 @@ if __name__ == "__main__":
             # temp_net = ModelWithTemperature(net, device)
             # temp_net.set_temperature(val_loader)
             # net.temp = temp_net.temperature
-
             # (
             #     t_conf_matrix,
             #     t_accuracy,
@@ -324,8 +344,8 @@ if __name__ == "__main__":
                 m2_res = []
                 if args.perturbation in ["fgsm2", "fgsm"]:
                     eps = [0.0001, 0.0003, 0.0005, 0.0007, 0.001, 0.002, 0.003, 0.005, 0.006, 0.007, 0.009, 0.01]
-                elif args.perturbation in ["fgsm3"]:
-                    eps = [0.00001, 0.00005, 0.0001, 0.0002, 0.0005, 0.0007, 0.001, 0.002, 0.003, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01]
+                elif args.perturbation in ["fgsm3", "fgsm4"]:
+                    eps = [0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01]
                 elif args.perturbation == "misclassified":
                     eps = [0.00001, 0.00002, 0.00003, 0.00004, 0.00005, 0.0001, 0.0002, 0.0003, 0.0004, 0.0005]
                 elif args.perturbation == "adv":
@@ -426,7 +446,7 @@ if __name__ == "__main__":
                             print(
                                 f"noise-:m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f};noise+:epsilon:{epsilon},m2_auroc:{m2_auroc:.4f},m2_aupr:{m2_auprc:.4f}"
                             )
-                        elif args.perturbation in ["fgsm3"]:
+                        elif args.perturbation in ["fgsm3", "fgsm4"]:
                             '''
                             加梯度改为减梯度
                             '''
@@ -652,6 +672,76 @@ if __name__ == "__main__":
                                 pca_auprc.append(m2_auprc)
 
                             m2_auroc, m2_auprc, t_ece, epsilon = [max(col) for col in zip(*res)]  #这里epsilon实际是m,t_ece是时间
+                        elif args.perturbation == "pcamis":  #pca + misclassified
+                            res = []
+                            use_pca = True
+
+                            if args.model == "resnet50":
+                                pca_dimension = list(range(128, model_to_num_dim[args.model], 128))
+                            else:
+                                pca_dimension = list(range(128, model_to_num_dim[args.model], 32))
+                            pca_storage = []
+                            pca_interval = []
+                            pca_auroc = []
+                            pca_auprc = []
+                            for m in pca_dimension:  #pca降到m维
+                                with open(cache_path, 'rb') as file:
+                                    cache = pkl.load(file)
+                                    embeddings = cache["embeddings"].to(device)
+                                    labels_cache = cache["labels"].to(device)
+                                    norm_threshold = cache["norm_threshold"]
+
+                                if use_pca:
+                                    pca = PCA(n_components=m, svd_solver='full')
+                                    # pca = PCA(n_components='mle', svd_solver='full')
+                                    X = embeddings.cpu()
+                                    pca.fit(X)
+                                    X_pca = pca.transform(X)
+                                    embeddings = torch.tensor(X_pca).to(device)
+                                else:
+                                    pca = None
+
+                                gaussians_model, jitter_eps = gmm_fit(embeddings=embeddings, labels=labels_cache, num_classes=num_classes)
+                                save_path = "gmm_params.pth"
+                                torch.save({'loc': gaussians_model.loc, 'covariance_matrix': gaussians_model.covariance_matrix}, save_path)
+                                storage2 = os.path.getsize(save_path)
+                                os.remove(save_path)
+                                start = time.time()
+
+                                logits2, labels2, outs2 = gmm_evaluate2(
+                                    net,
+                                    gaussians_model,
+                                    pca,
+                                    test_loader,
+                                    device=device,
+                                    num_classes=num_classes,
+                                    storage_device=device,
+                                )
+                                confidences2, preds2 = torch.max(F.softmax(outs2, dim=1), dim=1)
+
+                                t_ece = expected_calibration_error(confidences2.cpu().numpy(),
+                                                                   preds2.cpu().numpy(),
+                                                                   labels2.cpu().numpy(),
+                                                                   num_bins=15)
+                                #logits,labels,preds
+                                mis = (preds == labels).to(torch.int).cpu().numpy()
+                                mis2 = (preds2 == labels2).to(torch.int).cpu().numpy()
+                                uncertainty = maxval(logits).cpu().numpy()
+                                uncertainty2 = maxval(logits2).cpu().numpy()  #对比logsumexp
+                                m1_auroc = auroc(uncertainty, mis)
+                                m1_auprc = auprc(uncertainty, mis)
+                                m2_auroc = auroc(uncertainty2, mis2)
+                                m2_auprc = auprc(uncertainty2, mis2)
+                                print(f"m1_auroc_mis:{m1_auroc},m1_auprc_mis:{m1_auprc},m2_auroc_mis:{m2_auroc},m2_auprc_mis:{m2_auprc}")
+                                interval2 = time.time() - start
+
+                                res.append([m2_auroc, m2_auprc, t_ece, m])
+                                pca_interval.append(interval2)
+                                pca_storage.append(storage2)
+                                pca_auroc.append(m2_auroc)
+                                pca_auprc.append(m2_auprc)
+
+                            m2_auroc, m2_auprc, t_ece, epsilon = [max(col) for col in zip(*res)]  #这里epsilon实际是m
                         elif args.perturbation == "pcakde":  #pca降维
                             res = []
                             use_pca = True
@@ -788,28 +878,129 @@ if __name__ == "__main__":
                 epsilon = 0
                 print(f"accu:{accuracy:.4f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
             elif (args.evaltype == "softmax"):
-                logits, _ = maxp_evaluate(
-                    net,
-                    test_loader,
-                    device=device,
-                    num_classes=num_classes,
-                    storage_device=device,
-                )
-                ood_logits, _ = maxp_evaluate(
-                    net,
-                    ood_test_loader,
-                    device=device,
-                    num_classes=num_classes,
-                    storage_device=device,
-                )
-                _, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, confidence, device, conf=True)
-                print(f"m1_auroc:{m1_auroc:.4f},m1_aupr:{m1_auprc:.4f}")
+                if args.perturbation == "none":  #ood检测
+                    logits, _ = maxp_evaluate(
+                        net,
+                        test_loader,
+                        device=device,
+                        num_classes=num_classes,
+                        storage_device=device,
+                    )
+                    ood_logits, _ = maxp_evaluate(
+                        net,
+                        ood_test_loader,
+                        device=device,
+                        num_classes=num_classes,
+                        storage_device=device,
+                    )
+                    _, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, confidence, device, conf=True)
+                    print(f"m1_auroc:{m1_auroc:.4f},m1_aupr:{m1_auprc:.4f}")
 
-                m2_auroc = m1_auroc
-                m2_auprc = m1_auprc
-                epsilon = 0
-                print(f"accu:{accuracy:.4f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
+                    m2_auroc = m1_auroc
+                    m2_auprc = m1_auprc
+                    epsilon = 0
+                    print(f"accu:{accuracy:.4f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
+                elif args.perturbation == "misclassified":  #识别误分类
+                    logits2, labels2 = maxp_evaluate(
+                        net,
+                        test_loader,
+                        device=device,
+                        num_classes=num_classes,
+                        storage_device=device,
+                    )
+                    confidences2, preds2 = torch.max(F.softmax(logits2, dim=1), dim=1)
 
+                    t_ece = expected_calibration_error(confidences2.cpu().numpy(), preds2.cpu().numpy(), labels2.cpu().numpy(), num_bins=15)
+                    #logits,labels,preds
+                    mis2 = (preds2 == labels2).to(torch.int).cpu().numpy()
+                    uncertainty2 = maxval(logits2).cpu().numpy()  #对比logsumexp
+                    m1_auroc = auroc(uncertainty2, mis2)
+                    m1_auprc = auprc(uncertainty2, mis2)
+                    m2_auroc = auroc(uncertainty2, mis2)
+                    m2_auprc = auprc(uncertainty2, mis2)
+                    print(f"m1_auroc_mis:{m1_auroc},m1_auprc_mis:{m1_auprc},m2_auroc_mis:{m2_auroc},m2_auprc_mis:{m2_auprc}")
+                elif args.perturbation == "advfgsm" or args.perturbation == "advbim" or args.perturbation == "advpgd":  #TODO:分析对抗样本
+                    logits, _ = maxp_evaluate(
+                        net,
+                        test_loader,
+                        device=device,
+                        num_classes=num_classes,
+                        storage_device=device,
+                    )
+                    logits_adv, _, _ = maxp_evaluate_adv(net,
+                                                         test_loader,
+                                                         device=device,
+                                                         num_classes=num_classes,
+                                                         storage_device=device,
+                                                         perturbation=args.perturbation)
+
+                    _, m1_auroc, m1_auprc = get_roc_auc_logits(logits, logits_adv, maxval, device, conf=False)
+                    m2_auroc = m1_auroc
+                    m2_auprc = m1_auprc
+                    print(f"m1_auroc_adv:{m1_auprc},m1_auprc_adv:{m1_auprc};epsion:{epsilon},m2_auroc_adv:{m2_auroc},m2_auprc_adv:{m2_auprc}")
+            elif (args.evaltype == "bnn"):
+                if args.perturbation == "none":
+                    #实现mc dropout方法，ood检测
+                    logits, _ = bnn_evaluate(
+                        net,
+                        test_loader,
+                        device=device,
+                        num_classes=num_classes,
+                        storage_device=device,
+                    )
+                    ood_logits, _ = bnn_evaluate(
+                        net,
+                        ood_test_loader,
+                        device=device,
+                        num_classes=num_classes,
+                        storage_device=device,
+                    )
+                    _, m1_auroc, m1_auprc = get_roc_auc_logits(logits, ood_logits, maxval, device, conf=False)
+                    print(f"m1_auroc:{m1_auroc:.4f},m1_aupr:{m1_auprc:.4f}")
+
+                    m2_auroc = m1_auroc
+                    m2_auprc = m1_auprc
+                    epsilon = 0
+                    print(f"accu:{accuracy:.4f},m1_auroc1:{m1_auroc:.4f},m1_auprc:{m1_auprc:.4f},m2_auroc:{m2_auroc:.4f},m2_auprc:{m2_auprc:.4f}")
+                    epsilon = 0
+                elif args.perturbation == "misclassified":  #识别误分类
+                    logits2, outs2, labels2 = bnn_evaluate2(
+                        net,
+                        test_loader,
+                        device=device,
+                        num_classes=num_classes,
+                        storage_device=device,
+                    )
+                    confidences2, preds2 = torch.max(outs2, dim=1)
+
+                    t_ece = expected_calibration_error(confidences2.cpu().numpy(), preds2.cpu().numpy(), labels2.cpu().numpy(), num_bins=15)
+                    #logits,labels,preds
+                    mis2 = (preds2 == labels2).to(torch.int).cpu().numpy()
+                    uncertainty2 = -maxval(logits2).cpu().numpy()  #对比logsumexp
+                    m1_auroc = auroc(uncertainty2, mis2)
+                    m1_auprc = auprc(uncertainty2, mis2)
+                    m2_auroc = auroc(uncertainty2, mis2)
+                    m2_auprc = auprc(uncertainty2, mis2)
+                    print(f"m1_auroc_mis:{m1_auroc},m1_auprc_mis:{m1_auprc},m2_auroc_mis:{m2_auroc},m2_auprc_mis:{m2_auprc}")
+                elif args.perturbation == "advfgsm" or args.perturbation == "advbim" or args.perturbation == "advpgd":  #TODO:分析对抗样本
+                    logits, _ = bnn_evaluate(
+                        net,
+                        test_loader,
+                        device=device,
+                        num_classes=num_classes,
+                        storage_device=device,
+                    )
+                    logits_adv, _, _ = bnn_evaluate_adv(net,
+                                                        test_loader,
+                                                        device=device,
+                                                        num_classes=num_classes,
+                                                        storage_device=device,
+                                                        perturbation=args.perturbation)
+
+                    _, m1_auroc, m1_auprc = get_roc_auc_logits(logits, logits_adv, maxval, device, conf=False)
+                    m2_auroc = m1_auroc
+                    m2_auprc = m1_auprc
+                    print(f"m1_auroc_adv:{m1_auroc},m1_auprc_adv:{m1_auprc};epsion:{epsilon},m2_auroc_adv:{m2_auroc},m2_auprc_adv:{m2_auprc}")
         epsilons.append(epsilon)
         accuracies.append(accuracy)
         eces.append(ece)

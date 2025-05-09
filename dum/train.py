@@ -30,7 +30,7 @@ from net.lenet import lenet
 from net.resnet import resnet18, resnet50  # 自己实现的spectral norm
 # from net.resnet2 import resnet18, resnet50 #官方实现的spectral norm
 from net.vgg import vgg16  # 自己实现的
-from net.vit import vit
+from net.vit import vit, vit2
 # from net.vgg2 import vgg16 #官方实现的
 from net.wide_resnet import wrn
 from utils.args import training_args
@@ -45,7 +45,7 @@ dataset_num_classes = {"mnist": 10, "cifar10": 10, "cifar100": 100, "svhn": 10, 
 
 dataset_loader = {"cifar10": cifar10, "cifar100": cifar100, "svhn": svhn, "dirty_mnist": dirty_mnist, "mnist": mnist}
 
-models = {"lenet": lenet, "resnet18": resnet18, "resnet50": resnet50, "wide_resnet": wrn, "vgg16": vgg16, "vit": vit}
+models = {"lenet": lenet, "resnet18": resnet18, "resnet50": resnet50, "wide_resnet": wrn, "vgg16": vgg16, "vit": vit, "vit2": vit2}
 model_to_num_dim = {"resnet18": 512, "resnet50": 2048, "resnet101": 2048, "resnet152": 2048, "wide_resnet": 640, "vgg16": 512, "vit": 768}
 
 torch.backends.cudnn.benchmark = True
@@ -63,7 +63,7 @@ if __name__ == "__main__":
     num_classes = dataset_num_classes[args.dataset]
 
     # Choosing the model to train
-    net = models[args.model](spectral_normalization=args.sn, mod=args.mod, coeff=args.coeff, num_classes=num_classes).to(device)
+    net = models[args.model](spectral_normalization=args.sn, mod=args.mod, num_classes=num_classes).to(device)
     net.to(device)
 
     opt_params = net.parameters()
@@ -126,8 +126,6 @@ if __name__ == "__main__":
     time_str = datetime.datetime.strftime(curr_time, "%Y_%m_%d_%H_%M_%S")
     coeff = 3.0
     save_name = model_save_name(args.model, args.sn, args.mod, coeff, args.seed, args.contrastive)
-    import pdb
-    pdb.set_trace()
     print("Model save name", save_name)
 
     if args.ls:
@@ -162,7 +160,7 @@ if __name__ == "__main__":
         scheduler.step()
         # scheduler_auxloss.step()
 
-        net.eval() #不可缺少
+        net.eval()  #不可缺少
         if epoch % 3 == 0:
             val_acc = test_single_epoch(epoch, net, val_loader, device)
             writer.add_scalar("train_loss", train_loss, (epoch + 1))

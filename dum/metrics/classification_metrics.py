@@ -42,9 +42,9 @@ def test_classification_net_softmax(softmax_prob, labels):
     confidence_vals_list = []
 
     confidence_vals, predictions = torch.max(softmax_prob, dim=1)
-    labels_list.extend(labels.cpu().numpy())
-    predictions_list.extend(predictions.cpu().numpy())
-    confidence_vals_list.extend(confidence_vals.cpu().numpy())
+    labels_list.extend(labels.detach().cpu().numpy())
+    predictions_list.extend(predictions.detach().cpu().numpy())
+    confidence_vals_list.extend(confidence_vals.detach().cpu().numpy())
     accuracy = accuracy_score(labels_list, predictions_list)
     return (
         confusion_matrix(labels_list, predictions_list),
@@ -93,3 +93,34 @@ def test_classification_net_ensemble(model_ensemble, data_loader, device):
     labels = torch.cat(labels, dim=0)
 
     return test_classification_net_softmax(softmax_prob, labels)
+
+
+def test_classification_net_ensemble2(model_ensemble, data_loader, device):
+    """
+    This function reports classification accuracy and confusion matrix over a dataset
+    for a deep ensemble.
+    """
+    for model in model_ensemble:
+        model.eval()
+    softmax_prob = []
+    ents = []
+    mis = []
+    labels = []
+    with torch.no_grad():
+        for data, label in data_loader:
+            data = data.to(device)
+            label = label.to(device)
+
+            softmax, ent, mi = ensemble_forward_pass(model_ensemble, data)
+            softmax_prob.append(softmax)
+            ents.append(ent)
+            mis.append(mi)
+            labels.append(label)
+    softmax_prob = torch.cat(softmax_prob, dim=0)
+    labels = torch.cat(labels, dim=0)
+    ents = torch.cat(ents, dim=0)
+    mis = torch.cat(mis, dim=0)
+
+    return test_classification_net_softmax(softmax_prob, labels), ents, mis
+
+

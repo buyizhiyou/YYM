@@ -24,6 +24,22 @@ from torchvision.models._api import Weights
 from torchvision.models.vision_transformer import (Conv2dNormActivation,
                                                    ConvStemConfig, Encoder)
 
+def vit2(spectral_normalization=True, mod=True, num_classes=10,temp=1.0):#设置dropout
+    weights=models.ViT_B_32_Weights.IMAGENET1K_V1
+    model = VisionTransformer(
+        image_size=224,
+        patch_size=32,
+        num_layers=12,
+        dropout=0.5,
+        num_heads=12,
+        hidden_dim=768,
+        mlp_dim=3072,
+    )
+
+    model.load_state_dict(weights.get_state_dict(progress=True))
+    lastlayer_dims = model.heads[0].in_features
+    model.heads[0] = nn.Linear(lastlayer_dims, num_classes)
+    return model
 
 def vit(spectral_normalization=True, mod=True, num_classes=10,temp=1.0):
     weights=models.ViT_B_32_Weights.IMAGENET1K_V1

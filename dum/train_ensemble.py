@@ -21,17 +21,17 @@ import data_utils.ood_detection.svhn as svhn
 from net.resnet import resnet50
 from net.vgg import vgg16
 from net.wide_resnet import wrn
+from net.vit import vit
 # Import train and validation utilities
 from utils.args import training_args
 from utils.eval_utils import get_eval_stats_ensemble
-from utils.train_utils import (model_save_name, save_config_file,
-                               test_single_epoch, train_single_epoch)
+from utils.train_utils import (model_save_name, save_config_file, test_single_epoch, train_single_epoch)
 
 dataset_num_classes = {"cifar10": 10, "cifar100": 100, "svhn": 10}
 
 dataset_loader = {"cifar10": cifar10, "cifar100": cifar100, "svhn": svhn}
 
-models = {"resnet50": resnet50, "wide_resnet": wrn, "vgg16": vgg16}
+models = {"resnet50": resnet50, "wide_resnet": wrn, "vgg16": vgg16, "vit": vit}
 
 
 def parseArgs():
@@ -61,12 +61,17 @@ if __name__ == "__main__":
     num_classes = dataset_num_classes[args.dataset]
 
     # Choosing the model to train
-    args.ensemble = 1  #调试
+    args.ensemble = 5  #调试
+    if args.model=="vit":
+        size = 224
+    else:
+        size = 32
+        
     net_ensemble = [
         models[args.model](
             spectral_normalization=args.sn,
             mod=args.mod,
-            coeff=args.coeff,
+            # coeff=args.coeff,
             num_classes=num_classes,
         ).to(device) for _ in range(args.ensemble)
     ]
@@ -78,7 +83,7 @@ if __name__ == "__main__":
 
     for i, model in enumerate(net_ensemble):
         opt_params = model.parameters()
-        if args.optimiser == "sgd": #默认是这个
+        if args.optimiser == "sgd":  #默认是这个
             optimizer = optim.SGD(
                 opt_params,
                 lr=args.learning_rate,
@@ -90,7 +95,7 @@ if __name__ == "__main__":
             optimizer = optim.Adam(opt_params, lr=args.learning_rate, weight_decay=args.weight_decay)
         scheduler = optim.lr_scheduler.MultiStepLR(
             optimizer,
-            milestones=[args.first_milestone, args.second_milestone],#150,250
+            milestones=[args.first_milestone, args.second_milestone],  #150,250
             # milestones=[0.3 * args.epoch, 0.6 * args.epoch, 0.9 * args.epoch],
             gamma=0.1,
         )
@@ -100,7 +105,9 @@ if __name__ == "__main__":
                                                                                        val_size=0.1,
                                                                                        val_seed=args.seed,
                                                                                        pin_memory=args.gpu,
-                                                                                       contrastive=args.contrastive)
+                                                                                       contrastive=args.contrastive,
+                                                                                       size=size)
+
 
         optimizers.append(optimizer)
         schedulers.append(scheduler)
@@ -148,8 +155,7 @@ if __name__ == "__main__":
                 best_acc[i] = val_acc
                 save_path = save_loc + save_name + f"_{i}" + "_best" + ".model"
                 torch.save(model.state_dict(), save_path)
-                Path(os.path.join(save_loc,f"accuracy_{best_acc}")).touch()
+                Path(os.path.join(save_loc, f"accuracy_{best_acc}")).touch()
                 print("Model saved to ", save_path)
-
 
     writer.close()

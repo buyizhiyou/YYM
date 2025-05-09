@@ -118,6 +118,7 @@ def get_top_k_scorers(scores_N, batch_size, uncertainty=True):
     N = len(scores_N)
     batch_size = min(batch_size, N)
     candidate_scores, candidate_indices = torch.topk(scores_N, batch_size, largest=uncertainty)
+
     return candidate_scores.tolist(), candidate_indices.tolist()
 
 
